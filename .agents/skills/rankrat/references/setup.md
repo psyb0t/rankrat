@@ -101,7 +101,10 @@ inferring it from an empty result.
   what the account can do.
 - **Bing Webmaster Tools** — an API key from the Bing Webmaster dashboard,
   placed under `RANKRAT_SECRET_ROOT`.
-- **PageSpeed Insights** — an API key, same location.
+- **PageSpeed Insights** — an API key, same location, and the one Google surface
+  that does not use OAuth: the key goes on the query string, so the Google
+  consent flow grants it nothing. It is optional — with no key configured the
+  call still goes out, unauthenticated, under a much tighter quota.
 
 Credentials stay on the host running rankrat. They are used to call the provider
 APIs over HTTPS and are not sent anywhere else.

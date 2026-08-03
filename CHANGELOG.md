@@ -2,6 +2,27 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.1.1 — 2026-08-03
+
+Fixes the MCP registry publish, which was the one job the v0.1.0 tag did not
+complete, and documents how to get a PageSpeed key.
+
+- **`server.json` description was 126 characters; the registry caps it at 100.**
+  It rejects the publish with a `422`, and that request is the last step of a tag
+  run — the image push, the GitHub Release and the ClawHub publish had all
+  already succeeded, so v0.1.0 exists everywhere except the MCP registry. The
+  description is now 95 characters and matches the repository's own About text.
+- **The About text now names what it reads.** It led with "security-first" and
+  "boundary-limited", which say nothing to someone who has not read the code,
+  and never mentioned Search Console, Bing Webmaster, GA4 or PageSpeed.
+- **README documents the PageSpeed API key**: where to create it, restricting it
+  to the PageSpeed Insights API, and that `pagespeed_api_key_file` takes the
+  path *inside* the container (`/run/secrets/...`), not the host path the key
+  was written to. PageSpeed is also called out as the one Google surface that
+  does not use OAuth — the key rides on the query string, so the consent flow
+  grants it nothing — and as optional, since an unset key means unauthenticated
+  calls under a tighter quota rather than an error.
+
 ## v0.1.0 — 2026-08-03
 
 Initial release.

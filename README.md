@@ -170,9 +170,40 @@ Never put a credential in source, YAML, Makefiles, or chat.
 
 The one consent flow requests Search Console management, Indexing, and GA4
 read/edit scopes. It does not bypass provider-side ownership. Grant that Google
-user the required Search Console and GA4 roles first. PageSpeed uses its own
-API key; it is optional but recommended and should be restricted to the
-PageSpeed Insights API.
+user the required Search Console and GA4 roles first.
+
+### PageSpeed
+
+PageSpeed is the one Google surface that does not use OAuth at all. It takes a
+plain API key on the query string, so the consent flow above grants it nothing
+and there is no PageSpeed scope to request.
+
+The key is optional. Without one, PageSpeed calls go out unauthenticated and
+Google applies a much tighter quota — fine for a handful of URLs, not for a
+regular sweep. Get one:
+
+1. Open [Credentials](https://console.cloud.google.com/apis/credentials) in the
+   same project, then **Create credentials → API key**.
+2. On the new key choose **Edit API key → Restrict key → API restrictions →
+   Restrict key**, and select **PageSpeed Insights API** only. An unrestricted
+   key works against every API enabled on the project, which is not what you
+   want sitting in a file.
+3. Save the key on its own line, no quotes:
+
+   ```sh
+   install -m 600 /dev/null secrets/google/pagespeed-api-key
+   printf '%s' 'YOUR_KEY' > secrets/google/pagespeed-api-key
+   ```
+
+Then set the account's `pagespeed_api_key_file` in `config/boundaries.json` to
+the path **inside the container** — `secrets/` is mounted read-only at
+`/run/secrets`, so the host file above is:
+
+```json
+"pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key"
+```
+
+Leave that field unset to run keyless.
 
 ### Bing and IndexNow
 
