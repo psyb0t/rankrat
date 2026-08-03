@@ -121,8 +121,8 @@ docker run --rm --init --read-only \
 loopback only. Send `Authorization: Bearer <token>` when a bearer secret is
 configured.
 
-The repo's Make targets wrap these for humans working on a checkout; an agent
-does not need them.
+The repo ships a `rankrat.sh` wrapper around exactly these invocations for
+humans; an agent does not need it.
 
 Typical flow for "why did traffic drop":
 

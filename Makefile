@@ -14,6 +14,7 @@ SECRETS ?= $(PWD)/secrets
 OAUTH ?= $(PWD)/oauth
 OAUTH_ACCOUNT_ID ?= google
 OAUTH_CALLBACK_PORT ?= 49152
+HTTP_PORT ?= 8080
 HTTP_BEARER_SECRET_FILE ?= $(SECRETS)/rankrat/http-bearer-token
 RANKRAT_READ_ONLY ?= true
 RANKRAT_UNBOUNDED ?= false
@@ -40,22 +41,20 @@ PKG_GROUP ?=
 
 UID := $(shell id -u)
 GID := $(shell id -g)
-BOUNDARY_DIRECTORY := $(abspath $(dir $(BOUNDARIES)))
-BOUNDARY_FILENAME := $(notdir $(BOUNDARIES))
 
-ifeq ($(RANKRAT_UNBOUNDED),true)
-ifneq ($(RANKRAT_READ_ONLY),false)
-$(error RANKRAT_UNBOUNDED=true requires RANKRAT_READ_ONLY=false)
-endif
-RUNTIME_BOUNDARY_FILE := /run/config/$(BOUNDARY_FILENAME)
-RUNTIME_BOUNDARY_MOUNT := --mount type=bind,src=$(BOUNDARY_DIRECTORY),dst=/run/config
-else
-ifneq ($(RANKRAT_UNBOUNDED),false)
-$(error RANKRAT_UNBOUNDED must be either true or false)
-endif
-RUNTIME_BOUNDARY_FILE := /run/config/boundaries.json
-RUNTIME_BOUNDARY_MOUNT := --mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly
-endif
+# Every production-image invocation goes through the same wrapper users install,
+# so `make run` exercises the path they actually take and the docker run flags
+# exist in exactly one place. The wrapper reads all of this from the environment.
+WRAPPER := RANKRAT_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG) \
+	RANKRAT_BOUNDARIES=$(BOUNDARIES) \
+	RANKRAT_SECRETS=$(SECRETS) \
+	RANKRAT_OAUTH=$(OAUTH) \
+	RANKRAT_ENV_FILE=$(ENV_FILE) \
+	RANKRAT_HTTP_PORT=$(HTTP_PORT) \
+	RANKRAT_OAUTH_CALLBACK_PORT=$(OAUTH_CALLBACK_PORT) \
+	RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY) \
+	RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED) \
+	./rankrat.sh
 
 DEV_RUN := docker run --rm --init \
 	--user $(UID):$(GID) \
@@ -86,7 +85,7 @@ LOCK_RUN := docker run --rm --init \
 	-w /work \
 	$(LOCK_IMAGE)
 
-.PHONY: help version dev-image lock-image init-config setup init-indexnow verify-indexnow-key verify-runtime-boundary shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove \
+.PHONY: help version dev-image lock-image init-config setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove \
 	lint lint-fix format test test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow test-live-http test-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
 	 auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
@@ -106,24 +105,8 @@ lock-image: ## Build the minimal, sandboxed Python-version-transition lock image
 init-config: dev-image ## Create gitignored local boundary, secret, and OAuth-state paths without overwriting
 	$(DEV_RUN) sh -ec 'mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat; chmod 700 config oauth secrets secrets/rankrat; cp -n config/boundaries.json.example config/boundaries.json; chmod 600 config/boundaries.json; cp -n .env.example .env; token=secrets/rankrat/http-bearer-token; if test -e "$$token" || test -L "$$token"; then test -f "$$token" && test ! -L "$$token" || { echo "$$token must be a regular file" >&2; exit 1; }; else umask 077; python -c "import secrets; print(secrets.token_urlsafe(32))" > "$$token"; fi; chmod 600 "$$token"'
 
-verify-runtime-boundary: ## Check the boundary mount needed by the selected bounded or unbounded runtime
-	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
-ifeq ($(RANKRAT_UNBOUNDED),true)
-	@test ! -L "$(BOUNDARIES)" || (echo "$(BOUNDARIES) must not be a symlink in unbounded mode" >&2; exit 1)
-	@test "$$((0$$(stat -c '%a' "$(BOUNDARIES)") & 022))" -eq 0 || (echo "$(BOUNDARIES) must not be group- or world-writable" >&2; exit 1)
-	@test "$$((0$$(stat -c '%a' "$(BOUNDARY_DIRECTORY)") & 077))" -eq 0 || (echo "$(BOUNDARY_DIRECTORY) must be owner-only; run chmod 700 $(BOUNDARY_DIRECTORY)" >&2; exit 1)
-	@test "$$(stat -c '%u' "$(BOUNDARIES)")" -eq "$(UID)" || (echo "$(BOUNDARIES) must be owned by UID $(UID)" >&2; exit 1)
-	@test "$$(stat -c '%u' "$(BOUNDARY_DIRECTORY)")" -eq "$(UID)" || (echo "$(BOUNDARY_DIRECTORY) must be owned by UID $(UID)" >&2; exit 1)
-endif
-
 setup: init-config build ## Check configured provider access, then verify the shipped HTTP/MCP transport
-	docker run --rm -i --init --user $(UID):$(GID) --network bridge --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-		--env-file $(ENV_FILE) \
-		--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly \
-		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
-		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
-		$(IMAGE_NAME):$(IMAGE_TAG) setup
+	$(WRAPPER) setup
 	@$(MAKE) --no-print-directory test-live-google-search-console
 	@$(MAKE) --no-print-directory test-live-google-analytics
 	@$(MAKE) --no-print-directory test-live-pagespeed
@@ -180,10 +163,10 @@ lint: dev-image ## Run format, lint, and type checks in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync mypy --cache-dir /tmp/mypy src
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
 		--security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 \
-		-v $(PWD):/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) scripts/*.sh
+		-v $(PWD):/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) rankrat.sh scripts/*.sh
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
 		--security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 \
-		-v $(PWD):/mnt:ro -w /mnt $(SHFMT_IMAGE) -d scripts
+		-v $(PWD):/mnt:ro -w /mnt $(SHFMT_IMAGE) -d rankrat.sh scripts
 
 lint-fix: dev-image ## Apply safe lint and formatting fixes in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync ruff check --fix .
@@ -193,7 +176,7 @@ format: dev-image ## Apply Ruff and shfmt formatting in sandboxed containers
 	$(DEV_RUN) uv run --frozen --no-sync ruff format .
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
 		--security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 \
-		-v $(PWD):/mnt -w /mnt $(SHFMT_IMAGE) -w scripts
+		-v $(PWD):/mnt -w /mnt $(SHFMT_IMAGE) -w rankrat.sh scripts
 
 test: test-unit test-contract test-integration test-security test-tooling ## Run all mocked tests
 
@@ -210,7 +193,7 @@ test-security: dev-image ## Run security regression tests in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync pytest -p no:cacheprovider tests/security
 
 test-tooling: dev-image ## Exercise dependency age-gate tooling in container-local scratch
-	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$1" /work/Makefile || { echo "missing required Makefile fragment: $$1" >&2; exit 1; }; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; test -s bump.log || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment "ENV_FILE ?="; require_fragment "INDEXNOW_TARGET_ID is required"; require_fragment "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment "-e RANKRAT_HTTP_HOST=0.0.0.0"; require_fragment "-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token"; require_fragment "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; grep -Fq "pagespeed_api_key_file" /work/config/boundaries.json.example; grep -Fq "/run/secrets/google/pagespeed-api-key" /work/config/boundaries.json.example; grep -Fq "target: /run/secrets/google/oauth-client.json" /work/docker-compose.yml.example'
+	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; test -s bump.log || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "ENV_FILE ?="; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat.sh "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat.sh "CONTAINER_HTTP_HOST=\"0.0.0.0\""; require_fragment rankrat.sh "CONTAINER_HTTP_BEARER_SECRET_FILE=\"/run/secrets/rankrat/http-bearer-token\""; grep -Fq "pagespeed_api_key_file" /work/config/boundaries.json.example; grep -Fq "/run/secrets/google/pagespeed-api-key" /work/config/boundaries.json.example; grep -Fq "target: /run/secrets/google/oauth-client.json" /work/docker-compose.yml.example'
 
 test-live: test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow ## Run every opt-in provider check
 
@@ -331,86 +314,28 @@ build: ## Build the production image with version and latest tags
 
 build-test: dev-image ## Build the development image used by tests and linting
 
-run: build verify-runtime-boundary ## Run the production image as a stdio MCP server
-	docker run --rm -i --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-		-e RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY) \
-		-e RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED) \
-		-e RANKRAT_BOUNDARY_FILE=$(RUNTIME_BOUNDARY_FILE) \
-		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		$(RUNTIME_BOUNDARY_MOUNT) \
-		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
-		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
-		$(IMAGE_NAME):$(IMAGE_TAG)
+run: build ## Run the production image as a stdio MCP server
+	$(WRAPPER) stdio
 
-run-http: build verify-runtime-boundary ## Run REST and Streamable HTTP MCP on loopback port 8080
-	@test -d "$(SECRETS)" || (echo "$(SECRETS) is required" >&2; exit 1)
-	@test -d "$(OAUTH)" || (echo "$(OAUTH) is required; run make init-config first" >&2; exit 1)
-	@test -f "$(HTTP_BEARER_SECRET_FILE)" || (echo "$(HTTP_BEARER_SECRET_FILE) is required" >&2; exit 1)
-	docker run --rm --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-		-p 127.0.0.1:8080:8080 \
-		-e RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY) \
-		-e RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED) \
-		-e RANKRAT_BOUNDARY_FILE=$(RUNTIME_BOUNDARY_FILE) \
-		-e RANKRAT_HTTP_HOST=0.0.0.0 \
-		-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token \
-		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		$(RUNTIME_BOUNDARY_MOUNT) \
-		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
-		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
-		$(IMAGE_NAME):$(IMAGE_TAG) http
+run-http: build ## Run REST and Streamable HTTP MCP on a loopback port
+	$(WRAPPER) http
 
 auth-google: build ## Authorize every Rankrat Google OAuth scope through one host-loopback callback
-	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
-	@test -d "$(SECRETS)" || (echo "$(SECRETS) is required" >&2; exit 1)
-	@test -d "$(OAUTH)" || (echo "$(OAUTH) is required; run make init-config first" >&2; exit 1)
-	docker run --rm -i --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-		-p 127.0.0.1:$(OAUTH_CALLBACK_PORT):$(OAUTH_CALLBACK_PORT) \
-		-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
-		-e RANKRAT_SECRET_ROOT=/run/secrets \
-		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly \
-		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
-		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
-		$(IMAGE_NAME):$(IMAGE_TAG) auth-google --account-id "$(OAUTH_ACCOUNT_ID)" \
-			--callback-port "$(OAUTH_CALLBACK_PORT)" --docker-loopback-proxy \
-			--print-authorization-url
+	$(WRAPPER) auth-google --account-id "$(OAUTH_ACCOUNT_ID)" --print-authorization-url
 
 oauth-revoke: build ## Revoke and delete one configured Google OAuth account authorization
 	@test -n "$(OAUTH_ACCOUNT_ID)" || (echo "usage: make oauth-revoke OAUTH_ACCOUNT_ID=google-oauth" >&2; exit 1)
-	docker run --rm -i --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-		-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
-		-e RANKRAT_SECRET_ROOT=/run/secrets \
-		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly \
-		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
-		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
-		$(IMAGE_NAME):$(IMAGE_TAG) revoke-google --account-id "$(OAUTH_ACCOUNT_ID)"
+	$(WRAPPER) revoke-google --account-id "$(OAUTH_ACCOUNT_ID)"
 
 onboard-site: build ## Create GA4, Search Console, and Bing resources for one new HTTPS site and record boundaries
-	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
-	@test -d "$(SECRETS)" || (echo "$(SECRETS) is required" >&2; exit 1)
-	@test -d "$(OAUTH)" || (echo "$(OAUTH) is required; run make init-config first" >&2; exit 1)
 	@test -n "$(ONBOARD_SITE_URL)" || (echo "ONBOARD_SITE_URL is required" >&2; exit 1)
-	docker run --rm -i --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-		-e RANKRAT_READ_ONLY=false \
-		-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
-		-e RANKRAT_SECRET_ROOT=/run/secrets \
-		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json \
-		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
-		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
-		$(IMAGE_NAME):$(IMAGE_TAG) onboard-site \
-			--google-account-id "$(ONBOARD_GOOGLE_ACCOUNT_ID)" \
-			--bing-account-id "$(ONBOARD_BING_ACCOUNT_ID)" \
-			--site-url "$(ONBOARD_SITE_URL)" \
-			--display-name "$(ONBOARD_DISPLAY_NAME)" \
-			--time-zone "$(ONBOARD_TIME_ZONE)" \
-			--currency-code "$(ONBOARD_CURRENCY_CODE)"
+	$(WRAPPER) onboard-site \
+		--google-account-id "$(ONBOARD_GOOGLE_ACCOUNT_ID)" \
+		--bing-account-id "$(ONBOARD_BING_ACCOUNT_ID)" \
+		--site-url "$(ONBOARD_SITE_URL)" \
+		--display-name "$(ONBOARD_DISPLAY_NAME)" \
+		--time-zone "$(ONBOARD_TIME_ZONE)" \
+		--currency-code "$(ONBOARD_CURRENCY_CODE)"
 
 generate: generate-openapi ## Generate all checked-in API artifacts
 

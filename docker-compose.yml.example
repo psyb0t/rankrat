@@ -16,7 +16,12 @@ services:
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
-      - ./config/boundaries.json:/run/config/boundaries.json:ro
+      # The directory, not the file. The image bakes /run/config owned by its own
+      # `rankrat` user, and a single-file bind mount leaves that directory in
+      # place -- so whether the boundary file is readable then depends on the
+      # container uid matching the host file's owner. Mounting the directory
+      # replaces it and the read-only flag still covers the file inside.
+      - ./config:/run/config:ro
       - ./oauth:/run/oauth:rw
     secrets:
       - source: rankrat_http_bearer_token

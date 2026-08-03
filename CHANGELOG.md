@@ -2,6 +2,52 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.1.2 — 2026-08-03
+
+Adds `rankrat.sh`, makes the README lead with the image rather than the
+Makefile, and fixes the run command that had never worked.
+
+- **Mounting the boundary file on its own never worked, and that is what every
+  Make target did.** The image creates `/run/config` as mode 750 owned by its
+  own `rankrat` user. A single-file bind mount leaves that directory in place,
+  so a container started with `--user "$(id -u)"` cannot traverse into it and
+  the read fails with `PermissionError`, surfacing only as `rankrat startup
+  failed: invalid configuration`. Running as the image's own user instead just
+  moves the problem: the host file is owner-only, and its owner is not uid
+  10001. `run`, `run-http`, `setup`, `auth-google`, `oauth-revoke` and
+  `onboard-site` all did this and all failed. Everything now mounts the boundary
+  file's **directory**, which is what the agent skill, the smoke test and (as of
+  this release) the Compose example already did — and what unbounded onboarding
+  needs anyway, since it replaces the file by rename. A test asserts the
+  single-file form never comes back.
+- **`rankrat.sh` — a wrapper around `docker run`.** Install it on `PATH` and
+  `rankrat.sh` / `rankrat.sh http` start the published image with the mounts,
+  the published port and the container hardening flags already resolved. Its
+  first argument is the image's own mode, so `setup`, `auth-google`,
+  `revoke-google` and `onboard-site` work the same way and every remaining
+  argument is forwarded untouched. `docker run` remains the supported contract
+  and the README still documents it in full; the wrapper is convenience.
+- **The Makefile now calls that wrapper** for every production-image target, so
+  `make run` exercises the same path a user takes instead of a second copy of
+  it — which is how the mount bug above finally surfaced. That invocation
+  existed in five drifting copies. `make verify-runtime-boundary` is gone with
+  it: the wrapper performs those ownership and permission checks itself, for
+  `docker run` users as well.
+- **README is Docker-first.** The quick start creates the working layout and
+  runs the image; Make is presented as what it is, the checkout workflow. The
+  two things genuinely unavailable from the image alone — IndexNow key creation
+  and verification — are called out rather than left implied.
+- **`server.json` was rejected by the registry again**, this time with a `400`:
+  an OCI package may not carry `registryBaseUrl`, and `identifier` has to be a
+  canonical reference including the registry host. It now reads
+  `docker.io/psyb0t/rankrat:latest` with no `registryBaseUrl`, matching the
+  shape the other servers in this namespace publish with, and the release
+  workflow refuses both mistakes up front.
+- **`__version__` reported `0.1.0` from the v0.1.1 image.** The version in
+  `pyproject.toml` had not moved with the tag. `server.json` now carries the
+  `0.0.0` placeholder the publish workflow overwrites from the tag, which is one
+  fewer file that can drift.
+
 ## v0.1.1 — 2026-08-03
 
 Fixes the MCP registry publish, which was the one job the v0.1.0 tag did not

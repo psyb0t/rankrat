@@ -1,33 +1,55 @@
 from pathlib import Path
 
 _SOURCE_MAKEFILE = Path("Makefile")
-_DEFAULT_READ_ONLY_MOUNT = "dst=/run/config/boundaries.json,readonly"
-_UNBOUNDED_DIRECTORY_MOUNT = "dst=/run/config"
-_UNBOUNDED_MOUNT_ASSIGNMENT = (
-    "RUNTIME_BOUNDARY_MOUNT := --mount type=bind,src=$(BOUNDARY_DIRECTORY),dst=/run/config"
+_SOURCE_WRAPPER = Path("rankrat.sh")
+_READ_ONLY_MOUNT_ASSIGNMENT = (
+    'readonly_boundary_mount="type=bind,src=$boundary_directory,'
+    'dst=$CONTAINER_CONFIG_DIRECTORY,readonly"'
 )
-_BOUNDED_MOUNT_ASSIGNMENT = (
-    "RUNTIME_BOUNDARY_MOUNT := "
-    "--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly"
+_WRITABLE_MOUNT_ASSIGNMENT = (
+    'writable_boundary_mount="type=bind,src=$boundary_directory,dst=$CONTAINER_CONFIG_DIRECTORY"'
 )
 
 
-def test_runtime_make_targets_allow_only_explicit_unbounded_persistence() -> None:
+def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
     source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
-    runtime_target = _target(source, "run-http")
 
     assert "RANKRAT_READ_ONLY ?= true" in source
     assert "RANKRAT_UNBOUNDED ?= false" in source
+    assert "RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY)" in source
+    assert "RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED)" in source
+    assert "./rankrat.sh" in source
+    assert "$(WRAPPER) stdio" in _target(source, "run")
+    assert "$(WRAPPER) http" in _target(source, "run-http")
+
+
+def test_wrapper_allows_only_explicit_unbounded_persistence() -> None:
+    source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
+
+    assert 'read_only="${RANKRAT_READ_ONLY:-true}"' in source
+    assert 'unbounded="${RANKRAT_UNBOUNDED:-false}"' in source
     assert "RANKRAT_UNBOUNDED=true requires RANKRAT_READ_ONLY=false" in source
-    assert "RUNTIME_BOUNDARY_FILE := /run/config/$(BOUNDARY_FILENAME)" in source
-    assert _UNBOUNDED_MOUNT_ASSIGNMENT in source
-    assert _BOUNDED_MOUNT_ASSIGNMENT in source
-    assert "-e RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY)" in runtime_target
-    assert "-e RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED)" in runtime_target
-    assert "-e RANKRAT_BOUNDARY_FILE=$(RUNTIME_BOUNDARY_FILE)" in runtime_target
-    assert "$(RUNTIME_BOUNDARY_MOUNT)" in runtime_target
-    assert _DEFAULT_READ_ONLY_MOUNT in source
-    assert _UNBOUNDED_DIRECTORY_MOUNT in source
+    assert _READ_ONLY_MOUNT_ASSIGNMENT in source
+    assert _WRITABLE_MOUNT_ASSIGNMENT in source
+    assert 'serve_boundary_mount="$readonly_boundary_mount"' in source
+    assert 'serve_boundary_mount="$writable_boundary_mount"' in source
+    assert 'require_writable_boundary_is_safe "$boundary_file" "$boundary_directory"' in source
+
+
+def test_wrapper_never_bind_mounts_the_boundary_file_on_its_own() -> None:
+    """The image bakes /run/config, so a lone file mount there is unreadable."""
+
+    source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
+
+    assert "dst=/run/config/boundaries.json" not in source
+    assert "src=$boundary_file" not in source
+
+
+def test_compose_example_mounts_the_boundary_directory() -> None:
+    source = Path("docker-compose.yml.example").read_text(encoding="utf-8")
+
+    assert "- ./config:/run/config:ro" in source
+    assert "./config/boundaries.json:/run/config/boundaries.json" not in source
 
 
 def test_init_config_creates_and_preserves_a_safe_http_bearer_secret() -> None:
@@ -42,4 +64,4 @@ def test_init_config_creates_and_preserves_a_safe_http_bearer_secret() -> None:
 
 
 def _target(source: str, name: str) -> str:
-    return source.split(f"{name}:", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
+    return source.split(f"\n{name}:", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]

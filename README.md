@@ -6,6 +6,7 @@
 [![coverage](https://raw.githubusercontent.com/psyb0t/rankrat/badges/coverage.svg)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
 [![version](https://raw.githubusercontent.com/psyb0t/rankrat/badges/version.svg)](https://github.com/psyb0t/rankrat/tags)
 [![license](https://raw.githubusercontent.com/psyb0t/rankrat/badges/license.svg)](LICENSE)
+[![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
 
 Search Console, Bing Webmaster Tools, GA4 and PageSpeed each ship a dashboard.
 Dashboards answer the question you already knew to ask. The interesting ones —
@@ -33,6 +34,7 @@ tool surface is still free to move.
 ## Contents
 
 - [Quick start](#quick-start)
+- [Running it](#running-it)
 - [Agent integrations](#agent-integrations)
 - [Write capability](#write-capability)
 - [Credentials](#credentials)
@@ -43,42 +45,106 @@ tool surface is still free to move.
 
 ## Quick start
 
-Rankrat requires Docker and GNU Make on the host. Start by creating the ignored
-local layout:
+Rankrat ships as a Docker image; Docker is the only requirement. Create the
+working layout in a directory of your choosing — Rankrat reads all three paths
+as mounts and never writes outside them:
 
 ```sh
-make init-config
+mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat
+chmod 700 config oauth secrets secrets/rankrat
+
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/config/boundaries.json.example \
+  -o config/boundaries.json
+chmod 600 config/boundaries.json
+
+install -m 600 /dev/null secrets/rankrat/http-bearer-token
+openssl rand -base64 32 | tr -d '\n' > secrets/rankrat/http-bearer-token
 ```
 
-`make init-config` also creates an owner-only random HTTP bearer secret at
-`secrets/rankrat/http-bearer-token`; it retains an existing regular file rather
-than replacing it.
+The bearer secret authenticates `/v1/` and `/mcp` for non-loopback HTTP; stdio
+never uses it, but the HTTP mode requires the file to exist.
 
-Then configure `config/boundaries.json`, place only the credentials for the
-providers you intend to use at the paths in [Credentials](#credentials), and
-authorize Google if configured:
+Then edit `config/boundaries.json` to list only what Rankrat may read, put the
+credentials for the providers you actually use at the paths in
+[Credentials](#credentials), and authorize Google if you configured it:
 
 ```sh
-make auth-google
-make setup
+rankrat.sh auth-google --account-id google --print-authorization-url
+rankrat.sh setup
 ```
 
-`make setup` is a live, read-only verification gate. It checks configured
-provider access and exercises the shipped HTTP/MCP image; it does not create a
-provider resource or submit an IndexNow URL. It reports the missing local file,
-OAuth grant, provider permission, or configured resource that needs attention.
-Set the matching `RANKRAT_LIVE_*` selectors in `.env` for each provider you
-configure; leave selectors for unused providers empty so their live checks skip.
+`setup` is a live, read-only verification gate. It checks configured provider
+access; it does not create a provider resource or submit an IndexNow URL. It
+reports the missing local file, OAuth grant, provider permission, or configured
+resource that needs attention. It is the one mode that reads `.env`, where the
+`RANKRAT_LIVE_*` selectors choose which providers it checks — leave the
+selectors for unused providers empty and their checks skip.
 
-For stdio MCP, use `make run`. For Streamable HTTP/REST on loopback port 8080,
-use `make run-http`. Both targets build the production image and use the
-configured ignored `config/`, `secrets/`, and `oauth/` paths.
+## Running it
+
+```sh
+rankrat.sh          # MCP over stdio
+rankrat.sh http     # REST + Streamable HTTP MCP on 127.0.0.1:8080
+```
+
+[`rankrat.sh`](rankrat.sh) is a wrapper around `docker run`: it resolves the
+mounts, publishes the port, and applies the container hardening flags. Install
+it once —
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/rankrat.sh \
+  -o rankrat.sh
+less rankrat.sh                       # it is ~250 lines; read before installing
+chmod +x rankrat.sh
+sudo mv rankrat.sh /usr/local/bin/rankrat.sh
+```
+
+— or skip it entirely and run the image yourself. `docker run` is the supported
+contract and the wrapper is only convenience:
+
+```sh
+docker run -i --rm --init --read-only \
+  --user "$(id -u):$(id -g)" \
+  --cap-drop=ALL --security-opt no-new-privileges:true \
+  --pids-limit 128 --memory 512m --cpus 1 \
+  --tmpfs /tmp:rw,noexec,nosuid,size=32m \
+  -e RANKRAT_READ_ONLY=true \
+  -e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
+  -e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
+  --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
+  --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
+  --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
+  psyb0t/rankrat:latest stdio
+```
+
+Mount `config/` as a directory, not `config/boundaries.json` as a single file.
+The image bakes `/run/config` owned by its own `rankrat` user, so a single-file
+mount leaves that directory in place and the boundary file then reads only when
+the container uid happens to match the host file's owner. Mounting the directory
+replaces it, and `readonly` still covers the file inside.
+
+Swap `stdio` for `http` and add `-p 127.0.0.1:8080:8080`,
+`-e RANKRAT_HTTP_HOST=0.0.0.0` and
+`-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token`.
+`RANKRAT_HTTP_HOST=0.0.0.0` binds inside the container; `-p` is what keeps it on
+loopback. MCP is then at `http://127.0.0.1:8080/mcp`.
+
+The wrapper reads `RANKRAT_IMAGE`, `RANKRAT_BOUNDARIES`, `RANKRAT_SECRETS`,
+`RANKRAT_OAUTH`, `RANKRAT_ENV_FILE`, `RANKRAT_HTTP_PORT` and
+`RANKRAT_OAUTH_CALLBACK_PORT` from the environment to point at non-default
+paths. Those are host-side only — keep them out of `.env`, which goes straight
+to the container, where an unrecognized `RANKRAT_*` variable fails startup.
+`rankrat.sh --help` lists every mode.
+
+On a checkout, the Make targets call the same wrapper against the locally built
+image, so `make run` and `make run-http` exercise the path above rather than a
+second copy of it. See [Verification](#verification) and `make help`.
 
 ## Agent integrations
 
 The [skill](.agents/skills/rankrat) works in any agent that reads
-`.agents/skills/`, and installs natively in the clients below. The Make targets
-above are for humans on a checkout; an agent runs the published image.
+`.agents/skills/`, and installs natively in the clients below. An agent runs the
+published image directly and does not need the wrapper.
 
 ### Claude Code
 
@@ -165,8 +231,12 @@ Never put a credential in source, YAML, Makefiles, or chat.
    JSON to `secrets/google/oauth-client.json`, configure boundaries, then run:
 
    ```sh
-   make auth-google
+   rankrat.sh auth-google --account-id google --print-authorization-url
    ```
+
+   The callback listens on `127.0.0.1:49152`; set `RANKRAT_OAUTH_CALLBACK_PORT`
+   to move it. Revoke the grant later with
+   `rankrat.sh revoke-google --account-id google`.
 
 The one consent flow requests Search Console management, Indexing, and GA4
 read/edit scopes. It does not bypass provider-side ownership. Grant that Google
@@ -211,13 +281,18 @@ Verify each site in [Bing Webmaster Tools](https://www.bing.com/webmasters/),
 then create an API key under **Settings → API Access** and save it as
 `secrets/bing/api-key`.
 
+IndexNow key generation and verification are the one part of setup that is not
+in the image — they run from a checkout, since neither is something a running
+server should be able to do:
+
 ```sh
 make init-indexnow INDEXNOW_TARGET_ID=site INDEXNOW_HOST=example.com
 make verify-indexnow-key INDEXNOW_TARGET_ID=site
 ```
 
 Publish the generated `<key>.txt` on the public target host yourself. The
-verifier requires exact key content over direct HTTPS, with no redirect.
+verifier requires exact key content over direct HTTPS, with no redirect. Skip
+this section entirely if you are not submitting URLs to IndexNow.
 
 ## Configuration
 
@@ -225,12 +300,10 @@ Copy `config/boundaries.json.example` and list only resources Rankrat may touch.
 Every account, site, GA4 property, child URL, and IndexNow host is validated at
 the boundary; callers cannot choose provider origins or resources outside it.
 `.env.example` leaves live-test selectors blank intentionally: set only the
-account and resource selectors for providers you configured, so `make setup`
-can verify those integrations without requiring credentials for the others.
-For HTTP use, `make init-config` creates the owner-only bearer-secret file at
-the configured path (`secrets/rankrat/http-bearer-token` by default).
-`make run-http` requires it even on loopback and mounts it only into the
-running container.
+account and resource selectors for providers you configured, so `rankrat.sh
+setup` can verify those integrations without requiring credentials for the
+others. HTTP mode requires the bearer-secret file even on loopback, and mounts
+it only into the running container.
 
 ### Unbounded bootstrap mode
 
@@ -238,10 +311,10 @@ For a trusted agent that needs to discover or onboard a resource not yet listed,
 start Rankrat with both `RANKRAT_READ_ONLY=false` and `RANKRAT_UNBOUNDED=true`:
 
 ```sh
-RANKRAT_READ_ONLY=false RANKRAT_UNBOUNDED=true make run-http
+RANKRAT_READ_ONLY=false RANKRAT_UNBOUNDED=true rankrat.sh http
 ```
 
-The same environment variables work with `make run` for stdio MCP. Unbounded
+The same environment variables work with `rankrat.sh` for stdio MCP. Unbounded
 mode is reusable: stop the process, start it with those variables whenever a
 trusted agent needs another discovery/onboarding session, then restart without
 them to return to normal bounded enforcement.
@@ -261,11 +334,16 @@ enable unbounded mode again later for another trusted onboarding session.
 
 For this operation the parent directory holding `boundaries.json` must be owned
 by the host user and owner-only (`chmod 700 config`); the file itself must not
-be group- or world-writable. `make init-config` establishes those permissions,
-and `make run` / `make run-http` reject an unsafe writable mount before starting
-an unbounded process. Normal bounded runs keep the boundary file read-only.
+be group- or world-writable. The `chmod 700` in [Quick start](#quick-start)
+establishes that, and `rankrat.sh` refuses to start an unbounded process against
+an unsafe writable mount. Normal bounded runs keep the boundary file read-only.
 The Compose example intentionally stays bounded and mounts that file read-only;
-use the Make targets for a reusable unbounded session.
+use `rankrat.sh` for a reusable unbounded session.
+
+Unbounded mode is also why that run mounts the boundary file's *directory* at
+`/run/config` rather than the file itself — onboarding replaces the file
+atomically, and a rename over a bind-mounted file is not possible. Running the
+image by hand for an unbounded session needs the same substitution.
 
 The authoritative REST contract is
 [`src/rankrat/api/openapi.yaml`](src/rankrat/api/openapi.yaml). Run
@@ -274,6 +352,9 @@ The source lists the full writable contract; a running read-only server removes
 write routes from its served `/openapi.json` document.
 
 ## Verification
+
+From a checkout. Everything below runs in containers — the host needs only
+Docker and GNU Make:
 
 ```sh
 make format

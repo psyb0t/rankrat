@@ -111,9 +111,9 @@ APIs over HTTPS and are not sent anywhere else.
 
 ## Running it
 
-An agent runs the published image directly; the repo's Make targets exist for a
-human working on a checkout, and are how the boundary file, credentials and
-Google authorization get created in the first place.
+An agent runs the published image directly. The boundary file, the credentials
+and the Google authorization are created by a human beforehand, using the
+repository's `rankrat.sh` wrapper around these same invocations.
 
 Both transports take the same three read-only mounts. Container-side paths are
 the server's defaults, so only the host side changes:
