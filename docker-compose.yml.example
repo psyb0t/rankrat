@@ -1,0 +1,77 @@
+services:
+  rankrat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["http"]
+    environment:
+      RANKRAT_BOUNDARY_FILE: /run/config/boundaries.json
+      RANKRAT_SECRET_ROOT: /run/secrets
+      RANKRAT_OAUTH_TOKEN_ROOT: /run/oauth
+      RANKRAT_HTTP_BEARER_SECRET_FILE: /run/secrets/rankrat/http-bearer-token
+      RANKRAT_HTTP_HOST: 0.0.0.0
+      RANKRAT_HTTP_PORT: "8080"
+      RANKRAT_ENABLE_WRITES: "false"
+      # To enable IndexNow writes, set this to true and add the separate
+      # rankrat_admin_bearer_token secret mount below.
+      # RANKRAT_ADMIN_BEARER_SECRET_FILE: /run/secrets/rankrat/admin-bearer-token
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config/boundaries.json:/run/config/boundaries.json:ro
+      - ./oauth:/run/oauth:rw
+    secrets:
+      - source: rankrat_http_bearer_token
+        target: /run/secrets/rankrat/http-bearer-token
+      - source: google_oauth_client_json
+        target: /run/secrets/google/oauth-client.json
+      - source: google_pagespeed_api_key
+        target: /run/secrets/google/pagespeed-api-key
+      - source: bing_api_key
+        target: /run/secrets/bing/api-key
+      - source: indexnow_key
+        target: /run/secrets/indexnow/key
+      # - source: rankrat_admin_bearer_token
+      #   target: rankrat_admin_bearer_token
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=32m
+    init: true
+    user: "${RANKRAT_UID:-10001}:${RANKRAT_GID:-10001}"
+    pids_limit: 128
+    cpus: 1.0
+    mem_limit: 512m
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    # Some Docker hosts block analyticsadmin.googleapis.com from user-defined
+    # bridges. The default bridge preserves the same container network namespace
+    # and outbound provider access without exposing an additional service port.
+    network_mode: bridge
+
+secrets:
+  rankrat_http_bearer_token:
+    file: ./secrets/rankrat/http-bearer-token
+  google_oauth_client_json:
+    file: ./secrets/google/oauth-client.json
+  google_pagespeed_api_key:
+    file: ./secrets/google/pagespeed-api-key
+  bing_api_key:
+    file: ./secrets/bing/api-key
+  indexnow_key:
+    file: ./secrets/indexnow/key
+  # rankrat_admin_bearer_token:
+  #   file: ./secrets/rankrat/admin-bearer-token

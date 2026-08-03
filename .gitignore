@@ -1,0 +1,68 @@
+# Codex / agent scratch — never commit
+AGENTS.md
+CODEX.local.md
+.research_files/
+.agent_notes/
+.agent_knowledge/
+.testing/
+.secaudit/
+.anustimes/
+.brutal_reviews/
+.plan-and-delegate/
+PLAN.md
+implplan.md
+NOTES.md
+TODO.md
+WIP.md
+
+# Secrets
+.env
+.env.local
+.env.*
+!.env.example
+secrets/
+oauth/
+config/boundaries*.json
+!config/boundaries.json.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.pyright/
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage-report.log
+coverage.txt
+coverage-percent.txt
+coverage.out
+profile.out
+.cover/
+coverage.xml
+htmlcov/
+
+# Container / local tooling
+compose.yml
+compose.override.yml
+docker-compose.yml
+docker-compose.override.yml
+.dockerignore.local
+.test-image.*/
+.test-live-http.*/
+.sbom/
+.grype-db/
+
+# Editor / IDE
+.vscode/
+.idea/
+.editorconfig
+.envrc
+.tool-versions
+.python-version
+pyrightconfig.json
+.telemetry/
+
+# Local release tooling — never committed.
+git-update.sh

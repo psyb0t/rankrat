@@ -1,0 +1,96 @@
+name: pipeline
+
+on: [push]
+
+jobs:
+  # Bespoke instead of reusable python-package-workflow.yml on purpose: that
+  # workflow unconditionally runs a build_command and uploads dist/ with
+  # if-no-files-found: error, then publishes to PyPI on tags. Rankrat is not a
+  # PyPI package -- `make build` produces a Docker image and there is no dist/ --
+  # so calling it would fail every single run. Everything else here is a call
+  # into the shared reusable workflows.
+  # make-checks runs the repo's own lint and test commands with no toolchain
+  # setup, which is what this project wants: the toolchain lives in
+  # Dockerfile.dev, so setup-python would install something nothing uses.
+  # coverage_file is what makes the badges job below work -- the workflow
+  # uploads it as the artifact create-badges.yml downloads, so the caller does
+  # not hand-roll the upload step and the needs: edge that keeps it from racing.
+  #
+  # `make coverage-percent` runs the same containerized pytest as
+  # `make test-coverage` and writes the TOTAL percentage to
+  # coverage-percent.txt. Nothing else in the repo emits that file.
+  checks:
+    permissions:
+      contents: read
+    uses: psyb0t/reusable-github-workflows/.github/workflows/make-checks.yml@master
+    with:
+      test_command: "make coverage-percent"
+      coverage_file: coverage-percent.txt
+
+  # needs: [checks] is load-bearing, not cosmetic. create-badges.yml with
+  # coverage: true downloads the `coverage` artifact; without the dependency the
+  # two jobs start together and the download races the upload.
+  badges:
+    needs: [checks]
+    if: github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write # commit the SVGs to the badges branch
+    uses: psyb0t/reusable-github-workflows/.github/workflows/create-badges.yml@master
+    with:
+      coverage: true
+
+  # needs: [checks] so a red lint or test run stops the image and the GitHub
+  # Release, rather than publishing first and reporting the failure afterwards.
+  call-docker-image-workflow:
+    needs: [checks]
+    permissions:
+      contents: write # GitHub Release
+      security-events: write # upload the Grype SARIF to the Security tab
+    uses: psyb0t/reusable-github-workflows/.github/workflows/docker-image-workflow.yml@master
+
+    with:
+      repository_name: psyb0t/rankrat
+      # The three CPython stdlib CVEs in this document are assessed
+      # not_affected with a written justification per CVE (no tarfile and no
+      # html.parser call path in the application source). Assertions live in the
+      # repo and are reviewed like any other file.
+      scan_vex_file: security/rankrat-cpython.openvex.json
+      scan_only_fixed: true
+      # Deliberately stricter than the workflow default, and deliberately
+      # identical to what `make audit-image` already enforces locally
+      # (grype --vex ... --only-fixed --fail-on high). With only_fixed on and the
+      # VEX applied, anything left at high or critical has a published upstream
+      # fix and is a rebase away -- that is actionable, not weather, so it should
+      # go red. Consequence, accepted: the scan runs AFTER the image push and the
+      # GitHub Release, so a finding does not un-publish either; what it does
+      # block is publish-to-mcp-registry below, which is the correct thing to
+      # withhold for a knowingly vulnerable image.
+      scan_severity: "high"
+      scan_fail_build: true
+
+    secrets:
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+  # Tag pushes only, and only once the image exists on Docker Hub -- the registry
+  # verifies namespace ownership against the io.modelcontextprotocol.server.name
+  # LABEL on the pushed image.
+  publish-to-mcp-registry:
+    needs: [call-docker-image-workflow]
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      id-token: write # secretless OIDC auth to the MCP registry
+      contents: read
+    uses: psyb0t/reusable-github-workflows/.github/workflows/mcp-registry-publish.yml@master
+
+  # Validates on every push, publishes only on a tag: the reusable workflow runs
+  # a validate job whenever it is called and gates the publish job on a tag ref
+  # itself, so the caller's `if` here only decides when the whole thing runs.
+  # Both halves default on and a missing .agents dir is skipped cleanly, so this
+  # stays correct whether the repo ships a skill, a plugin, or both.
+  publish-to-clawhub:
+    needs: [call-docker-image-workflow]
+    if: startsWith(github.ref, 'refs/tags/')
+    uses: psyb0t/reusable-github-workflows/.github/workflows/clawhub-publish.yml@master
+    secrets:
+      clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}

@@ -1,0 +1,5521 @@
+{
+  "components": {
+    "schemas": {
+      "BingSiteOperation": {
+        "description": "The documented Bing Webmaster property mutation operations.",
+        "enum": [
+          "add",
+          "delete"
+        ],
+        "title": "BingSiteOperation",
+        "type": "string"
+      },
+      "BingSitemapOperation": {
+        "description": "The documented Bing Webmaster feed mutation operations.",
+        "enum": [
+          "submit",
+          "delete"
+        ],
+        "title": "BingSitemapOperation",
+        "type": "string"
+      },
+      "GoogleIndexingNotificationType": {
+        "description": "The two notification types documented by Google's Indexing API.",
+        "enum": [
+          "URL_UPDATED",
+          "URL_DELETED"
+        ],
+        "title": "GoogleIndexingNotificationType",
+        "type": "string"
+      },
+      "GoogleSiteOperation": {
+        "description": "The documented Search Console property mutation operations.",
+        "enum": [
+          "add",
+          "delete"
+        ],
+        "title": "GoogleSiteOperation",
+        "type": "string"
+      },
+      "GoogleSitemapOperation": {
+        "description": "The two documented Search Console sitemap mutation operations.",
+        "enum": [
+          "submit",
+          "delete"
+        ],
+        "title": "GoogleSitemapOperation",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "PageSpeedCategory": {
+        "description": "Supported non-deprecated PageSpeed audit categories.",
+        "enum": [
+          "ACCESSIBILITY",
+          "AGENTIC_BROWSING",
+          "BEST_PRACTICES",
+          "PERFORMANCE",
+          "SEO"
+        ],
+        "title": "PageSpeedCategory",
+        "type": "string"
+      },
+      "PageSpeedStrategy": {
+        "description": "Supported PageSpeed device strategies.",
+        "enum": [
+          "DESKTOP",
+          "MOBILE"
+        ],
+        "title": "PageSpeedStrategy",
+        "type": "string"
+      },
+      "Provider": {
+        "description": "Providers supported by the read-only foundation.",
+        "enum": [
+          "google",
+          "bing"
+        ],
+        "title": "Provider",
+        "type": "string"
+      },
+      "SearchAnalyticsDimension": {
+        "description": "Google Search Console dimensions safe for bounded raw queries.",
+        "enum": [
+          "date",
+          "query",
+          "page",
+          "country",
+          "device",
+          "searchAppearance"
+        ],
+        "title": "SearchAnalyticsDimension",
+        "type": "string"
+      },
+      "SearchAnalyticsDimensionReportKind": {
+        "description": "Fixed, useful Search Analytics groupings with no caller-selected dimension.",
+        "enum": [
+          "top_queries",
+          "top_pages",
+          "countries",
+          "search_appearances",
+          "time_series"
+        ],
+        "title": "SearchAnalyticsDimensionReportKind",
+        "type": "string"
+      },
+      "SearchAnalyticsDropAttributionKind": {
+        "description": "The only fixed dimensions used to attribute a Search Console drop.",
+        "enum": [
+          "queries",
+          "pages"
+        ],
+        "title": "SearchAnalyticsDropAttributionKind",
+        "type": "string"
+      },
+      "SearchAnalyticsFilterOperator": {
+        "description": "Documented Search Console dimension-filter operators.",
+        "enum": [
+          "equals",
+          "contains",
+          "notContains",
+          "includingRegex",
+          "excludingRegex"
+        ],
+        "title": "SearchAnalyticsFilterOperator",
+        "type": "string"
+      },
+      "SearchAnalyticsType": {
+        "description": "Documented Search Console report types.",
+        "enum": [
+          "web",
+          "image",
+          "video",
+          "news",
+          "discover",
+          "googleNews"
+        ],
+        "title": "SearchAnalyticsType",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "_BingBrandAnalysisBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "brand_terms": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Brand Terms",
+            "type": "array"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "brand_terms"
+        ],
+        "title": "_BingBrandAnalysisBody",
+        "type": "object"
+      },
+      "_BingKeywordStatisticsBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "query": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "query"
+        ],
+        "title": "_BingKeywordStatisticsBody",
+        "type": "object"
+      },
+      "_BingLinkCountsBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "page": {
+            "default": 0,
+            "maximum": 1000.0,
+            "minimum": 0.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url"
+        ],
+        "title": "_BingLinkCountsBody",
+        "type": "object"
+      },
+      "_BingPageQueryPerformanceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "page_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Page Url",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "page_url"
+        ],
+        "title": "_BingPageQueryPerformanceBody",
+        "type": "object"
+      },
+      "_BingPerformanceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url"
+        ],
+        "title": "_BingPerformanceBody",
+        "type": "object"
+      },
+      "_BingQueryPagePerformanceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "query": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "query"
+        ],
+        "title": "_BingQueryPagePerformanceBody",
+        "type": "object"
+      },
+      "_BingRelatedKeywordsBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "query": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Query",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "query",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_BingRelatedKeywordsBody",
+        "type": "object"
+      },
+      "_BingSiteApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/BingSiteOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "operation"
+        ],
+        "title": "_BingSiteApprovalBody",
+        "type": "object"
+      },
+      "_BingSiteSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/BingSiteOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "operation",
+          "approval_id"
+        ],
+        "title": "_BingSiteSubmissionBody",
+        "type": "object"
+      },
+      "_BingSitemapApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/BingSitemapOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "sitemap_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Sitemap Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "sitemap_url",
+          "operation"
+        ],
+        "title": "_BingSitemapApprovalBody",
+        "type": "object"
+      },
+      "_BingSitemapSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/BingSitemapOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "sitemap_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Sitemap Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "sitemap_url",
+          "operation",
+          "approval_id"
+        ],
+        "title": "_BingSitemapSubmissionBody",
+        "type": "object"
+      },
+      "_BingTrafficBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_BingTrafficBody",
+        "type": "object"
+      },
+      "_BingTrafficComparisonBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "previous_end_date": {
+            "format": "date",
+            "title": "Previous End Date",
+            "type": "string"
+          },
+          "previous_start_date": {
+            "format": "date",
+            "title": "Previous Start Date",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date",
+          "previous_start_date",
+          "previous_end_date"
+        ],
+        "title": "_BingTrafficComparisonBody",
+        "type": "object"
+      },
+      "_BingUrlInformationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "page_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Page Url",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "page_url"
+        ],
+        "title": "_BingUrlInformationBody",
+        "type": "object"
+      },
+      "_BingUrlSubmissionApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "urls"
+        ],
+        "title": "_BingUrlSubmissionApprovalBody",
+        "type": "object"
+      },
+      "_BingUrlSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "urls",
+          "approval_id"
+        ],
+        "title": "_BingUrlSubmissionBody",
+        "type": "object"
+      },
+      "_Ga4AccountDiscoveryBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id"
+        ],
+        "title": "_Ga4AccountDiscoveryBody",
+        "type": "object"
+      },
+      "_Ga4ConversionFunnelBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "event_names": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 2,
+            "title": "Event Names",
+            "type": "array"
+          },
+          "limit": {
+            "default": 1000,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "property_id": {
+            "pattern": "^[0-9]+$",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "property_id",
+          "start_date",
+          "end_date",
+          "event_names"
+        ],
+        "title": "_Ga4ConversionFunnelBody",
+        "type": "object"
+      },
+      "_Ga4DateRangeBody": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start_date",
+          "end_date"
+        ],
+        "title": "_Ga4DateRangeBody",
+        "type": "object"
+      },
+      "_Ga4FixedReportBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "limit": {
+            "default": 1000,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "property_id": {
+            "pattern": "^[0-9]+$",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "property_id",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_Ga4FixedReportBody",
+        "type": "object"
+      },
+      "_Ga4PageSpeedCorrelationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "google_analytics_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Analytics Account Id",
+            "type": "string"
+          },
+          "page_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Page Url",
+            "type": "string"
+          },
+          "pagespeed_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Pagespeed Account Id",
+            "type": "string"
+          },
+          "property_id": {
+            "pattern": "^[0-9]+$",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/PageSpeedStrategy",
+            "default": "DESKTOP"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_analytics_account_id",
+          "property_id",
+          "pagespeed_account_id",
+          "site_url",
+          "page_url",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_Ga4PageSpeedCorrelationBody",
+        "type": "object"
+      },
+      "_Ga4RealtimeReportBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "dimensions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 9,
+            "minItems": 1,
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "limit": {
+            "default": 1000,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "metrics": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Metrics",
+            "type": "array"
+          },
+          "property_id": {
+            "pattern": "^[0-9]+$",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "property_id",
+          "dimensions",
+          "metrics"
+        ],
+        "title": "_Ga4RealtimeReportBody",
+        "type": "object"
+      },
+      "_Ga4ReportBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "date_ranges": {
+            "items": {
+              "$ref": "#/components/schemas/_Ga4DateRangeBody"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Date Ranges",
+            "type": "array"
+          },
+          "dimensions": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 9,
+            "minItems": 1,
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "limit": {
+            "default": 1000,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "metrics": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Metrics",
+            "type": "array"
+          },
+          "offset": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "property_id": {
+            "pattern": "^[0-9]+$",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "property_id",
+          "date_ranges",
+          "dimensions",
+          "metrics"
+        ],
+        "title": "_Ga4ReportBody",
+        "type": "object"
+      },
+      "_Ga4SearchConsoleComparisonBody": {
+        "additionalProperties": false,
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "google_analytics_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Analytics Account Id",
+            "type": "string"
+          },
+          "google_search_console_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Search Console Account Id",
+            "type": "string"
+          },
+          "property_id": {
+            "pattern": "^[0-9]+$",
+            "title": "Property Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_analytics_account_id",
+          "property_id",
+          "google_search_console_account_id",
+          "site_url",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_Ga4SearchConsoleComparisonBody",
+        "type": "object"
+      },
+      "_GoogleIndexingApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "notification_type": {
+            "$ref": "#/components/schemas/GoogleIndexingNotificationType"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "url",
+          "notification_type"
+        ],
+        "title": "_GoogleIndexingApprovalBody",
+        "type": "object"
+      },
+      "_GoogleIndexingBatchApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "notifications": {
+            "items": {
+              "$ref": "#/components/schemas/_GoogleIndexingBatchNotificationBody"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Notifications",
+            "type": "array"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "notifications"
+        ],
+        "title": "_GoogleIndexingBatchApprovalBody",
+        "type": "object"
+      },
+      "_GoogleIndexingBatchNotificationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "notification_type": {
+            "$ref": "#/components/schemas/GoogleIndexingNotificationType"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "notification_type"
+        ],
+        "title": "_GoogleIndexingBatchNotificationBody",
+        "type": "object"
+      },
+      "_GoogleIndexingBatchSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "notifications": {
+            "items": {
+              "$ref": "#/components/schemas/_GoogleIndexingBatchNotificationBody"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Notifications",
+            "type": "array"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "notifications",
+          "approval_id"
+        ],
+        "title": "_GoogleIndexingBatchSubmissionBody",
+        "type": "object"
+      },
+      "_GoogleIndexingMetadataBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "url"
+        ],
+        "title": "_GoogleIndexingMetadataBody",
+        "type": "object"
+      },
+      "_GoogleIndexingSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "notification_type": {
+            "$ref": "#/components/schemas/GoogleIndexingNotificationType"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "url",
+          "notification_type",
+          "approval_id"
+        ],
+        "title": "_GoogleIndexingSubmissionBody",
+        "type": "object"
+      },
+      "_GoogleSiteApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/GoogleSiteOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "operation"
+        ],
+        "title": "_GoogleSiteApprovalBody",
+        "type": "object"
+      },
+      "_GoogleSiteSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/GoogleSiteOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "operation",
+          "approval_id"
+        ],
+        "title": "_GoogleSiteSubmissionBody",
+        "type": "object"
+      },
+      "_GoogleSitemapApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/GoogleSitemapOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "sitemap_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Sitemap Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "sitemap_url",
+          "operation"
+        ],
+        "title": "_GoogleSitemapApprovalBody",
+        "type": "object"
+      },
+      "_GoogleSitemapSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "operation": {
+            "$ref": "#/components/schemas/GoogleSitemapOperation"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "sitemap_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Sitemap Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "sitemap_url",
+          "operation",
+          "approval_id"
+        ],
+        "title": "_GoogleSitemapSubmissionBody",
+        "type": "object"
+      },
+      "_IndexNowApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "target_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "target_id",
+          "urls"
+        ],
+        "title": "_IndexNowApprovalBody",
+        "type": "object"
+      },
+      "_IndexNowSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "target_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Target Id",
+            "type": "string"
+          },
+          "urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "target_id",
+          "urls",
+          "approval_id"
+        ],
+        "title": "_IndexNowSubmissionBody",
+        "type": "object"
+      },
+      "_LocalSchemaValidationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "document": {
+            "maxLength": 1048576,
+            "minLength": 1,
+            "title": "Document",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document"
+        ],
+        "title": "_LocalSchemaValidationBody",
+        "type": "object"
+      },
+      "_PageSpeedAnalysisBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "categories": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PageSpeedCategory"
+            },
+            "maxItems": 5,
+            "title": "Categories",
+            "type": "array"
+          },
+          "page_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Page Url",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "strategy": {
+            "$ref": "#/components/schemas/PageSpeedStrategy",
+            "default": "DESKTOP"
+          },
+          "timeout_seconds": {
+            "default": 30.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "page_url"
+        ],
+        "title": "_PageSpeedAnalysisBody",
+        "type": "object"
+      },
+      "_PublicSchemaValidationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          },
+          "url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "_PublicSchemaValidationBody",
+        "type": "object"
+      },
+      "_SearchAnalyticsBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "dimensions": {
+            "items": {
+              "$ref": "#/components/schemas/SearchAnalyticsDimension"
+            },
+            "maxItems": 5,
+            "title": "Dimensions",
+            "type": "array"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "filters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/_SearchAnalyticsFilterBody"
+            },
+            "maxItems": 20,
+            "title": "Filters",
+            "type": "array"
+          },
+          "row_limit": {
+            "default": 1000,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Row Limit",
+            "type": "integer"
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/SearchAnalyticsType",
+            "default": "web"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "start_row": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Start Row",
+            "type": "integer"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date",
+          "dimensions"
+        ],
+        "title": "_SearchAnalyticsBody",
+        "type": "object"
+      },
+      "_SearchAnalyticsComparisonBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "filters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/_SearchAnalyticsFilterBody"
+            },
+            "maxItems": 20,
+            "title": "Filters",
+            "type": "array"
+          },
+          "previous_end_date": {
+            "format": "date",
+            "title": "Previous End Date",
+            "type": "string"
+          },
+          "previous_start_date": {
+            "format": "date",
+            "title": "Previous Start Date",
+            "type": "string"
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/SearchAnalyticsType",
+            "default": "web"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date",
+          "previous_start_date",
+          "previous_end_date"
+        ],
+        "title": "_SearchAnalyticsComparisonBody",
+        "type": "object"
+      },
+      "_SearchAnalyticsDimensionReportBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "filters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/_SearchAnalyticsFilterBody"
+            },
+            "maxItems": 20,
+            "title": "Filters",
+            "type": "array"
+          },
+          "report": {
+            "$ref": "#/components/schemas/SearchAnalyticsDimensionReportKind"
+          },
+          "row_limit": {
+            "default": 1000,
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Row Limit",
+            "type": "integer"
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/SearchAnalyticsType",
+            "default": "web"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "start_row": {
+            "default": 0,
+            "maximum": 100000.0,
+            "minimum": 0.0,
+            "title": "Start Row",
+            "type": "integer"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date",
+          "report"
+        ],
+        "title": "_SearchAnalyticsDimensionReportBody",
+        "type": "object"
+      },
+      "_SearchAnalyticsDropAttributionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "attribution": {
+            "$ref": "#/components/schemas/SearchAnalyticsDropAttributionKind"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "filters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/_SearchAnalyticsFilterBody"
+            },
+            "maxItems": 20,
+            "title": "Filters",
+            "type": "array"
+          },
+          "previous_end_date": {
+            "format": "date",
+            "title": "Previous End Date",
+            "type": "string"
+          },
+          "previous_start_date": {
+            "format": "date",
+            "title": "Previous Start Date",
+            "type": "string"
+          },
+          "row_limit": {
+            "default": 500,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Row Limit",
+            "type": "integer"
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/SearchAnalyticsType",
+            "default": "web"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date",
+          "attribution",
+          "previous_start_date",
+          "previous_end_date"
+        ],
+        "title": "_SearchAnalyticsDropAttributionBody",
+        "type": "object"
+      },
+      "_SearchAnalyticsFilterBody": {
+        "additionalProperties": false,
+        "properties": {
+          "dimension": {
+            "$ref": "#/components/schemas/SearchAnalyticsDimension"
+          },
+          "expression": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Expression",
+            "type": "string"
+          },
+          "operator": {
+            "$ref": "#/components/schemas/SearchAnalyticsFilterOperator"
+          }
+        },
+        "required": [
+          "dimension",
+          "operator",
+          "expression"
+        ],
+        "title": "_SearchAnalyticsFilterBody",
+        "type": "object"
+      },
+      "_SearchAnalyticsPagePerformanceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "filters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/_SearchAnalyticsFilterBody"
+            },
+            "maxItems": 20,
+            "title": "Filters",
+            "type": "array"
+          },
+          "row_limit": {
+            "default": 500,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Row Limit",
+            "type": "integer"
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/SearchAnalyticsType",
+            "default": "web"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_SearchAnalyticsPagePerformanceBody",
+        "type": "object"
+      },
+      "_SearchAnalyticsSummaryBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "filters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/_SearchAnalyticsFilterBody"
+            },
+            "maxItems": 20,
+            "title": "Filters",
+            "type": "array"
+          },
+          "search_type": {
+            "$ref": "#/components/schemas/SearchAnalyticsType",
+            "default": "web"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_SearchAnalyticsSummaryBody",
+        "type": "object"
+      },
+      "_SearchEngineComparisonBody": {
+        "additionalProperties": false,
+        "properties": {
+          "bing_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Bing Account Id",
+            "type": "string"
+          },
+          "bing_site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Bing Site Url",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "google_search_console_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Search Console Account Id",
+            "type": "string"
+          },
+          "google_search_console_site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Google Search Console Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_search_console_account_id",
+          "google_search_console_site_url",
+          "bing_account_id",
+          "bing_site_url",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_SearchEngineComparisonBody",
+        "type": "object"
+      },
+      "_SearchEngineTrafficHealthBody": {
+        "additionalProperties": false,
+        "properties": {
+          "bing_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Bing Account Id",
+            "type": "string"
+          },
+          "bing_site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Bing Site Url",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "google_search_console_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Search Console Account Id",
+            "type": "string"
+          },
+          "google_search_console_site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Google Search Console Site Url",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_search_console_account_id",
+          "google_search_console_site_url",
+          "bing_account_id",
+          "bing_site_url",
+          "start_date",
+          "end_date"
+        ],
+        "title": "_SearchEngineTrafficHealthBody",
+        "type": "object"
+      },
+      "_SiteOnboardingApprovalBody": {
+        "additionalProperties": false,
+        "properties": {
+          "bing_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Bing Account Id",
+            "type": "string"
+          },
+          "currency_code": {
+            "default": "USD",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "google_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Account Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "time_zone": {
+            "default": "Etc/UTC",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Time Zone",
+            "type": "string"
+          }
+        },
+        "required": [
+          "google_account_id",
+          "bing_account_id",
+          "site_url"
+        ],
+        "title": "_SiteOnboardingApprovalBody",
+        "type": "object"
+      },
+      "_SiteOnboardingSubmissionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "approval_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Approval Id",
+            "type": "string"
+          },
+          "bing_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Bing Account Id",
+            "type": "string"
+          },
+          "currency_code": {
+            "default": "USD",
+            "maxLength": 3,
+            "minLength": 3,
+            "title": "Currency Code",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "google_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Account Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "time_zone": {
+            "default": "Etc/UTC",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Time Zone",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_account_id",
+          "bing_account_id",
+          "site_url",
+          "approval_id"
+        ],
+        "title": "_SiteOnboardingSubmissionBody",
+        "type": "object"
+      },
+      "_UrlInspectionBatchBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "inspection_urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Inspection Urls",
+            "type": "array"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "inspection_urls"
+        ],
+        "title": "_UrlInspectionBatchBody",
+        "type": "object"
+      },
+      "_UrlInspectionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "inspection_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Inspection Url",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "inspection_url"
+        ],
+        "title": "_UrlInspectionBody",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "AdminBearerAuth": {
+        "bearerFormat": "opaque",
+        "description": "Required for `/v1/admin/*`; configure it separately from the regular API bearer.",
+        "scheme": "bearer",
+        "type": "http"
+      },
+      "BearerAuth": {
+        "bearerFormat": "opaque",
+        "description": "Required for every protected non-admin endpoint.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "title": "rankrat",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "healthHealthzGet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Health Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "security": [],
+        "summary": "Health"
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "readyReadyGet",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Ready"
+      }
+    },
+    "/v1/accounts": {
+      "get": {
+        "operationId": "accountsList",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Provider"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Accounts List"
+      }
+    },
+    "/v1/admin/bing-site-approvals": {
+      "post": {
+        "operationId": "adminBingSiteApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingSiteApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Bing Site Approval"
+      }
+    },
+    "/v1/admin/bing-sitemap-approvals": {
+      "post": {
+        "operationId": "adminBingSitemapApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingSitemapApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Bing Sitemap Approval"
+      }
+    },
+    "/v1/admin/bing-url-submission-approvals": {
+      "post": {
+        "operationId": "adminBingUrlSubmissionApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingUrlSubmissionApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Bing Url Submission Approval"
+      }
+    },
+    "/v1/admin/google-indexing-approvals": {
+      "post": {
+        "operationId": "adminGoogleIndexingApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleIndexingApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Google Indexing Approval"
+      }
+    },
+    "/v1/admin/google-indexing-batch-approvals": {
+      "post": {
+        "operationId": "adminGoogleIndexingBatchApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleIndexingBatchApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Google Indexing Batch Approval"
+      }
+    },
+    "/v1/admin/google-site-approvals": {
+      "post": {
+        "operationId": "adminGoogleSiteApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleSiteApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Google Site Approval"
+      }
+    },
+    "/v1/admin/google-sitemap-approvals": {
+      "post": {
+        "operationId": "adminGoogleSitemapApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleSitemapApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Google Sitemap Approval"
+      }
+    },
+    "/v1/admin/site-onboarding-approvals": {
+      "post": {
+        "operationId": "adminSiteOnboardingApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SiteOnboardingApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Site Onboarding Approval"
+      }
+    },
+    "/v1/admin/write-approvals": {
+      "post": {
+        "operationId": "adminWriteApprovalCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_IndexNowApprovalBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "AdminBearerAuth": []
+          }
+        ],
+        "summary": "Create Indexnow Approval"
+      }
+    },
+    "/v1/bing-site-submissions": {
+      "post": {
+        "operationId": "bingSiteSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingSiteSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Site Submission"
+      }
+    },
+    "/v1/bing-sitemap-submissions": {
+      "post": {
+        "operationId": "bingSitemapSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingSitemapSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Sitemap Submission"
+      }
+    },
+    "/v1/bing-url-submissions": {
+      "post": {
+        "operationId": "bingUrlSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingUrlSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Url Submission"
+      }
+    },
+    "/v1/bing/brand-analysis": {
+      "post": {
+        "operationId": "bingBrandAnalysis",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingBrandAnalysisBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Brand Analysis"
+      }
+    },
+    "/v1/bing/crawl-issues": {
+      "post": {
+        "operationId": "bingCrawlIssues",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Crawl Issues"
+      }
+    },
+    "/v1/bing/crawl-stats": {
+      "post": {
+        "operationId": "bingCrawlStats",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Crawl Stats"
+      }
+    },
+    "/v1/bing/feeds": {
+      "post": {
+        "operationId": "bingFeeds",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Feeds"
+      }
+    },
+    "/v1/bing/keyword-statistics": {
+      "post": {
+        "operationId": "bingKeywordStatistics",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingKeywordStatisticsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Keyword Statistics"
+      }
+    },
+    "/v1/bing/link-counts": {
+      "post": {
+        "operationId": "bingLinkCounts",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingLinkCountsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Link Counts"
+      }
+    },
+    "/v1/bing/opportunity-matrix": {
+      "post": {
+        "operationId": "bingOpportunityMatrix",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Opportunity Matrix"
+      }
+    },
+    "/v1/bing/page-opportunities": {
+      "post": {
+        "operationId": "bingPageOpportunities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Page Opportunities"
+      }
+    },
+    "/v1/bing/page-performance": {
+      "post": {
+        "operationId": "bingPagePerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Page Performance"
+      }
+    },
+    "/v1/bing/page-query-performance": {
+      "post": {
+        "operationId": "bingPageQueryPerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPageQueryPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Page Query Performance"
+      }
+    },
+    "/v1/bing/query-cannibalization": {
+      "post": {
+        "operationId": "bingQueryCannibalization",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingQueryPagePerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Query Cannibalization"
+      }
+    },
+    "/v1/bing/query-opportunities": {
+      "post": {
+        "operationId": "bingQueryOpportunities",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Query Opportunities"
+      }
+    },
+    "/v1/bing/query-page-performance": {
+      "post": {
+        "operationId": "bingQueryPagePerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingQueryPagePerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Query Page Performance"
+      }
+    },
+    "/v1/bing/query-performance": {
+      "post": {
+        "operationId": "bingQueryPerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Query Performance"
+      }
+    },
+    "/v1/bing/ranking-buckets": {
+      "post": {
+        "operationId": "bingRankingBuckets",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Ranking Buckets"
+      }
+    },
+    "/v1/bing/related-keywords": {
+      "post": {
+        "operationId": "bingRelatedKeywords",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingRelatedKeywordsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Related Keywords"
+      }
+    },
+    "/v1/bing/traffic-anomalies": {
+      "post": {
+        "operationId": "bingTrafficAnomalies",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingTrafficBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Traffic Anomalies"
+      }
+    },
+    "/v1/bing/traffic-comparison": {
+      "post": {
+        "operationId": "bingTrafficComparison",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingTrafficComparisonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Traffic Comparison"
+      }
+    },
+    "/v1/bing/traffic-trend": {
+      "post": {
+        "operationId": "bingTrafficTrend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingTrafficBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Traffic Trend"
+      }
+    },
+    "/v1/bing/url-information": {
+      "post": {
+        "operationId": "bingUrlInformation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingUrlInformationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Url Information"
+      }
+    },
+    "/v1/bing/url-submission-quota": {
+      "post": {
+        "operationId": "bingUrlSubmissionQuota",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingPerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Url Submission Quota"
+      }
+    },
+    "/v1/cross-provider/ga4-pagespeed-correlations": {
+      "post": {
+        "operationId": "ga4PagespeedCorrelation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4PageSpeedCorrelationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ga4 Pagespeed Correlation"
+      }
+    },
+    "/v1/cross-provider/ga4-search-console-comparisons": {
+      "post": {
+        "operationId": "ga4SearchConsoleComparison",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4SearchConsoleComparisonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ga4 Search Console Comparison"
+      }
+    },
+    "/v1/cross-provider/search-engine-comparisons": {
+      "post": {
+        "operationId": "searchEngineComparison",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchEngineComparisonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Engine Comparison"
+      }
+    },
+    "/v1/cross-provider/search-engine-traffic-health": {
+      "post": {
+        "operationId": "searchEngineTrafficHealth",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchEngineTrafficHealthBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Search Engine Traffic Health"
+      }
+    },
+    "/v1/google-analytics/account-inventory": {
+      "post": {
+        "operationId": "googleAnalyticsAccountInventory",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4AccountDiscoveryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Account Inventory"
+      }
+    },
+    "/v1/google-analytics/audience-segments": {
+      "post": {
+        "operationId": "googleAnalyticsAudienceSegments",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4FixedReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Audience Segments"
+      }
+    },
+    "/v1/google-analytics/content-performance": {
+      "post": {
+        "operationId": "googleAnalyticsContentPerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4FixedReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Content Performance"
+      }
+    },
+    "/v1/google-analytics/conversion-funnels": {
+      "post": {
+        "operationId": "googleAnalyticsConversionFunnel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4ConversionFunnelBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Conversion Funnel"
+      }
+    },
+    "/v1/google-analytics/ecommerce-performance": {
+      "post": {
+        "operationId": "googleAnalyticsEcommercePerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4FixedReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Ecommerce Performance"
+      }
+    },
+    "/v1/google-analytics/landing-page-performance": {
+      "post": {
+        "operationId": "googleAnalyticsLandingPagePerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4FixedReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Landing Page Performance"
+      }
+    },
+    "/v1/google-analytics/organic-search-landing-pages": {
+      "post": {
+        "operationId": "googleAnalyticsOrganicSearchLandingPages",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4FixedReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Organic Search Landing Pages"
+      }
+    },
+    "/v1/google-analytics/realtime-reports": {
+      "post": {
+        "operationId": "googleAnalyticsRealtimeReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4RealtimeReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Realtime Report"
+      }
+    },
+    "/v1/google-analytics/reports": {
+      "post": {
+        "operationId": "googleAnalyticsReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4ReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Report"
+      }
+    },
+    "/v1/google-analytics/traffic-source-performance": {
+      "post": {
+        "operationId": "googleAnalyticsTrafficSourcePerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4FixedReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics Traffic Source Performance"
+      }
+    },
+    "/v1/google-analytics/user-behavior": {
+      "post": {
+        "operationId": "googleAnalyticsUserBehavior",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_Ga4FixedReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Analytics User Behavior"
+      }
+    },
+    "/v1/google-indexing-batch-submissions": {
+      "post": {
+        "operationId": "googleIndexingBatchSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleIndexingBatchSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Indexing Batch Submission"
+      }
+    },
+    "/v1/google-indexing-metadata": {
+      "post": {
+        "operationId": "googleIndexingMetadataGet",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleIndexingMetadataBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Indexing Metadata"
+      }
+    },
+    "/v1/google-indexing-submissions": {
+      "post": {
+        "operationId": "googleIndexingSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleIndexingSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Indexing Submission"
+      }
+    },
+    "/v1/google-site-submissions": {
+      "post": {
+        "operationId": "googleSiteSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleSiteSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Site Submission"
+      }
+    },
+    "/v1/google-sitemap-submissions": {
+      "post": {
+        "operationId": "googleSitemapSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_GoogleSitemapSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Sitemap Submission"
+      }
+    },
+    "/v1/google/search-analytics-anomalies": {
+      "post": {
+        "operationId": "googleSearchAnalyticsAnomalies",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsSummaryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Anomalies"
+      }
+    },
+    "/v1/google/search-analytics-comparison": {
+      "post": {
+        "operationId": "googleSearchAnalyticsComparison",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsComparisonBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Comparison"
+      }
+    },
+    "/v1/google/search-analytics-dimension-report": {
+      "post": {
+        "operationId": "googleSearchAnalyticsDimensionReport",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsDimensionReportBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Dimension Report"
+      }
+    },
+    "/v1/google/search-analytics-drop-attribution": {
+      "post": {
+        "operationId": "googleSearchAnalyticsDropAttribution",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsDropAttributionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Drop Attribution"
+      }
+    },
+    "/v1/google/search-analytics-page-performance": {
+      "post": {
+        "operationId": "googleSearchAnalyticsPagePerformance",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsPagePerformanceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Page Performance"
+      }
+    },
+    "/v1/google/search-analytics-queries": {
+      "post": {
+        "operationId": "googleSearchAnalyticsQuery",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Query"
+      }
+    },
+    "/v1/google/search-analytics-summary": {
+      "post": {
+        "operationId": "googleSearchAnalyticsSummary",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsSummaryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Summary"
+      }
+    },
+    "/v1/google/search-analytics-trend": {
+      "post": {
+        "operationId": "googleSearchAnalyticsTrend",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SearchAnalyticsSummaryBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Search Analytics Trend"
+      }
+    },
+    "/v1/google/site": {
+      "get": {
+        "operationId": "googleSiteGet",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "site_url",
+            "required": true,
+            "schema": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Site Url",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeout_seconds",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "maximum": 30.0,
+              "minimum": 0.1,
+              "title": "Timeout Seconds",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Site Get"
+      }
+    },
+    "/v1/google/sitemap": {
+      "get": {
+        "operationId": "googleSitemapGet",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "site_url",
+            "required": true,
+            "schema": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Site Url",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sitemap_url",
+            "required": true,
+            "schema": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Sitemap Url",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeout_seconds",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "maximum": 30.0,
+              "minimum": 0.1,
+              "title": "Timeout Seconds",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Sitemap Get"
+      }
+    },
+    "/v1/google/sitemaps": {
+      "get": {
+        "operationId": "googleSitemapsList",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "site_url",
+            "required": true,
+            "schema": {
+              "maxLength": 2048,
+              "minLength": 1,
+              "title": "Site Url",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeout_seconds",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "maximum": 30.0,
+              "minimum": 0.1,
+              "title": "Timeout Seconds",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Sitemaps List"
+      }
+    },
+    "/v1/google/sites": {
+      "get": {
+        "operationId": "googleSitesList",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeout_seconds",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "maximum": 30.0,
+              "minimum": 0.1,
+              "title": "Timeout Seconds",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Sites List"
+      }
+    },
+    "/v1/google/url-inspection-batches": {
+      "post": {
+        "operationId": "googleUrlInspectionBatch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_UrlInspectionBatchBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Url Inspection Batch"
+      }
+    },
+    "/v1/google/url-inspections": {
+      "post": {
+        "operationId": "googleUrlInspection",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_UrlInspectionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Google Url Inspection"
+      }
+    },
+    "/v1/indexnow-submissions": {
+      "post": {
+        "operationId": "indexnowSubmit",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_IndexNowSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Indexnow Submit"
+      }
+    },
+    "/v1/pagespeed/analyses": {
+      "post": {
+        "operationId": "pagespeedAnalyze",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_PageSpeedAnalysisBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pagespeed Analyze"
+      }
+    },
+    "/v1/pagespeed/core-web-vitals": {
+      "post": {
+        "operationId": "pagespeedCoreWebVitals",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_PageSpeedAnalysisBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pagespeed Core Web Vitals"
+      }
+    },
+    "/v1/provider-readiness": {
+      "get": {
+        "operationId": "providerReadiness",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "timeout_seconds",
+            "required": false,
+            "schema": {
+              "default": 10.0,
+              "maximum": 30.0,
+              "minimum": 0.1,
+              "title": "Timeout Seconds",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Provider Readiness"
+      }
+    },
+    "/v1/schema/validate-html": {
+      "post": {
+        "operationId": "schemaValidateHtml",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_LocalSchemaValidationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Validate Html"
+      }
+    },
+    "/v1/schema/validate-json-ld": {
+      "post": {
+        "operationId": "schemaValidateJsonLd",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_LocalSchemaValidationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Validate Json Ld"
+      }
+    },
+    "/v1/schema/validate-url": {
+      "post": {
+        "operationId": "schemaValidateUrl",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_PublicSchemaValidationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Schema Validate Url"
+      }
+    },
+    "/v1/server-info": {
+      "get": {
+        "operationId": "serverInfo",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Server Info"
+      }
+    },
+    "/v1/site-onboarding-submissions": {
+      "post": {
+        "operationId": "siteOnboardingSubmissionCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SiteOnboardingSubmissionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Site Onboarding Submission"
+      }
+    },
+    "/v1/sites": {
+      "get": {
+        "operationId": "sitesList",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 63,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Account Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/Provider"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sites List"
+      }
+    }
+  },
+  "security": [
+    {
+      "BearerAuth": []
+    }
+  ]
+}

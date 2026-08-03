@@ -1,0 +1,27 @@
+title = "Rankrat secret scanning"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Ignored local credentials, runtime configuration, and agent scratch"
+paths = [
+  '''(^|/)\.agent_notes(?:/|$)''',
+  '''(^|/)\.anustimes(?:/|$)''',
+  '''(^|/)\.brutal_reviews(?:/|$)''',
+  '''(^|/)\.plan-and-delegate(?:/|$)''',
+  '''(^|/)\.research_files(?:/|$)''',
+  '''(^|/)\.secaudit(?:/|$)''',
+  '''(^|/)\.testing(?:/|$)''',
+  '''(^|/)\.venv(?:/|$)''',
+  '''(^|/)\.sbom(?:/|$)''',
+  '''(^|/)\.grype-db(?:/|$)''',
+  '''(^|/)\.mypy_cache(?:/|$)''',
+  '''(^|/)\.pyright(?:/|$)''',
+  '''(^|/)\.pytest_cache(?:/|$)''',
+  '''(^|/)\.ruff_cache(?:/|$)''',
+  '''(^|/)__pycache__(?:/|$)''',
+  '''(^|/)\.coverage$''',
+  '''(^|/)config/boundaries(?:\.live)?\.json$''',
+  '''(^|/)secrets(?:/|$)''',
+]

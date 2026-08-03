@@ -1,0 +1,22 @@
+{
+  "accounts": [
+    {
+      "id": "google",
+      "provider": "google",
+      "credential": "/run/secrets/google/oauth-client.json",
+      "oauth_token_file": "/run/oauth/google.json",
+      "pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key",
+      "google_analytics_parent_account_id": "123456789",
+      "google_account_discovery": true,
+      "search_console_sites": ["sc-domain:example.com"],
+      "pagespeed_sites": ["https://example.com/"]
+    },
+    {
+      "id": "bing",
+      "provider": "bing",
+      "credential": "/run/secrets/bing/api-key",
+      "sites": ["https://example.com/"]
+    }
+  ],
+  "indexnow_targets": []
+}
