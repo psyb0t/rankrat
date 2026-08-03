@@ -2,6 +2,48 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.2.0 — 2026-08-03
+
+Onboarding now explains the half it cannot do, and agents no longer reach it just
+because the server is writable.
+
+- **Rankrat cannot verify site ownership, and now says so instead of implying
+  otherwise.** Onboarding creates the GA4 property, the Search Console property
+  and the Bing site, then returns `google_search_console_added: true`. That flag
+  only ever meant the create call was accepted — the property is unverified,
+  answers reads with a `siteUnverifiedUser` permission level rather than data,
+  and stays that way until a human deploys a token issued by the provider's own
+  console. Nothing reported that, so a run that "worked" left the user with
+  unexplained empty reads.
+- **The procedure is now served.** New read-only surfaces: a
+  `rankrat://onboarding` MCP resource, a `rankrat://onboarding/{site_url}`
+  resource template narrowing it to one percent-encoded site, and an
+  `onboarding_guide` tool returning the identical document for clients without
+  resource support. All three render from one function and exist on every server,
+  including a read-only one — knowing the procedure is not a privilege, and a
+  read-only Rankrat can now coach an operator through work it will not do itself.
+  `rankrat onboard-site` prints the same steps when it finishes. The server
+  advertises the `resources` capability for the first time; it previously
+  advertised only `tools`.
+- **The guidance is narrowed by the property form,** because the options are not
+  the same: a `sc-domain:` property accepts a DNS TXT record and nothing else,
+  while a `https://` URL-prefix property also accepts the GA4 tag, an HTML file
+  or a meta tag. It never invents a token value — Rankrat holds no credential
+  that can read one — so each method names its artifact and says which console
+  issues it.
+- **Breaking. `RANKRAT_READ_ONLY=false` no longer exposes `site_onboarding_submit`
+  on its own.** Onboarding is the one operation that rewrites the boundary file
+  this server enforces, so an agent calling it widens its own future scope; that
+  should not ride along with the switch that permits an IndexNow submission. It
+  now also requires `RANKRAT_ALLOW_AGENT_ONBOARDING=true`, without which the tool
+  is absent from `tools/list` and its REST route is never mounted. Deployments
+  that relied on the old behaviour set the new variable. The `rankrat
+  onboard-site` command is unaffected.
+
+Known gap, unchanged in this release: a partially-failed onboarding is not rolled
+back, and because the boundary file is only written after all three stages
+succeed, retrying creates a second GA4 property.
+
 ## v0.1.2 — 2026-08-03
 
 Adds `rankrat.sh`, makes the README lead with the image rather than the

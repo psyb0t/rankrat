@@ -37,6 +37,7 @@ tool surface is still free to move.
 - [Running it](#running-it)
 - [Agent integrations](#agent-integrations)
 - [Write capability](#write-capability)
+- [Onboarding a new site](#onboarding-a-new-site)
 - [Credentials](#credentials)
 - [Configuration](#configuration)
 - [Verification](#verification)
@@ -199,6 +200,57 @@ HTTP; stdio access is controlled by who can start the process.
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
 Indexing notifications, Search Console site/sitemap changes, and new-site
 onboarding. They are marked destructive/non-idempotent in MCP.
+
+## Onboarding a new site
+
+`onboard-site` creates a GA4 property, a Search Console property and a Bing site
+for one URL, then records their IDs in the boundary file. Two things are worth
+knowing before using it.
+
+**It cannot verify the site, and does not pretend to.** Verification proves to a
+provider that you own the domain; the token is issued by that provider's own
+console and Rankrat holds no credential that can read it. So onboarding returns
+success — meaning the three create calls were accepted — while the properties are
+still unverified and returning no data. What you do next depends on the property
+form:
+
+| Property | Methods it accepts |
+| --- | --- |
+| `sc-domain:example.com` | DNS TXT record, and nothing else |
+| `https://example.com/` | GA4 tag, HTML file, meta tag, DNS TXT |
+| Bing | Import from a verified Search Console property, XML file, meta tag, CNAME |
+
+Deploy the returned GA4 Measurement ID first. It is the one artifact Rankrat
+hands you directly, and on a URL-prefix property it also satisfies Search Console
+verification on its own — after which Bing can simply import that property. Least
+work, no extra APIs.
+
+The procedure is served rather than left implied, so an agent can walk you through
+it instead of guessing: the `rankrat://onboarding` MCP resource, a
+`rankrat://onboarding/{site_url}` template for one percent-encoded site, and an
+`onboarding_guide` tool returning the same document for clients without resource
+support. All three are read-only and present even on a read-only server — knowing
+the procedure is not a privilege. `rankrat onboard-site` prints the same steps
+when it finishes.
+
+**Agents cannot reach it unless you say so.** It is the only operation that
+rewrites the boundary file this server enforces, so `RANKRAT_READ_ONLY=false`
+alone is deliberately not enough:
+
+```dotenv
+RANKRAT_READ_ONLY=false
+RANKRAT_ALLOW_AGENT_ONBOARDING=true
+```
+
+Without the second switch `site_onboarding_submit` is absent from `tools/list`
+and its REST route is never mounted, however writable the rest of the server is.
+`rankrat onboard-site` ignores the switch — that is you at a terminal, not an
+agent in a session.
+
+One caveat: if a later stage fails the earlier ones are not rolled back. A run
+that creates the GA4 property then fails on Search Console leaves that property
+real but absent from the boundary file, and re-running creates a second one.
+Check Analytics before retrying.
 
 ## Credentials
 

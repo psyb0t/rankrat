@@ -43,6 +43,11 @@ from rankrat.providers.google_search_console import (
     GoogleConfiguredTokenProvider,
     GoogleSearchConsoleClient,
 )
+from rankrat.services.onboarding_guide import (
+    GuideActor,
+    OnboardingGuideRequest,
+    OnboardingGuideService,
+)
 from rankrat.services.provider_readiness import ProviderReadinessRequest
 from rankrat.transports.http import create_http_app
 from rankrat.transports.mcp import build_mcp_server
@@ -57,6 +62,14 @@ _SETUP_GA4_CONFIGURATION_ACTION = (
     "SETUP ACTION: {account_id} has no configured GA4 property. Create a GA4 property and "
     "web stream, add its numeric property ID to the boundary file, then deploy the returned "
     "G- Measurement ID in the site's public <head>."
+)
+_ONBOARDING_NEXT_STEPS_HEADING = (
+    "NOT DONE YET: the three resources exist but the site is not verified, so none of "
+    "them return data until you finish these steps."
+)
+_ONBOARDING_GUIDE_POINTER = (
+    "The full procedure is also served to agents as the rankrat://onboarding resource "
+    "and the onboarding_guide tool."
 )
 _SETUP_READY_MESSAGE = (
     "SETUP READY: configured provider checks passed. Confirm each configured GA4 web stream's "
@@ -228,7 +241,33 @@ def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Setti
         "boundary_updated": receipt.boundary_updated,
     }
     sys.stdout.write(f"{json.dumps(payload, separators=(',', ':'))}\n")
+    _write_onboarding_next_steps(policy, settings, receipt.site_url)
     return 0
+
+
+def _write_onboarding_next_steps(
+    policy: BoundaryPolicy,
+    settings: Settings,
+    site_url: str,
+) -> None:
+    """Print what the operator still has to do, from the same source the guide serves."""
+
+    guide = OnboardingGuideService(policy).render(
+        OnboardingGuideRequest(site_url=site_url),
+        writes_enabled=settings.writes_enabled,
+        agent_onboarding_enabled=settings.agent_onboarding_enabled,
+    )
+    sys.stdout.write(f"\n{_ONBOARDING_NEXT_STEPS_HEADING}\n")
+    for step in guide.recommended_order:
+        if step.actor is not GuideActor.OPERATOR:
+            continue
+        sys.stdout.write(f"  {step.order}. {step.title}\n     {step.detail}\n")
+    for site in guide.sites:
+        methods = ", ".join(method.label for method in site.search_console_verification)
+        sys.stdout.write(f"\n  Search Console methods for {site.site_url}: {methods}\n")
+        for note in site.notes:
+            sys.stdout.write(f"  Note: {note}\n")
+    sys.stdout.write(f"\n{_ONBOARDING_GUIDE_POINTER}\n")
 
 
 def _run_setup_operator(settings: Settings) -> int:

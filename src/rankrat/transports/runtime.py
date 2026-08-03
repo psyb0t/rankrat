@@ -36,6 +36,7 @@ from rankrat.services.google_search_console import GoogleSearchConsoleService
 from rankrat.services.google_sitemaps import GoogleSitemapService
 from rankrat.services.google_sites import GoogleSiteService
 from rankrat.services.indexnow import IndexNowService
+from rankrat.services.onboarding_guide import OnboardingGuideService
 from rankrat.services.pagespeed import PageSpeedService
 from rankrat.services.provider_readiness import ProviderReadinessService
 from rankrat.services.schema import LocalSchemaValidationService
@@ -58,7 +59,9 @@ class ApplicationServices:
     local_schema: LocalSchemaValidationService
     provider_readiness: ProviderReadinessService
     sites: SitesService
+    onboarding_guide: OnboardingGuideService
     writes_enabled: bool = False
+    agent_onboarding_enabled: bool = False
     indexnow: IndexNowService | None = None
     google_indexing: GoogleIndexingService | None = None
     google_sites: GoogleSiteService | None = None
@@ -129,6 +132,11 @@ def build_services(settings: Settings) -> ApplicationServices:
             policy,
             sitemap_client,
         )
+    # Its own switch rather than the writes_enabled block above: onboarding is
+    # the only operation that rewrites the boundary file this server enforces, so
+    # writable mode by itself must not expose it. agent_onboarding_enabled
+    # already requires writes_enabled, so this stays a subset.
+    if settings.agent_onboarding_enabled:
         site_onboarding = SiteOnboardingService(
             SiteOnboardingOperator(
                 settings.boundary_file,
@@ -169,7 +177,9 @@ def build_services(settings: Settings) -> ApplicationServices:
             {google_client.provider: google_client, bing_client.provider: bing_client},
         ),
         sites=SitesService(policy),
+        onboarding_guide=OnboardingGuideService(policy),
         writes_enabled=settings.writes_enabled,
+        agent_onboarding_enabled=settings.agent_onboarding_enabled,
         indexnow=indexnow,
         google_indexing=google_indexing,
         google_sites=google_sites,

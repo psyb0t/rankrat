@@ -156,6 +156,28 @@ docker run --rm --init --read-only \
 loopback. MCP is then at `http://127.0.0.1:8080/mcp`; send
 `Authorization: Bearer <token>` whenever a bearer secret is configured.
 
+## Onboarding
+
+`RANKRAT_READ_ONLY=false` does not by itself expose onboarding. It is the only
+operation that rewrites the boundary file the server enforces, so it needs
+`RANKRAT_ALLOW_AGENT_ONBOARDING=true` as well; without that,
+`site_onboarding_submit` is absent from `tools/list` and its REST route is not
+mounted. The operator's own `rankrat onboard-site` command is unaffected.
+
+The guidance is available either way, read-only, on every server:
+
+| Surface | What it gives |
+|---|---|
+| `rankrat://onboarding` resource | The whole procedure and this server's onboarding posture |
+| `rankrat://onboarding/{site_url}` template | Same, narrowed to one percent-encoded site |
+| `onboarding_guide` tool | The identical document, for clients without resource support |
+
+Verification is not something Rankrat can do — the token comes from the
+provider's console. A `sc-domain:` property accepts only a DNS TXT record; a
+`https://` URL-prefix property also accepts the GA4 tag, an HTML file or a meta
+tag, and the GA4 tag is the cheapest because onboarding already returned its
+Measurement ID.
+
 ## Checking it works
 
 - `server_info` — the server is up and which mode it is in.

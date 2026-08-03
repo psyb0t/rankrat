@@ -278,6 +278,7 @@ docker run -d --name "$container_name" --network bridge \
 	-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/test-http-bearer \
 	-e RANKRAT_READ_ONLY=false \
 	-e RANKRAT_UNBOUNDED=true \
+	-e RANKRAT_ALLOW_AGENT_ONBOARDING=true \
 	-e RANKRAT_ENABLE_OPENAPI=true \
 	"$image_reference" http >/dev/null
 http_container_started=true
@@ -327,5 +328,67 @@ grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$unbounded_openapi" || {
 	log ERROR "unbounded server did not publish the site onboarding route"
 	exit 1
 }
+
+log INFO "checking writable HTTP startup withholds onboarding without its own switch"
+docker rm -f "$container_name" >/dev/null
+http_container_started=false
+container_name="rankrat-final-image-no-onboarding-$$-${RANDOM}"
+docker run -d --name "$container_name" --network bridge \
+	-p "127.0.0.1::${HTTP_PORT}" \
+	--init --user "$TEST_CONTAINER_UID_GID" --read-only --cap-drop=ALL \
+	--security-opt no-new-privileges:true --pids-limit "$TEST_PIDS_LIMIT" \
+	--memory "$TEST_MEMORY_LIMIT" --cpus "$TEST_CPU_LIMIT" \
+	--tmpfs "/tmp:rw,noexec,nosuid,size=32m" \
+	--mount "type=bind,src=$config_directory,dst=/run/config,readonly" \
+	--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly" \
+	--mount "type=bind,src=$oauth_directory,dst=/run/oauth,readonly" \
+	-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
+	-e RANKRAT_SECRET_ROOT=/run/secrets \
+	-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
+	-e RANKRAT_HTTP_HOST=0.0.0.0 \
+	-e RANKRAT_HTTP_PORT="$HTTP_PORT" \
+	-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/test-http-bearer \
+	-e RANKRAT_READ_ONLY=false \
+	-e RANKRAT_ENABLE_OPENAPI=true \
+	"$image_reference" http >/dev/null
+http_container_started=true
+
+no_onboarding_port_mapping=$(docker port "$container_name" "${HTTP_PORT}/tcp")
+no_onboarding_host_port="${no_onboarding_port_mapping##*:}"
+[[ "$no_onboarding_host_port" =~ ^[0-9]+$ ]] || {
+	log ERROR "Docker did not expose a numeric writable loopback port"
+	exit 1
+}
+readonly no_onboarding_health_url="http://127.0.0.1:${no_onboarding_host_port}/healthz"
+readonly no_onboarding_openapi_url="http://127.0.0.1:${no_onboarding_host_port}${OPENAPI_PATH}"
+
+for ((attempt = 1; attempt <= HTTP_RETRY_COUNT; attempt++)); do
+	if curl --silent --show-error --fail --noproxy '*' --proto '=http' \
+		--max-redirs 0 --connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+		--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$no_onboarding_health_url" >/dev/null; then
+		break
+	fi
+	if [[ "$attempt" -eq "$HTTP_RETRY_COUNT" ]]; then
+		log ERROR "writable HTTP health endpoint did not become ready"
+		log_http_container_output
+		exit 1
+	fi
+	sleep 1
+done
+
+no_onboarding_openapi=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$no_onboarding_openapi_url")
+# Another write route has to be present, or the absence below would prove nothing
+# beyond the server having come up read-only.
+grep -Fq "\"${SCHEMA_VALIDATE_URL_PATH}\"" <<<"$no_onboarding_openapi" || {
+	log ERROR "writable server did not publish its normal routes"
+	exit 1
+}
+if grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$no_onboarding_openapi"; then
+	log ERROR "writable server published site onboarding without RANKRAT_ALLOW_AGENT_ONBOARDING"
+	exit 1
+fi
 
 log INFO "production image stdio and HTTP smoke passed"

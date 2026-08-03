@@ -124,6 +124,21 @@ configured.
 The repo ships a `rankrat.sh` wrapper around exactly these invocations for
 humans; an agent does not need it.
 
+### Onboarding a site
+
+Read the `rankrat://onboarding` resource before saying anything about onboarding,
+or call the `onboarding_guide` tool if the client does not support resources —
+pass `site_url` to get the methods that site's property form actually accepts.
+Both are read-only and present on every server, including read-only ones.
+
+The point of reading it: creating the three provider resources is the small part,
+and Rankrat cannot verify site ownership at all. Onboarding reports success while
+the properties are unverified and returning no data, so a run that "worked" still
+leaves the user with steps to perform. The guide names them, and says which ones
+the user has to do rather than you. `site_onboarding_submit` exists only when the
+operator has set `RANKRAT_ALLOW_AGENT_ONBOARDING=true`; when it is absent, guiding
+the user through `rankrat onboard-site` is the whole job.
+
 Typical flow for "why did traffic drop":
 
 1. `google_search_analytics_summary` — establish the baseline.

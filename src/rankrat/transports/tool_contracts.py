@@ -110,6 +110,7 @@ from rankrat.services.google_sitemaps import (
 )
 from rankrat.services.google_sites import GoogleSiteSubmissionRequest, GoogleSiteSubmissionResponse
 from rankrat.services.indexnow import IndexNowSubmissionRequest, IndexNowSubmissionResponse
+from rankrat.services.onboarding_guide import OnboardingGuide, OnboardingGuideRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisReport,
     PageSpeedAnalysisRequest,
@@ -198,11 +199,15 @@ _GOOGLE_INDEXING_METADATA_TOOL_NAME = "google_indexing_metadata"
 _GOOGLE_SITE_SUBMIT_TOOL_NAME = "google_site_submit"
 _GOOGLE_SITEMAP_SUBMIT_TOOL_NAME = "google_sitemap_submit"
 _SITE_ONBOARDING_SUBMIT_TOOL_NAME = "site_onboarding_submit"
+_ONBOARDING_GUIDE_TOOL_NAME = "onboarding_guide"
 _PAGESPEED_ANALYZE_TOOL_NAME = "pagespeed_analyze"
 _SCHEMA_VALIDATE_HTML_TOOL_NAME = "schema_validate_html"
 _SCHEMA_VALIDATE_JSON_LD_TOOL_NAME = "schema_validate_json_ld"
 _SCHEMA_VALIDATE_URL_TOOL_NAME = "schema_validate_url"
 
+_ONBOARDING_GUIDE_DESCRIPTION = (
+    "Explain the onboarding steps only the operator can perform, and what to tell them."
+)
 _SERVER_INFO_DESCRIPTION = "Show non-sensitive Rankrat capability metadata."
 _ACCOUNTS_LIST_DESCRIPTION = "List configured account summaries only."
 _SITES_LIST_DESCRIPTION = "List configured site and property boundaries only."
@@ -394,6 +399,13 @@ _READ_ONLY_ANNOTATIONS = ToolAnnotations(True, False, True, False)
 _INDEXNOW_WRITE_ANNOTATIONS = ToolAnnotations(False, True, False, False)
 
 READ_ONLY_TOOL_CATALOG: tuple[ToolContract[object, object], ...] = (
+    ToolContract(
+        name=_ONBOARDING_GUIDE_TOOL_NAME,
+        description=_ONBOARDING_GUIDE_DESCRIPTION,
+        input_type=OnboardingGuideRequest,
+        output_type=OnboardingGuide,
+        annotations=_READ_ONLY_ANNOTATIONS,
+    ),
     ToolContract(
         name=_SCHEMA_VALIDATE_URL_TOOL_NAME,
         description=_SCHEMA_VALIDATE_URL_DESCRIPTION,
@@ -923,10 +935,13 @@ SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT = cast(
 )
 
 
-def tool_catalog(writes_enabled: bool) -> tuple[ToolContract[object, object], ...]:
-    """Expose write tools only when the immutable startup setting permits them."""
+def tool_catalog(
+    writes_enabled: bool,
+    agent_onboarding_enabled: bool = False,
+) -> tuple[ToolContract[object, object], ...]:
+    """Expose write tools only when the immutable startup settings permit them."""
     if writes_enabled:
-        return (
+        write_catalog = (
             *READ_ONLY_TOOL_CATALOG,
             INDEXNOW_TOOL_CONTRACT,
             BING_URL_SUBMIT_TOOL_CONTRACT,
@@ -936,6 +951,8 @@ def tool_catalog(writes_enabled: bool) -> tuple[ToolContract[object, object], ..
             GOOGLE_INDEXING_BATCH_SUBMIT_TOOL_CONTRACT,
             GOOGLE_SITE_SUBMIT_TOOL_CONTRACT,
             GOOGLE_SITEMAP_SUBMIT_TOOL_CONTRACT,
-            SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT,
         )
+        if agent_onboarding_enabled:
+            return (*write_catalog, SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT)
+        return write_catalog
     return READ_ONLY_TOOL_CATALOG

@@ -7,10 +7,11 @@ import json
 from datetime import date
 from enum import StrEnum
 from typing import Any, Final
+from urllib.parse import unquote
 
 import mcp.types as types
 from mcp.server.lowlevel import Server
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import AnyUrl, BaseModel, ConfigDict, Field, ValidationError
 
 from rankrat import __version__
 from rankrat.constants import (
@@ -128,6 +129,7 @@ from rankrat.services.google_sitemaps import (
 )
 from rankrat.services.google_sites import GoogleSiteOperation, GoogleSiteSubmissionRequest
 from rankrat.services.indexnow import IndexNowSubmissionRequest
+from rankrat.services.onboarding_guide import OnboardingGuideRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisRequest,
     PageSpeedCategory,
@@ -144,6 +146,20 @@ from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.tool_contracts import ToolAnnotations, tool_catalog
 
 _OBJECT_SCHEMA = "object"
+_JSON_MIME_TYPE = "application/json"
+_ONBOARDING_RESOURCE_URI = "rankrat://onboarding"
+_ONBOARDING_RESOURCE_NAME = "onboarding"
+_ONBOARDING_RESOURCE_DESCRIPTION = (
+    "The onboarding steps only the operator can perform, and what to tell them."
+)
+_ONBOARDING_SITE_RESOURCE_TEMPLATE = "rankrat://onboarding/{site_url}"
+_ONBOARDING_SITE_RESOURCE_NAME = "onboarding-site"
+_ONBOARDING_SITE_RESOURCE_DESCRIPTION = (
+    "The same guidance narrowed to one percent-encoded site URL, which decides "
+    "which verification methods its Search Console property form accepts."
+)
+_ONBOARDING_SITE_RESOURCE_PREFIX = f"{_ONBOARDING_RESOURCE_URI}/"
+_UNKNOWN_RESOURCE_CODE = "RESOURCE_NOT_FOUND"
 _TOOL_ERROR_CODE = "TOOL_INPUT_INVALID"
 _UNKNOWN_TOOL_CODE = "TOOL_NOT_FOUND"
 _TOOL_REQUEST_REJECTED_CODE = "TOOL_REQUEST_REJECTED"
@@ -296,6 +312,12 @@ class _GoogleSiteSubmissionArguments(BaseModel):
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
         le=MAX_PROVIDER_TIMEOUT_SECONDS,
     )
+
+
+class _OnboardingGuideArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    site_url: str | None = Field(default=None, min_length=1, max_length=2_048)
 
 
 class _SiteOnboardingSubmissionArguments(BaseModel):
@@ -782,8 +804,23 @@ def _tool_annotations(annotations: ToolAnnotations) -> types.ToolAnnotations:
     )
 
 
+def _onboarding_resource_site_url(uri: str) -> str | None:
+    """Resolve a supported onboarding URI to its optional site, rejecting anything else."""
+
+    if uri == _ONBOARDING_RESOURCE_URI:
+        return None
+    if not uri.startswith(_ONBOARDING_SITE_RESOURCE_PREFIX):
+        raise RankratError(f"{_UNKNOWN_RESOURCE_CODE}: {uri}")
+    encoded_site_url = uri[len(_ONBOARDING_SITE_RESOURCE_PREFIX) :]
+    site_url = unquote(encoded_site_url)
+    if not site_url:
+        raise RankratError(f"{_UNKNOWN_RESOURCE_CODE}: {uri}")
+    return site_url
+
+
 def _tool_input_schema(name: str) -> dict[str, object]:
     schemas: dict[str, dict[str, object]] = {
+        "onboarding_guide": _OnboardingGuideArguments.model_json_schema(),
         "server_info": {"type": _OBJECT_SCHEMA, "properties": {}, "additionalProperties": False},
         "diagnostics": {"type": _OBJECT_SCHEMA, "properties": {}, "additionalProperties": False},
         "accounts_list": {
@@ -1178,8 +1215,43 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                 inputSchema=_tool_input_schema(contract.name),
                 annotations=_tool_annotations(contract.annotations),
             )
-            for contract in tool_catalog(services.writes_enabled)
+            for contract in tool_catalog(
+                services.writes_enabled,
+                services.agent_onboarding_enabled,
+            )
         ]
+
+    @server.list_resources()  # type: ignore[misc,no-untyped-call]
+    async def list_resources() -> list[types.Resource]:
+        return [
+            types.Resource(
+                uri=AnyUrl(_ONBOARDING_RESOURCE_URI),
+                name=_ONBOARDING_RESOURCE_NAME,
+                description=_ONBOARDING_RESOURCE_DESCRIPTION,
+                mimeType=_JSON_MIME_TYPE,
+            ),
+        ]
+
+    @server.list_resource_templates()  # type: ignore[misc,no-untyped-call]
+    async def list_resource_templates() -> list[types.ResourceTemplate]:
+        return [
+            types.ResourceTemplate(
+                uriTemplate=_ONBOARDING_SITE_RESOURCE_TEMPLATE,
+                name=_ONBOARDING_SITE_RESOURCE_NAME,
+                description=_ONBOARDING_SITE_RESOURCE_DESCRIPTION,
+                mimeType=_JSON_MIME_TYPE,
+            ),
+        ]
+
+    @server.read_resource()  # type: ignore[misc,no-untyped-call]
+    async def read_resource(uri: AnyUrl) -> str:
+        site_url = _onboarding_resource_site_url(str(uri))
+        guide = services.onboarding_guide.render(
+            OnboardingGuideRequest(site_url=site_url),
+            writes_enabled=services.writes_enabled,
+            agent_onboarding_enabled=services.agent_onboarding_enabled,
+        )
+        return json.dumps(to_json_value(guide), separators=(",", ":"))
 
     @server.call_tool(validate_input=False)  # type: ignore[misc]
     async def call_tool(
@@ -1195,6 +1267,15 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
             )
             if analytics_or_pagespeed_result is not None:
                 return analytics_or_pagespeed_result
+            if name == "onboarding_guide":
+                guide_arguments = _OnboardingGuideArguments.model_validate(raw_arguments)
+                return _tool_success(
+                    services.onboarding_guide.render(
+                        OnboardingGuideRequest(site_url=guide_arguments.site_url),
+                        writes_enabled=services.writes_enabled,
+                        agent_onboarding_enabled=services.agent_onboarding_enabled,
+                    ),
+                )
             if name == "server_info":
                 _NoArguments.model_validate(raw_arguments)
                 return _tool_success(services.capabilities.server_info(ServerInfoRequest()))

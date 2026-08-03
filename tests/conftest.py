@@ -105,6 +105,9 @@ def indexnow_deployment(tmp_path: Path) -> tuple[Settings, ApplicationServices]:
         secret_root=secret_root,
         log_file=tmp_path / "rankrat.log",
         read_only=False,
+        # This fixture stands for the fully-writable deployment, which is what the
+        # OpenAPI source document describes, so it opts into onboarding too.
+        allow_agent_onboarding=True,
     )
     policy = BoundaryPolicy.from_file(boundary_file, secret_root)
     client = IndexNowClient(

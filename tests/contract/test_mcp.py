@@ -307,6 +307,7 @@ async def test_mcp_tool_catalog_annotations_and_calls(
         assert {tool.name for tool in tools.tools} == {
             "accounts_list",
             "diagnostics",
+            "onboarding_guide",
             "provider_readiness",
             "server_info",
             "sites_list",
