@@ -4,15 +4,12 @@ from typing import cast
 
 import pytest
 
-from rankrat.errors import ApprovalDeniedError
 from rankrat.operator.site_onboarding import (
     SiteOnboardingOperator,
     SiteOnboardingReceipt,
     SiteOnboardingRequest,
 )
-from rankrat.policy.approvals import WriteApprovalStore
 from rankrat.services.site_onboarding import (
-    SiteOnboardingApprovalRequest,
     SiteOnboardingService,
     SiteOnboardingSubmissionRequest,
 )
@@ -39,56 +36,20 @@ class _Operator:
         )
 
 
-def _approval_request() -> SiteOnboardingApprovalRequest:
-    return SiteOnboardingApprovalRequest(
-        google_account_id="google-main",
-        bing_account_id="bing-main",
-        site_url="https://new.example.com",
-        display_name="New Example",
-    )
-
-
 @pytest.mark.asyncio
-async def test_site_onboarding_binds_each_approval_to_every_provider_write_parameter() -> None:
+async def test_site_onboarding_validates_before_each_direct_provider_write() -> None:
     operator = _Operator()
-    service = SiteOnboardingService(
-        cast(SiteOnboardingOperator, operator),
-        WriteApprovalStore(token_factory=lambda _: "approval-1"),
-    )
-    approval = await service.approve(_approval_request())
+    service = SiteOnboardingService(cast(SiteOnboardingOperator, operator))
 
-    with pytest.raises(ApprovalDeniedError):
-        await service.submit(
-            SiteOnboardingSubmissionRequest(
-                google_account_id="google-main",
-                bing_account_id="bing-main",
-                site_url="https://new.example.com",
-                display_name="New Example",
-                currency_code="EUR",
-                approval_id=approval.approval_id,
-            )
-        )
-    assert operator.onboarded == []
-
-    approval = await service.approve(_approval_request())
     receipt = await service.submit(
         SiteOnboardingSubmissionRequest(
             google_account_id="google-main",
             bing_account_id="bing-main",
             site_url="https://new.example.com/",
             display_name="New Example",
-            approval_id=approval.approval_id,
         )
     )
+
     assert receipt.ga4_property_id == "456"
+    assert [request.site_url for request in operator.validated] == ["https://new.example.com/"]
     assert [request.site_url for request in operator.onboarded] == ["https://new.example.com/"]
-    with pytest.raises(ApprovalDeniedError):
-        await service.submit(
-            SiteOnboardingSubmissionRequest(
-                google_account_id="google-main",
-                bing_account_id="bing-main",
-                site_url="https://new.example.com/",
-                display_name="New Example",
-                approval_id=approval.approval_id,
-            )
-        )

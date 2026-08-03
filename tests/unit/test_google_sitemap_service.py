@@ -4,13 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from rankrat.errors import ApprovalDeniedError, BoundaryDeniedError
+from rankrat.errors import BoundaryDeniedError
 from rankrat.models.boundaries import BoundaryDocument
-from rankrat.policy.approvals import WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.google_search_console import GoogleSearchConsoleClient
 from rankrat.services.google_sitemaps import (
-    GoogleSitemapApprovalRequest,
     GoogleSitemapOperation,
     GoogleSitemapService,
     GoogleSitemapSubmissionRequest,
@@ -40,12 +38,11 @@ def _service() -> GoogleSitemapService:
     return GoogleSitemapService(
         policy,
         GoogleSearchConsoleClient(policy, _token),
-        WriteApprovalStore(),
     )
 
 
 @pytest.mark.asyncio
-async def test_google_sitemap_submit_requires_exact_one_use_approval(
+async def test_google_sitemap_submit_is_boundary_limited(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = _service()
@@ -55,20 +52,12 @@ async def test_google_sitemap_submit_requires_exact_one_use_approval(
         submitted.append(args)
 
     monkeypatch.setattr(service._client, "submit_sitemap", submit_sitemap)
-    approval_request = GoogleSitemapApprovalRequest(
-        "google-main",
-        "sc-domain:example.com",
-        "https://example.com/sitemap.xml",
-        GoogleSitemapOperation.SUBMIT,
-    )
-    approval = await service.approve(approval_request)
     response = await service.submit(
         GoogleSitemapSubmissionRequest(
             "google-main",
             "sc-domain:example.com",
             "https://example.com/sitemap.xml",
             GoogleSitemapOperation.SUBMIT,
-            approval.approval_id,
         )
     )
 
@@ -77,21 +66,11 @@ async def test_google_sitemap_submit_requires_exact_one_use_approval(
         "sc-domain:example.com",
         "https://example.com/sitemap.xml",
     )
-    with pytest.raises(ApprovalDeniedError):
-        await service.submit(
-            GoogleSitemapSubmissionRequest(
-                "google-main",
-                "sc-domain:example.com",
-                "https://example.com/sitemap.xml",
-                GoogleSitemapOperation.SUBMIT,
-                approval.approval_id,
-            )
-        )
     assert len(submitted) == 1
 
 
 @pytest.mark.asyncio
-async def test_google_sitemap_delete_rejects_changed_or_out_of_scope_intent(
+async def test_google_sitemap_rejects_out_of_scope_intent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = _service()
@@ -102,27 +81,9 @@ async def test_google_sitemap_delete_rejects_changed_or_out_of_scope_intent(
         deleted = True
 
     monkeypatch.setattr(service._client, "delete_sitemap", delete_sitemap)
-    approval = await service.approve(
-        GoogleSitemapApprovalRequest(
-            "google-main",
-            "sc-domain:example.com",
-            "https://example.com/sitemap.xml",
-            GoogleSitemapOperation.DELETE,
-        )
-    )
-    with pytest.raises(ApprovalDeniedError):
+    with pytest.raises(BoundaryDeniedError):
         await service.submit(
             GoogleSitemapSubmissionRequest(
-                "google-main",
-                "sc-domain:example.com",
-                "https://example.com/changed.xml",
-                GoogleSitemapOperation.DELETE,
-                approval.approval_id,
-            )
-        )
-    with pytest.raises(BoundaryDeniedError):
-        await service.approve(
-            GoogleSitemapApprovalRequest(
                 "google-main",
                 "sc-domain:example.com",
                 "https://outside.example.net/sitemap.xml",
@@ -142,20 +103,11 @@ async def test_google_sitemap_submit_logs_and_preserves_provider_failure(
         raise RuntimeError("upstream failure")
 
     monkeypatch.setattr(service._client, "submit_sitemap", submit_sitemap)
-    request = GoogleSitemapApprovalRequest(
+    request = GoogleSitemapSubmissionRequest(
         "google-main",
         "sc-domain:example.com",
         "https://example.com/sitemap.xml",
         GoogleSitemapOperation.SUBMIT,
     )
-    approval = await service.approve(request)
     with pytest.raises(RuntimeError, match="upstream failure"):
-        await service.submit(
-            GoogleSitemapSubmissionRequest(
-                "google-main",
-                "sc-domain:example.com",
-                "https://example.com/sitemap.xml",
-                GoogleSitemapOperation.SUBMIT,
-                approval.approval_id,
-            )
-        )
+        await service.submit(request)

@@ -1,4 +1,4 @@
-"""Approval-gated Google Indexing notifications with local eligibility evidence."""
+"""Bounded Google Indexing notifications with local eligibility evidence."""
 
 from __future__ import annotations
 
@@ -8,9 +8,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from rankrat.constants import DEFAULT_PROVIDER_TIMEOUT_SECONDS, MAX_GOOGLE_INDEXING_BATCH
-from rankrat.errors import ApprovalDeniedError, InputLimitError
+from rankrat.errors import BoundaryDeniedError, InputLimitError
 from rankrat.logging import log_event
-from rankrat.policy.approvals import WriteApproval, WriteApprovalRequest, WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.google_indexing import (
     URL_DELETED,
@@ -34,16 +33,12 @@ class GoogleIndexingNotificationType(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class GoogleIndexingApprovalRequest:
+class GoogleIndexingSubmissionRequest:
     account_id: str
     site_url: str
     url: str
     notification_type: GoogleIndexingNotificationType
 
-
-@dataclass(frozen=True, slots=True)
-class GoogleIndexingSubmissionRequest(GoogleIndexingApprovalRequest):
-    approval_id: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
 
@@ -56,19 +51,13 @@ class GoogleIndexingBatchNotification:
 
 
 @dataclass(frozen=True, slots=True)
-class GoogleIndexingBatchApprovalRequest:
-    """One administrator-approved, ordered batch for a configured property."""
+class GoogleIndexingBatchSubmissionRequest:
+    """One ordered batch for a configured property."""
 
     account_id: str
     site_url: str
     notifications: tuple[GoogleIndexingBatchNotification, ...]
 
-
-@dataclass(frozen=True, slots=True)
-class GoogleIndexingBatchSubmissionRequest(GoogleIndexingBatchApprovalRequest):
-    """A consumer request that presents one exact, single-use batch approval."""
-
-    approval_id: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
 
@@ -82,31 +71,22 @@ class GoogleIndexingBatchSubmission:
 
 
 class GoogleIndexingService:
-    """Require site ownership, eligibility evidence, and exact approval before publishing."""
+    """Require site ownership and eligibility evidence before publishing."""
 
     def __init__(
         self,
         policy: BoundaryPolicy,
         client: GoogleIndexingClient,
-        approvals: WriteApprovalStore,
         schema_fetcher: PublicSchemaFetcher,
     ) -> None:
         self._policy = policy
         self._client = client
-        self._approvals = approvals
         self._schema_fetcher = schema_fetcher
-
-    async def approve(self, request: GoogleIndexingApprovalRequest) -> WriteApproval:
-        normalized = await self._eligible_url(request, DEFAULT_PROVIDER_TIMEOUT_SECONDS)
-        return await self._approvals.mint(self._approval_request(request, normalized))
 
     async def submit(
         self, request: GoogleIndexingSubmissionRequest
     ) -> GoogleIndexingPublishReceipt:
         normalized = await self._eligible_url(request, request.timeout_seconds)
-        await self._approvals.consume(
-            request.approval_id, self._approval_request(request, normalized)
-        )
         try:
             result = await self._client.publish(
                 request.account_id,
@@ -134,26 +114,13 @@ class GoogleIndexingService:
         )
         return result
 
-    async def approve_batch(
-        self,
-        request: GoogleIndexingBatchApprovalRequest,
-    ) -> WriteApproval:
-        """Mint one exact approval after all batch entries pass local checks."""
-
-        normalized = await self._eligible_batch(request, DEFAULT_PROVIDER_TIMEOUT_SECONDS)
-        return await self._approvals.mint(self._batch_approval_request(request, normalized))
-
     async def submit_batch(
         self,
         request: GoogleIndexingBatchSubmissionRequest,
     ) -> GoogleIndexingBatchSubmission:
-        """Consume one exact approval and make one multipart provider call."""
+        """Validate every notification and make one multipart provider call."""
 
         normalized = await self._eligible_batch(request, request.timeout_seconds)
-        await self._approvals.consume(
-            request.approval_id,
-            self._batch_approval_request(request, normalized),
-        )
         try:
             receipts = await self._client.publish_batch(
                 request.account_id,
@@ -190,7 +157,7 @@ class GoogleIndexingService:
 
     async def _eligible_url(
         self,
-        request: GoogleIndexingApprovalRequest,
+        request: GoogleIndexingSubmissionRequest,
         timeout_seconds: float,
     ) -> str:
         normalized = self._policy.require_search_console_url(
@@ -203,12 +170,12 @@ class GoogleIndexingService:
         fetched = await self._schema_fetcher.fetch(normalized, timeout_seconds)
         eligibility = assess_google_indexing_eligibility(fetched.body)
         if not eligibility.eligible:
-            raise ApprovalDeniedError("Google Indexing URL is not eligible")
+            raise BoundaryDeniedError("Google Indexing URL is not eligible")
         return normalized
 
     async def _eligible_batch(
         self,
-        request: GoogleIndexingBatchApprovalRequest,
+        request: GoogleIndexingBatchSubmissionRequest,
         timeout_seconds: float,
     ) -> tuple[tuple[str, str], ...]:
         if not request.notifications:
@@ -239,35 +206,7 @@ class GoogleIndexingService:
                 fetched = await self._schema_fetcher.fetch(url, timeout_seconds)
             eligibility = assess_google_indexing_eligibility(fetched.body)
             if not eligibility.eligible:
-                raise ApprovalDeniedError("Google Indexing URL is not eligible")
+                raise BoundaryDeniedError("Google Indexing URL is not eligible")
 
         await asyncio.gather(*(validate(notification) for notification in normalized))
         return tuple((url, notification_type.value) for url, notification_type in normalized)
-
-    @staticmethod
-    def _approval_request(
-        request: GoogleIndexingApprovalRequest,
-        normalized_url: str,
-    ) -> WriteApprovalRequest:
-        return WriteApprovalRequest(
-            operation="google_indexing_publish",
-            account_id=request.account_id,
-            resource=request.site_url,
-            arguments={"url": normalized_url, "type": request.notification_type.value},
-        )
-
-    @staticmethod
-    def _batch_approval_request(
-        request: GoogleIndexingBatchApprovalRequest,
-        normalized: tuple[tuple[str, str], ...],
-    ) -> WriteApprovalRequest:
-        return WriteApprovalRequest(
-            operation="google_indexing_publish_batch",
-            account_id=request.account_id,
-            resource=request.site_url,
-            arguments={
-                "notifications": [
-                    {"url": url, "type": notification_type} for url, notification_type in normalized
-                ]
-            },
-        )

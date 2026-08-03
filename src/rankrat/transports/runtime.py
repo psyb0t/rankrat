@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from rankrat import __version__
 from rankrat.config import Settings
 from rankrat.operator.site_onboarding import SiteOnboardingOperator
-from rankrat.policy.approvals import WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.bing import BingWebmasterClient
 from rankrat.providers.google_analytics import (
@@ -59,7 +58,7 @@ class ApplicationServices:
     local_schema: LocalSchemaValidationService
     provider_readiness: ProviderReadinessService
     sites: SitesService
-    write_approvals: WriteApprovalStore | None = None
+    writes_enabled: bool = False
     indexnow: IndexNowService | None = None
     google_indexing: GoogleIndexingService | None = None
     google_sites: GoogleSiteService | None = None
@@ -73,6 +72,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         settings.boundary_file,
         settings.secret_root,
         settings.oauth_token_root,
+        unbounded=settings.unbounded,
     )
     google_client = GoogleSearchConsoleClient(
         policy,
@@ -92,21 +92,17 @@ def build_services(settings: Settings) -> ApplicationServices:
     )
     bing_client = BingWebmasterClient(policy)
     pagespeed_client = PageSpeedClient(policy)
-    write_approvals: WriteApprovalStore | None = None
     indexnow = None
     google_indexing = None
     google_sites = None
     google_sitemaps = None
     site_onboarding = None
-    if settings.enable_writes:
+    if settings.writes_enabled:
         from rankrat.providers.indexnow import IndexNowClient
 
-        enabled_write_approvals = WriteApprovalStore()
-        write_approvals = enabled_write_approvals
         indexnow = IndexNowService(
             policy,
             IndexNowClient(policy),
-            enabled_write_approvals,
         )
         indexing_client = GoogleSearchConsoleClient(
             policy,
@@ -115,7 +111,6 @@ def build_services(settings: Settings) -> ApplicationServices:
         google_indexing = GoogleIndexingService(
             policy,
             GoogleIndexingClient(indexing_client),
-            enabled_write_approvals,
             PublicSchemaFetcher(),
         )
         site_client = GoogleSearchConsoleClient(
@@ -125,7 +120,6 @@ def build_services(settings: Settings) -> ApplicationServices:
         google_sites = GoogleSiteService(
             policy,
             site_client,
-            enabled_write_approvals,
         )
         sitemap_client = GoogleSearchConsoleClient(
             policy,
@@ -134,7 +128,6 @@ def build_services(settings: Settings) -> ApplicationServices:
         google_sitemaps = GoogleSitemapService(
             policy,
             sitemap_client,
-            enabled_write_approvals,
         )
         site_onboarding = SiteOnboardingService(
             SiteOnboardingOperator(
@@ -150,11 +143,10 @@ def build_services(settings: Settings) -> ApplicationServices:
                 ),
                 bing_client,
             ),
-            enabled_write_approvals,
         )
     google_analytics = GoogleAnalyticsDataService(policy, google_analytics_client)
     google_search_console = GoogleSearchConsoleService(policy, google_client)
-    bing_webmaster = BingWebmasterService(policy, bing_client, write_approvals)
+    bing_webmaster = BingWebmasterService(policy, bing_client)
     pagespeed = PageSpeedService(policy, pagespeed_client)
     return ApplicationServices(
         capabilities=CapabilityService(settings, policy, __version__),
@@ -177,7 +169,7 @@ def build_services(settings: Settings) -> ApplicationServices:
             {google_client.provider: google_client, bing_client.provider: bing_client},
         ),
         sites=SitesService(policy),
-        write_approvals=write_approvals,
+        writes_enabled=settings.writes_enabled,
         indexnow=indexnow,
         google_indexing=google_indexing,
         google_sites=google_sites,

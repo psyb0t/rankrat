@@ -62,12 +62,17 @@ def test_settings_validate_exposure_paths_levels_and_write_mode(tmp_path: Path) 
         {"boundary_file": Path("relative")},
         {"oauth_token_root": Path("relative")},
         {"enable_writes": True},
+        {"admin_bearer_secret_file": secret},
     ]
     for values in invalid_settings:
         with pytest.raises(ValidationError):
             Settings.model_validate(values)
-    write_settings = Settings(enable_writes=True, admin_bearer_secret_file=secret)
-    assert write_settings.enable_writes is True
+    write_settings = Settings(read_only=False)
+    assert write_settings.writes_enabled is True
+    unbounded_settings = Settings(read_only=False, unbounded=True)
+    assert unbounded_settings.unbounded is True
+    with pytest.raises(ValidationError, match="unbounded mode requires"):
+        Settings(unbounded=True)
 
 
 def test_load_settings_wraps_validation(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -83,6 +88,7 @@ def test_services_filter_boundaries_and_report_capabilities(
     server_info = services.capabilities.server_info(ServerInfoRequest())
     assert server_info.name == "rankrat"
     assert server_info.read_only is True
+    assert server_info.unbounded is False
     assert [item.provider for item in server_info.providers] == [Provider.GOOGLE, Provider.BING]
 
     accounts = services.sites.accounts_list(AccountsListRequest(provider=Provider.GOOGLE))

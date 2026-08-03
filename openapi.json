@@ -486,44 +486,12 @@
         "title": "_BingRelatedKeywordsBody",
         "type": "object"
       },
-      "_BingSiteApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Account Id",
-            "type": "string"
-          },
-          "operation": {
-            "$ref": "#/components/schemas/BingSiteOperation"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_id",
-          "site_url",
-          "operation"
-        ],
-        "title": "_BingSiteApprovalBody",
-        "type": "object"
-      },
       "_BingSiteSubmissionBody": {
         "additionalProperties": false,
         "properties": {
           "account_id": {
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
             "title": "Account Id",
-            "type": "string"
-          },
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
             "type": "string"
           },
           "operation": {
@@ -546,43 +514,9 @@
         "required": [
           "account_id",
           "site_url",
-          "operation",
-          "approval_id"
-        ],
-        "title": "_BingSiteSubmissionBody",
-        "type": "object"
-      },
-      "_BingSitemapApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Account Id",
-            "type": "string"
-          },
-          "operation": {
-            "$ref": "#/components/schemas/BingSitemapOperation"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          },
-          "sitemap_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Sitemap Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_id",
-          "site_url",
-          "sitemap_url",
           "operation"
         ],
-        "title": "_BingSitemapApprovalBody",
+        "title": "_BingSiteSubmissionBody",
         "type": "object"
       },
       "_BingSitemapSubmissionBody": {
@@ -593,12 +527,6 @@
             "title": "Account Id",
             "type": "string"
           },
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
-            "type": "string"
-          },
           "operation": {
             "$ref": "#/components/schemas/BingSitemapOperation"
           },
@@ -626,8 +554,7 @@
           "account_id",
           "site_url",
           "sitemap_url",
-          "operation",
-          "approval_id"
+          "operation"
         ],
         "title": "_BingSitemapSubmissionBody",
         "type": "object"
@@ -762,50 +689,12 @@
         "title": "_BingUrlInformationBody",
         "type": "object"
       },
-      "_BingUrlSubmissionApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Account Id",
-            "type": "string"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          },
-          "urls": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 500,
-            "minItems": 1,
-            "title": "Urls",
-            "type": "array"
-          }
-        },
-        "required": [
-          "account_id",
-          "site_url",
-          "urls"
-        ],
-        "title": "_BingUrlSubmissionApprovalBody",
-        "type": "object"
-      },
       "_BingUrlSubmissionBody": {
         "additionalProperties": false,
         "properties": {
           "account_id": {
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
             "title": "Account Id",
-            "type": "string"
-          },
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
             "type": "string"
           },
           "site_url": {
@@ -834,8 +723,7 @@
         "required": [
           "account_id",
           "site_url",
-          "urls",
-          "approval_id"
+          "urls"
         ],
         "title": "_BingUrlSubmissionBody",
         "type": "object"
@@ -1231,71 +1119,6 @@
         "title": "_Ga4SearchConsoleComparisonBody",
         "type": "object"
       },
-      "_GoogleIndexingApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Account Id",
-            "type": "string"
-          },
-          "notification_type": {
-            "$ref": "#/components/schemas/GoogleIndexingNotificationType"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          },
-          "url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_id",
-          "site_url",
-          "url",
-          "notification_type"
-        ],
-        "title": "_GoogleIndexingApprovalBody",
-        "type": "object"
-      },
-      "_GoogleIndexingBatchApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Account Id",
-            "type": "string"
-          },
-          "notifications": {
-            "items": {
-              "$ref": "#/components/schemas/_GoogleIndexingBatchNotificationBody"
-            },
-            "maxItems": 100,
-            "minItems": 1,
-            "title": "Notifications",
-            "type": "array"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_id",
-          "site_url",
-          "notifications"
-        ],
-        "title": "_GoogleIndexingBatchApprovalBody",
-        "type": "object"
-      },
       "_GoogleIndexingBatchNotificationBody": {
         "additionalProperties": false,
         "properties": {
@@ -1324,12 +1147,6 @@
             "title": "Account Id",
             "type": "string"
           },
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
-            "type": "string"
-          },
           "notifications": {
             "items": {
               "$ref": "#/components/schemas/_GoogleIndexingBatchNotificationBody"
@@ -1356,8 +1173,7 @@
         "required": [
           "account_id",
           "site_url",
-          "notifications",
-          "approval_id"
+          "notifications"
         ],
         "title": "_GoogleIndexingBatchSubmissionBody",
         "type": "object"
@@ -1406,12 +1222,6 @@
             "title": "Account Id",
             "type": "string"
           },
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
-            "type": "string"
-          },
           "notification_type": {
             "$ref": "#/components/schemas/GoogleIndexingNotificationType"
           },
@@ -1439,36 +1249,9 @@
           "account_id",
           "site_url",
           "url",
-          "notification_type",
-          "approval_id"
+          "notification_type"
         ],
         "title": "_GoogleIndexingSubmissionBody",
-        "type": "object"
-      },
-      "_GoogleSiteApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Account Id",
-            "type": "string"
-          },
-          "operation": {
-            "$ref": "#/components/schemas/GoogleSiteOperation"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_id",
-          "site_url",
-          "operation"
-        ],
-        "title": "_GoogleSiteApprovalBody",
         "type": "object"
       },
       "_GoogleSiteSubmissionBody": {
@@ -1479,12 +1262,6 @@
             "title": "Account Id",
             "type": "string"
           },
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
-            "type": "string"
-          },
           "operation": {
             "$ref": "#/components/schemas/GoogleSiteOperation"
           },
@@ -1505,43 +1282,9 @@
         "required": [
           "account_id",
           "site_url",
-          "operation",
-          "approval_id"
-        ],
-        "title": "_GoogleSiteSubmissionBody",
-        "type": "object"
-      },
-      "_GoogleSitemapApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Account Id",
-            "type": "string"
-          },
-          "operation": {
-            "$ref": "#/components/schemas/GoogleSitemapOperation"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          },
-          "sitemap_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Sitemap Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "account_id",
-          "site_url",
-          "sitemap_url",
           "operation"
         ],
-        "title": "_GoogleSitemapApprovalBody",
+        "title": "_GoogleSiteSubmissionBody",
         "type": "object"
       },
       "_GoogleSitemapSubmissionBody": {
@@ -1550,12 +1293,6 @@
           "account_id": {
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
             "title": "Account Id",
-            "type": "string"
-          },
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
             "type": "string"
           },
           "operation": {
@@ -1585,13 +1322,12 @@
           "account_id",
           "site_url",
           "sitemap_url",
-          "operation",
-          "approval_id"
+          "operation"
         ],
         "title": "_GoogleSitemapSubmissionBody",
         "type": "object"
       },
-      "_IndexNowApprovalBody": {
+      "_IndexNowSubmissionBody": {
         "additionalProperties": false,
         "properties": {
           "target_id": {
@@ -1612,38 +1348,6 @@
         "required": [
           "target_id",
           "urls"
-        ],
-        "title": "_IndexNowApprovalBody",
-        "type": "object"
-      },
-      "_IndexNowSubmissionBody": {
-        "additionalProperties": false,
-        "properties": {
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
-            "type": "string"
-          },
-          "target_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Target Id",
-            "type": "string"
-          },
-          "urls": {
-            "items": {
-              "type": "string"
-            },
-            "maxItems": 1000,
-            "minItems": 1,
-            "title": "Urls",
-            "type": "array"
-          }
-        },
-        "required": [
-          "target_id",
-          "urls",
-          "approval_id"
         ],
         "title": "_IndexNowSubmissionBody",
         "type": "object"
@@ -2275,69 +1979,9 @@
         "title": "_SearchEngineTrafficHealthBody",
         "type": "object"
       },
-      "_SiteOnboardingApprovalBody": {
-        "additionalProperties": false,
-        "properties": {
-          "bing_account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Bing Account Id",
-            "type": "string"
-          },
-          "currency_code": {
-            "default": "USD",
-            "maxLength": 3,
-            "minLength": 3,
-            "title": "Currency Code",
-            "type": "string"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "google_account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Google Account Id",
-            "type": "string"
-          },
-          "site_url": {
-            "maxLength": 2048,
-            "minLength": 1,
-            "title": "Site Url",
-            "type": "string"
-          },
-          "time_zone": {
-            "default": "Etc/UTC",
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Time Zone",
-            "type": "string"
-          }
-        },
-        "required": [
-          "google_account_id",
-          "bing_account_id",
-          "site_url"
-        ],
-        "title": "_SiteOnboardingApprovalBody",
-        "type": "object"
-      },
       "_SiteOnboardingSubmissionBody": {
         "additionalProperties": false,
         "properties": {
-          "approval_id": {
-            "maxLength": 256,
-            "minLength": 1,
-            "title": "Approval Id",
-            "type": "string"
-          },
           "bing_account_id": {
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
             "title": "Bing Account Id",
@@ -2366,6 +2010,18 @@
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
             "title": "Google Account Id",
             "type": "string"
+          },
+          "google_analytics_parent_account_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Google Analytics Parent Account Id"
           },
           "site_url": {
             "maxLength": 2048,
@@ -2391,8 +2047,7 @@
         "required": [
           "google_account_id",
           "bing_account_id",
-          "site_url",
-          "approval_id"
+          "site_url"
         ],
         "title": "_SiteOnboardingSubmissionBody",
         "type": "object"
@@ -2474,21 +2129,16 @@
       }
     },
     "securitySchemes": {
-      "AdminBearerAuth": {
-        "bearerFormat": "opaque",
-        "description": "Required for `/v1/admin/*`; configure it separately from the regular API bearer.",
-        "scheme": "bearer",
-        "type": "http"
-      },
       "BearerAuth": {
         "bearerFormat": "opaque",
-        "description": "Required for every protected non-admin endpoint.",
+        "description": "Required for protected HTTP endpoints.",
         "scheme": "bearer",
         "type": "http"
       }
     }
   },
   "info": {
+    "description": "Boundary-limited SEO operations over REST and MCP. The source document lists the full writable contract; a read-only runtime removes write routes from its served OpenAPI document.",
     "title": "rankrat",
     "version": "0.1.0"
   },
@@ -2573,375 +2223,6 @@
           }
         },
         "summary": "Accounts List"
-      }
-    },
-    "/v1/admin/bing-site-approvals": {
-      "post": {
-        "operationId": "adminBingSiteApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_BingSiteApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Bing Site Approval"
-      }
-    },
-    "/v1/admin/bing-sitemap-approvals": {
-      "post": {
-        "operationId": "adminBingSitemapApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_BingSitemapApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Bing Sitemap Approval"
-      }
-    },
-    "/v1/admin/bing-url-submission-approvals": {
-      "post": {
-        "operationId": "adminBingUrlSubmissionApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_BingUrlSubmissionApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Bing Url Submission Approval"
-      }
-    },
-    "/v1/admin/google-indexing-approvals": {
-      "post": {
-        "operationId": "adminGoogleIndexingApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_GoogleIndexingApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Google Indexing Approval"
-      }
-    },
-    "/v1/admin/google-indexing-batch-approvals": {
-      "post": {
-        "operationId": "adminGoogleIndexingBatchApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_GoogleIndexingBatchApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Google Indexing Batch Approval"
-      }
-    },
-    "/v1/admin/google-site-approvals": {
-      "post": {
-        "operationId": "adminGoogleSiteApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_GoogleSiteApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Google Site Approval"
-      }
-    },
-    "/v1/admin/google-sitemap-approvals": {
-      "post": {
-        "operationId": "adminGoogleSitemapApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_GoogleSitemapApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Google Sitemap Approval"
-      }
-    },
-    "/v1/admin/site-onboarding-approvals": {
-      "post": {
-        "operationId": "adminSiteOnboardingApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_SiteOnboardingApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Site Onboarding Approval"
-      }
-    },
-    "/v1/admin/write-approvals": {
-      "post": {
-        "operationId": "adminWriteApprovalCreate",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/_IndexNowApprovalBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "AdminBearerAuth": []
-          }
-        ],
-        "summary": "Create Indexnow Approval"
       }
     },
     "/v1/bing-site-submissions": {

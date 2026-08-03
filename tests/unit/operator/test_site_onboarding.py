@@ -54,6 +54,19 @@ def test_site_onboarding_rejects_an_unknown_iana_time_zone() -> None:
         )
 
 
+@pytest.mark.parametrize("parent_account_id", ("", "account-id", "123\\n456"))
+def test_site_onboarding_rejects_invalid_google_analytics_parent_account_id(
+    parent_account_id: str,
+) -> None:
+    with pytest.raises(InputLimitError, match="parent account ID"):
+        SiteOnboardingRequest(
+            "google-main",
+            "bing-main",
+            "https://example.com/",
+            google_analytics_parent_account_id=parent_account_id,
+        )
+
+
 def test_boundary_write_failure_preserves_the_original_file(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

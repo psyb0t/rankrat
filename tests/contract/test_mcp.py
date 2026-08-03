@@ -23,12 +23,6 @@ from rankrat.providers.google_search_console import (
     SearchConsoleUrlInspection,
 )
 from rankrat.providers.schema_fetch import SchemaFetchResult
-from rankrat.services.bing import (
-    BingSitemapApprovalRequest,
-    BingSitemapOperation,
-    BingUrlSubmissionApprovalRequest,
-)
-from rankrat.services.indexnow import IndexNowApprovalRequest
 from rankrat.transports import mcp as mcp_transport
 from rankrat.transports.mcp import build_mcp_server
 from rankrat.transports.runtime import ApplicationServices
@@ -1168,7 +1162,7 @@ async def test_mcp_tool_catalog_annotations_and_calls(
 
 
 @pytest.mark.asyncio
-async def test_mcp_indexnow_contract_when_explicitly_enabled(
+async def test_mcp_write_contract_when_read_only_is_disabled(
     indexnow_deployment: tuple[Settings, ApplicationServices],
 ) -> None:
     _, services = indexnow_deployment
@@ -1186,7 +1180,7 @@ async def test_mcp_indexnow_contract_when_explicitly_enabled(
         assert indexnow.annotations.destructiveHint is True
         assert indexnow.annotations.idempotentHint is False
         assert indexnow.annotations.openWorldHint is False
-        assert indexnow.inputSchema["required"] == ["target_id", "urls", "approval_id"]
+        assert indexnow.inputSchema["required"] == ["target_id", "urls"]
         assert bing_submission.annotations is not None
         assert bing_submission.annotations.readOnlyHint is False
         assert bing_sitemap_submission.annotations is not None
@@ -1203,50 +1197,26 @@ async def test_mcp_indexnow_contract_when_explicitly_enabled(
 
         services.bing_webmaster._client.submit_feed = mock_bing_sitemap_submission  # type: ignore[method-assign, assignment]
 
-        approval = await services.indexnow.approve(
-            IndexNowApprovalRequest(
-                "site-main",
-                ("https://example.com/article",),
-            )
-        )
-
         accepted = await client.call_tool(
             "indexnow_submit",
             {
                 "target_id": "site-main",
                 "urls": ["https://example.com/article"],
-                "approval_id": approval.approval_id,
             },
         )
         payload = json.loads(accepted.content[0].text)  # type: ignore[union-attr]
         assert payload["submitted_count"] == 1
 
-        bing_approval = await services.bing_webmaster.approve_url_submission(
-            BingUrlSubmissionApprovalRequest(
-                "bing-main",
-                "https://example.com/",
-                ("https://example.com/article",),
-            )
-        )
         bing_accepted = await client.call_tool(
             "bing_url_submit",
             {
                 "account_id": "bing-main",
                 "site_url": "https://example.com/",
                 "urls": ["https://example.com/article"],
-                "approval_id": bing_approval.approval_id,
             },
         )
         assert json.loads(bing_accepted.content[0].text)["submitted_count"] == 1  # type: ignore[union-attr]
 
-        bing_sitemap_approval = await services.bing_webmaster.approve_sitemap_submission(
-            BingSitemapApprovalRequest(
-                "bing-main",
-                "https://example.com/",
-                "https://example.com/sitemap.xml",
-                BingSitemapOperation.SUBMIT,
-            )
-        )
         bing_sitemap_accepted = await client.call_tool(
             "bing_sitemap_submit",
             {
@@ -1254,7 +1224,6 @@ async def test_mcp_indexnow_contract_when_explicitly_enabled(
                 "site_url": "https://example.com/",
                 "sitemap_url": "https://example.com/sitemap.xml",
                 "operation": "submit",
-                "approval_id": bing_sitemap_approval.approval_id,
             },
         )
         assert json.loads(bing_sitemap_accepted.content[0].text) == {  # type: ignore[union-attr]
@@ -1268,7 +1237,6 @@ async def test_mcp_indexnow_contract_when_explicitly_enabled(
             {
                 "target_id": "site-main",
                 "urls": ["http://example.com/article"],
-                "approval_id": "unused",
             },
         )
         assert invalid.isError is True

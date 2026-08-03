@@ -1,6 +1,6 @@
 {
   "name": "rankrat",
-  "description": "Self-hosted MCP server over Google Search Console, Bing Webmaster Tools, GA4 and PageSpeed Insights — search analytics, indexing and crawl diagnostics, ranking and opportunity reports, GA4 reporting. Read-only by default, scoped to the properties you configure.",
+  "description": "Self-hosted MCP server over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed Insights and IndexNow — search analytics, indexing and crawl diagnostics, ranking and opportunity reports, GA4 reporting, plus optional boundary-limited submissions and site onboarding. Read-only by default, scoped to the properties you configure. MCP over stdio and Streamable HTTP, plus a REST API.",
   "author": { "name": "psyb0t", "url": "https://github.com/psyb0t" },
   "homepage": "https://github.com/psyb0t/rankrat",
   "license": "WTFPL",
@@ -11,22 +11,9 @@
     "google-analytics",
     "ga4",
     "pagespeed",
+    "indexnow",
     "indexing",
     "search-analytics",
     "mcp"
-  ],
-  "userConfig": {
-    "url": {
-      "type": "string",
-      "title": "rankrat URL",
-      "description": "Base URL of your running rankrat server, e.g. http://localhost:8080 (same value as RANKRAT_URL).",
-      "required": true
-    },
-    "authToken": {
-      "type": "string",
-      "title": "rankrat bearer token",
-      "description": "Bearer token. Only needed if the server was started with HTTP bearer auth configured.",
-      "sensitive": true
-    }
-  }
+  ]
 }

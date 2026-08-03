@@ -7,7 +7,6 @@ from typing import Final
 import pytest
 
 from rankrat.config import Settings
-from rankrat.policy.approvals import WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import AccountId, ProviderReadRequest
 from rankrat.providers.bing import BingWebmasterClient
@@ -58,11 +57,7 @@ from rankrat.services.google_search_console import (
     SitemapListRequest,
     UrlInspectionRequest,
 )
-from rankrat.services.indexnow import (
-    IndexNowApprovalRequest,
-    IndexNowService,
-    IndexNowSubmissionRequest,
-)
+from rankrat.services.indexnow import IndexNowService, IndexNowSubmissionRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisRequest,
     PageSpeedCategory,
@@ -453,18 +448,15 @@ async def test_live_indexnow_submission_matches_mocked_contract() -> None:
         pytest.skip("an explicit live IndexNow target ID and URL are required")
 
     settings = Settings()
-    if not settings.enable_writes:
-        pytest.skip("RANKRAT_ENABLE_WRITES=true is required for a live IndexNow submission")
+    if settings.read_only:
+        pytest.skip("RANKRAT_READ_ONLY=false is required for a live IndexNow submission")
     policy = BoundaryPolicy.from_file(
         settings.boundary_file,
         settings.secret_root,
         settings.oauth_token_root,
     )
-    service = IndexNowService(policy, IndexNowClient(policy), WriteApprovalStore())
-    approval = await service.approve(IndexNowApprovalRequest(target_id, (url,)))
-    result = await service.submit(
-        IndexNowSubmissionRequest(target_id, (url,), approval.approval_id)
-    )
+    service = IndexNowService(policy, IndexNowClient(policy))
+    result = await service.submit(IndexNowSubmissionRequest(target_id, (url,)))
 
     assert result.target_id == target_id
     assert result.submitted_count == 1

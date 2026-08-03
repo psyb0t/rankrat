@@ -94,7 +94,7 @@ def test_site_onboarding_requires_explicit_write_enablement(
         secret_root=tmp_path / "secrets",
         oauth_token_root=tmp_path / "oauth",
         log_file=tmp_path / "rankrat.log",
-        enable_writes=False,
+        read_only=True,
     )
     monkeypatch.setattr(cli, "load_settings", lambda: settings)
     monkeypatch.setattr(cli, "configure_logging", _configure_logging)
@@ -200,7 +200,7 @@ def test_auth_google_prints_an_authorization_url_only_when_requested(
         ["rankrat", "auth-google", "--account-id", "google-main", "--print-authorization-url"],
     )
     assert cli.main() == 0
-    assert observed["enable_writes"] is False
+    assert observed["enable_writes"] is True
     assert observed["browser_opener"] is None
     assert observed["listener_host"] == OAUTH_LOOPBACK_HOST
     assert observed["callback_port"] == OAUTH_DYNAMIC_CALLBACK_PORT
@@ -236,6 +236,7 @@ def test_revoke_google_never_registers_a_transport_surface(
     monkeypatch.setattr(sys, "argv", ["rankrat", "revoke-google", "--account-id", "google-main"])
     assert cli.main() == 0
     assert len(revoked) == 2
+    assert revoked[1] is True
     assert capsys.readouterr().out == "Google OAuth authorization revoked.\n"
 
 
@@ -548,3 +549,65 @@ def test_setup_runs_live_readiness_after_local_preflight(
 
     assert cli.main() == 0
     assert "READY: bing-main" in capsys.readouterr().out
+
+
+def test_setup_explains_ga4_property_and_tag_prerequisites(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    secret_root = tmp_path / "secrets"
+    secret_root.mkdir()
+    credential = secret_root / "oauth-client.json"
+    credential.write_text("not-a-real-client", encoding="utf-8")
+    oauth_root = tmp_path / "oauth"
+    oauth_root.mkdir()
+    boundary_file = tmp_path / "boundaries.json"
+    boundary_file.write_text(
+        json.dumps(
+            {
+                "accounts": [
+                    {
+                        "id": "google-main",
+                        "provider": "google",
+                        "credential": str(credential),
+                        "google_account_discovery": False,
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    settings = Settings(
+        boundary_file=boundary_file,
+        secret_root=secret_root,
+        oauth_token_root=oauth_root,
+        log_file=tmp_path / "rankrat.log",
+    )
+
+    async def readiness(request: ProviderReadinessRequest) -> ProviderReadiness:
+        assert request.account_id == "google-main"
+        return ProviderReadiness(
+            AccountId("google-main"),
+            Provider.GOOGLE,
+            True,
+            "Google access is available",
+        )
+
+    monkeypatch.setattr(cli, "load_settings", lambda: settings)
+    monkeypatch.setattr(cli, "configure_logging", _configure_logging)
+
+    def build_services(_: Settings) -> SimpleNamespace:
+        return SimpleNamespace(provider_readiness=SimpleNamespace(readiness=readiness))
+
+    monkeypatch.setattr(
+        cli,
+        "build_services",
+        build_services,
+    )
+    monkeypatch.setattr(sys, "argv", ["rankrat", "setup"])
+
+    assert cli.main() == 0
+    output = capsys.readouterr().out
+    assert "SETUP ACTION: google-main has no configured GA4 property." in output
+    assert "G- Measurement ID" in output

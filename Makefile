@@ -15,7 +15,8 @@ OAUTH ?= $(PWD)/oauth
 OAUTH_ACCOUNT_ID ?= google
 OAUTH_CALLBACK_PORT ?= 49152
 HTTP_BEARER_SECRET_FILE ?= $(SECRETS)/rankrat/http-bearer-token
-ADMIN_BEARER_SECRET_FILE ?= $(SECRETS)/rankrat/admin-bearer-token
+RANKRAT_READ_ONLY ?= true
+RANKRAT_UNBOUNDED ?= false
 ONBOARD_GOOGLE_ACCOUNT_ID ?= google
 ONBOARD_BING_ACCOUNT_ID ?= bing
 ONBOARD_SITE_URL ?=
@@ -39,6 +40,22 @@ PKG_GROUP ?=
 
 UID := $(shell id -u)
 GID := $(shell id -g)
+BOUNDARY_DIRECTORY := $(abspath $(dir $(BOUNDARIES)))
+BOUNDARY_FILENAME := $(notdir $(BOUNDARIES))
+
+ifeq ($(RANKRAT_UNBOUNDED),true)
+ifneq ($(RANKRAT_READ_ONLY),false)
+$(error RANKRAT_UNBOUNDED=true requires RANKRAT_READ_ONLY=false)
+endif
+RUNTIME_BOUNDARY_FILE := /run/config/$(BOUNDARY_FILENAME)
+RUNTIME_BOUNDARY_MOUNT := --mount type=bind,src=$(BOUNDARY_DIRECTORY),dst=/run/config
+else
+ifneq ($(RANKRAT_UNBOUNDED),false)
+$(error RANKRAT_UNBOUNDED must be either true or false)
+endif
+RUNTIME_BOUNDARY_FILE := /run/config/boundaries.json
+RUNTIME_BOUNDARY_MOUNT := --mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly
+endif
 
 DEV_RUN := docker run --rm --init \
 	--user $(UID):$(GID) \
@@ -69,10 +86,10 @@ LOCK_RUN := docker run --rm --init \
 	-w /work \
 	$(LOCK_IMAGE)
 
-.PHONY: help version dev-image lock-image init-config setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove \
+.PHONY: help version dev-image lock-image init-config setup init-indexnow verify-indexnow-key verify-runtime-boundary shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove \
 	lint lint-fix format test test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow test-live-http test-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
-	 auth-google oauth-authorize oauth-revoke onboard-site clean generate generate-openapi check-openapi
+	 auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
 
 help: ## Show supported Rankrat commands
 	@awk 'BEGIN {FS = ":.*##"}; /^[a-zA-Z0-9_.-]+:.*##/ {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -87,7 +104,17 @@ lock-image: ## Build the minimal, sandboxed Python-version-transition lock image
 	docker build -f Dockerfile.lock -t $(LOCK_IMAGE) .
 
 init-config: dev-image ## Create gitignored local boundary, secret, and OAuth-state paths without overwriting
-	$(DEV_RUN) sh -ec 'mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat; chmod 700 oauth secrets; cp -n config/boundaries.json.example config/boundaries.json; cp -n .env.example .env'
+	$(DEV_RUN) sh -ec 'mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat; chmod 700 config oauth secrets secrets/rankrat; cp -n config/boundaries.json.example config/boundaries.json; chmod 600 config/boundaries.json; cp -n .env.example .env; token=secrets/rankrat/http-bearer-token; if test -e "$$token" || test -L "$$token"; then test -f "$$token" && test ! -L "$$token" || { echo "$$token must be a regular file" >&2; exit 1; }; else umask 077; python -c "import secrets; print(secrets.token_urlsafe(32))" > "$$token"; fi; chmod 600 "$$token"'
+
+verify-runtime-boundary: ## Check the boundary mount needed by the selected bounded or unbounded runtime
+	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
+ifeq ($(RANKRAT_UNBOUNDED),true)
+	@test ! -L "$(BOUNDARIES)" || (echo "$(BOUNDARIES) must not be a symlink in unbounded mode" >&2; exit 1)
+	@test "$$((0$$(stat -c '%a' "$(BOUNDARIES)") & 022))" -eq 0 || (echo "$(BOUNDARIES) must not be group- or world-writable" >&2; exit 1)
+	@test "$$((0$$(stat -c '%a' "$(BOUNDARY_DIRECTORY)") & 077))" -eq 0 || (echo "$(BOUNDARY_DIRECTORY) must be owner-only; run chmod 700 $(BOUNDARY_DIRECTORY)" >&2; exit 1)
+	@test "$$(stat -c '%u' "$(BOUNDARIES)")" -eq "$(UID)" || (echo "$(BOUNDARIES) must be owned by UID $(UID)" >&2; exit 1)
+	@test "$$(stat -c '%u' "$(BOUNDARY_DIRECTORY)")" -eq "$(UID)" || (echo "$(BOUNDARY_DIRECTORY) must be owned by UID $(UID)" >&2; exit 1)
+endif
 
 setup: init-config build ## Check configured provider access, then verify the shipped HTTP/MCP transport
 	docker run --rm -i --init --user $(UID):$(GID) --network bridge --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
@@ -304,34 +331,37 @@ build: ## Build the production image with version and latest tags
 
 build-test: dev-image ## Build the development image used by tests and linting
 
-run: build ## Run the production image as a stdio MCP server
+run: build verify-runtime-boundary ## Run the production image as a stdio MCP server
 	docker run --rm -i --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
 		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
+		-e RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY) \
+		-e RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED) \
+		-e RANKRAT_BOUNDARY_FILE=$(RUNTIME_BOUNDARY_FILE) \
 		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly \
+		$(RUNTIME_BOUNDARY_MOUNT) \
 		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
 		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
 		$(IMAGE_NAME):$(IMAGE_TAG)
 
-run-http: build ## Run REST and Streamable HTTP MCP on loopback port 8080
-	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
+run-http: build verify-runtime-boundary ## Run REST and Streamable HTTP MCP on loopback port 8080
 	@test -d "$(SECRETS)" || (echo "$(SECRETS) is required" >&2; exit 1)
 	@test -d "$(OAUTH)" || (echo "$(OAUTH) is required; run make init-config first" >&2; exit 1)
 	@test -f "$(HTTP_BEARER_SECRET_FILE)" || (echo "$(HTTP_BEARER_SECRET_FILE) is required" >&2; exit 1)
 	docker run --rm --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
 		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
 		-p 127.0.0.1:8080:8080 \
+		-e RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY) \
+		-e RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED) \
+		-e RANKRAT_BOUNDARY_FILE=$(RUNTIME_BOUNDARY_FILE) \
 		-e RANKRAT_HTTP_HOST=0.0.0.0 \
 		-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token \
 		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly \
+		$(RUNTIME_BOUNDARY_MOUNT) \
 		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
 		--mount type=bind,src=$(OAUTH),dst=/run/oauth \
 		$(IMAGE_NAME):$(IMAGE_TAG) http
 
-auth-google: oauth-authorize ## Authorize every Rankrat Google OAuth scope through one host-loopback callback
-
-oauth-authorize: build ## Alias retained for existing automation; use auth-google
+auth-google: build ## Authorize every Rankrat Google OAuth scope through one host-loopback callback
 	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
 	@test -d "$(SECRETS)" || (echo "$(SECRETS) is required" >&2; exit 1)
 	@test -d "$(OAUTH)" || (echo "$(OAUTH) is required; run make init-config first" >&2; exit 1)
@@ -364,15 +394,13 @@ onboard-site: build ## Create GA4, Search Console, and Bing resources for one ne
 	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
 	@test -d "$(SECRETS)" || (echo "$(SECRETS) is required" >&2; exit 1)
 	@test -d "$(OAUTH)" || (echo "$(OAUTH) is required; run make init-config first" >&2; exit 1)
-	@test -f "$(ADMIN_BEARER_SECRET_FILE)" || (echo "$(ADMIN_BEARER_SECRET_FILE) is required" >&2; exit 1)
 	@test -n "$(ONBOARD_SITE_URL)" || (echo "ONBOARD_SITE_URL is required" >&2; exit 1)
 	docker run --rm -i --init --user $(UID):$(GID) --read-only --cap-drop=ALL --security-opt no-new-privileges:true \
 		--pids-limit 128 --memory 512m --cpus 1 --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-		-e RANKRAT_ENABLE_WRITES=true \
+		-e RANKRAT_READ_ONLY=false \
 		-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
 		-e RANKRAT_SECRET_ROOT=/run/secrets \
 		-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-		-e RANKRAT_ADMIN_BEARER_SECRET_FILE=/run/secrets/rankrat/admin-bearer-token \
 		--mount type=bind,src=$(BOUNDARIES),dst=/run/config/boundaries.json \
 		--mount type=bind,src=$(SECRETS),dst=/run/secrets,readonly \
 		--mount type=bind,src=$(OAUTH),dst=/run/oauth \

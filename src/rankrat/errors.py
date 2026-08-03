@@ -23,10 +23,6 @@ class WritesDisabledError(RankratError):
     """Raised when an operator has not enabled an explicit write capability."""
 
 
-class ApprovalDeniedError(RankratError):
-    """Raised when a write approval is missing, mismatched, expired, or spent."""
-
-
 class SchemaFetchError(RankratError):
     """Raised when a public schema URL is unsafe or cannot be safely fetched."""
 

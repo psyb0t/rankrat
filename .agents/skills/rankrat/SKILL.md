@@ -8,11 +8,11 @@ metadata:
     emoji: "🐀"
     primaryEnv: RANKRAT_URL
     requires:
-      bins: [docker, curl]
+      bins: [docker]
 permissions:
   network: "outbound HTTPS to the configured providers (Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights) and inbound only on the port you bind. Traffic goes to the provider APIs, never to a third party."
-  shell: "docker and curl invocations shown in references/setup.md — no other host access."
-  filesystem: "reads the boundary config and the provider credential files you point it at; writes only its own log file."
+  shell: "docker run invocations for the published image, as shown below; no other host access is required."
+  filesystem: "reads the boundary config and provider credentials. Local initialization creates an HTTP bearer secret; Google authorization writes its token record; IndexNow initialization creates or retains its local key and updates .env plus the boundary file; writable unbounded onboarding updates the one configured boundary file with exact created-resource IDs."
 ---
 
 # rankrat
@@ -27,22 +27,30 @@ Install, credentials and the full environment reference:
 
 ## Security & safety
 
-The account boundary is fixed by the operator, not by the agent. rankrat serves
-only the sites and properties listed in its boundary config; an agent cannot
-widen that scope, enumerate other properties, or reach an account you did not
-configure.
+In normal bounded mode, the operator fixes the boundary at startup and rankrat
+serves only the accounts, sites and properties listed in it. A tool cannot widen
+that scope from inside a bounded session.
 
-It is **read-only by default** — `enable_writes` defaults to `false`, and the
-write tools are not merely rejected but absent from the tool catalog entirely,
-so an agent cannot see or call them. Turning writes on additionally requires an
-admin bearer secret to be configured; rankrat refuses to start otherwise. Leave
-writes off unless you specifically want submission tools, and only point the
-server at properties you own.
+It is **read-only by default** — `RANKRAT_READ_ONLY` defaults to `true`, and the
+write tools are not merely rejected but absent from `tools/list` entirely, so an
+agent cannot discover or call them. Setting it to `false` makes them visible;
+writes still stay inside the configured boundaries and whatever the provider
+account is actually permitted to do.
+
+There is a second, wider switch. `RANKRAT_UNBOUNDED=true` (which also requires
+read-only off) is a reusable trusted-caller mode for discovering or onboarding a
+resource that is not in the boundary file yet. It keeps credential **accounts**
+fixed but skips per-resource allow-lists. Onboarding records exact resulting
+resources in the boundary file; restart without the switch to enforce them
+again. The operator may enable unbounded mode again for a later onboarding
+session. Treat any unbounded server as a trusted-caller setup, not a public
+service.
 
 Your provider credentials stay on the host running rankrat. Requests go to the
-provider APIs over HTTPS; nothing is relayed to a third party. Bind it to
-localhost or a private network and enable bearer auth if it is reachable by
-anything else.
+provider APIs over HTTPS; nothing is relayed to a third party, and credentials,
+OAuth records and raw provider bodies are never returned or logged. Bind it to
+loopback or a private network, and use the bearer token if anything else can
+reach it.
 
 ## When to use
 
@@ -65,8 +73,10 @@ anything else.
 - **Sites you don't control.** Everything is scoped to properties already
   verified in your own Search Console / Bing / GA4 accounts. It is not a rank
   tracker or a competitor-research tool and cannot query arbitrary domains.
-- **Changing anything.** Aside from the optional submission tools, there is no
-  way to edit provider state — no settings, no property creation, no content.
+- **Changing anything in the default configuration.** Read-only mode exposes no
+  write tools. A trusted writable deployment can submit URLs/sitemaps and,
+  during an unbounded session, create supported provider resources for a newly
+  onboarded site.
 - **Realtime dashboards.** Provider APIs lag (Search Console notably so), and
   rankrat reports what they return.
 - **Crawling a site.** It reads provider APIs; it is not a crawler or an
@@ -74,25 +84,45 @@ anything else.
 
 ## Usage
 
-Start it and point an MCP client at it — the tool list adapts to which providers
-are configured, so ask for `provider_readiness` first if a call comes back empty.
+Both MCP transports run from the published image. The tool list adapts to which
+providers are configured, so ask `provider_readiness` first if a call comes back
+empty.
+
+**stdio** is the default mode, so a client that spawns its own server just runs
+the image and talks to it — no port, no bridge:
 
 ```bash
-docker run --rm -p 8080:8080 \
-  -v "$PWD/config:/config:ro" \
+docker run -i --rm --init --read-only \
+  --cap-drop=ALL --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,noexec,nosuid,size=32m \
+  --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
+  --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
+  --mount type=bind,src="$PWD/oauth",dst=/run/oauth,readonly \
+  psyb0t/rankrat stdio
+```
+
+**Streamable HTTP** for a shared or already-running server. MCP is at `/mcp`,
+and the REST API is on the same port:
+
+```bash
+docker run --rm --init --read-only \
+  --cap-drop=ALL --security-opt no-new-privileges:true \
+  --tmpfs /tmp:rw,noexec,nosuid,size=32m \
+  -p 127.0.0.1:8080:8080 \
+  -e RANKRAT_HTTP_HOST=0.0.0.0 \
+  -e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token \
+  --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
+  --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
+  --mount type=bind,src="$PWD/oauth",dst=/run/oauth,readonly \
   psyb0t/rankrat http
 ```
 
-MCP over Streamable HTTP is at `/mcp`. A FastAPI JSON API is available for
-non-MCP callers on the same port.
+`RANKRAT_HTTP_HOST=0.0.0.0` binds inside the container; the `-p` publishes it on
+loopback only. Send `Authorization: Bearer <token>` when a bearer secret is
+configured.
 
-`stdio` is the default mode and speaks MCP directly, so a client that spawns its
-own server needs no bridge or proxy — point it at the image and let it own the
-process:
-
-```bash
-docker run -i --rm -v "$PWD/config:/config:ro" psyb0t/rankrat stdio
-```
+The repo's Make targets wrap these for humans working on a checkout; an agent
+does not need them.
 
 Typical flow for "why did traffic drop":
 

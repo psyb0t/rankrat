@@ -29,10 +29,9 @@ from rankrat.constants import (
     MAX_BING_TRAFFIC_DATE_RANGE_DAYS,
     MIN_BING_TRAFFIC_ANOMALY_POINTS,
 )
-from rankrat.errors import ApprovalDeniedError, InputLimitError
+from rankrat.errors import InputLimitError
 from rankrat.logging import log_event
 from rankrat.models.boundaries import Provider, ResourceKind
-from rankrat.policy.approvals import WriteApproval, WriteApprovalRequest, WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import (
     AccountId,
@@ -538,22 +537,12 @@ class BingRelatedKeywordsReport:
 
 
 @dataclass(frozen=True, slots=True)
-class BingUrlSubmissionApprovalRequest:
-    """One exact Bing URL batch an administrator wants to authorize once."""
-
-    account_id: str
-    site_url: str
-    urls: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class BingUrlSubmissionRequest:
-    """One approved bounded Bing URL batch submission."""
+    """One boundary-limited Bing URL batch submission."""
 
     account_id: str
     site_url: str
     urls: tuple[str, ...]
-    approval_id: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
 
@@ -574,20 +563,14 @@ class BingSitemapOperation(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class BingSitemapApprovalRequest:
-    """One exact Bing sitemap mutation an administrator can approve once."""
+class BingSitemapSubmissionRequest:
+    """One boundary-limited Bing sitemap mutation ready for the provider client."""
 
     account_id: str
     site_url: str
     sitemap_url: str
     operation: BingSitemapOperation
 
-
-@dataclass(frozen=True, slots=True)
-class BingSitemapSubmissionRequest(BingSitemapApprovalRequest):
-    """One approved Bing sitemap mutation ready for the provider client."""
-
-    approval_id: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
 
@@ -608,25 +591,19 @@ class BingSiteOperation(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class BingSiteApprovalRequest:
-    """One exact Bing property mutation an administrator can approve once."""
+class BingSiteSubmissionRequest:
+    """One boundary-limited Bing property mutation ready for the provider client."""
 
     account_id: str
     site_url: str
     operation: BingSiteOperation
 
-
-@dataclass(frozen=True, slots=True)
-class BingSiteSubmissionRequest(BingSiteApprovalRequest):
-    """One approved Bing property mutation ready for the provider client."""
-
-    approval_id: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
 
 @dataclass(frozen=True, slots=True)
 class BingSiteSubmissionResponse:
-    """Safe Bing property mutation receipt without an API key or approval ID."""
+    """Safe Bing property mutation receipt without an API key."""
 
     account_id: str
     site_url: str
@@ -640,11 +617,9 @@ class BingWebmasterService:
         self,
         policy: BoundaryPolicy,
         client: BingWebmasterClient,
-        approvals: WriteApprovalStore | None = None,
     ) -> None:
         self._policy = policy
         self._client = client
-        self._approvals = approvals
 
     async def keyword_statistics(
         self,
@@ -937,47 +912,15 @@ class BingWebmasterService:
         )
         return _bing_url_information_report(information)
 
-    async def approve_url_submission(
-        self,
-        request: BingUrlSubmissionApprovalRequest,
-    ) -> WriteApproval:
-        """Mint an approval for one exact bounded Bing URL submission batch."""
-        if self._approvals is None:
-            raise ApprovalDeniedError("Bing URL submission is disabled")
-        normalized_urls = self._normalized_submission_urls(
-            request.account_id,
-            request.site_url,
-            request.urls,
-        )
-        return await self._approvals.mint(
-            WriteApprovalRequest(
-                operation="bing_url_submit",
-                account_id=request.account_id,
-                resource=request.site_url,
-                arguments={"urls": list(normalized_urls)},
-            )
-        )
-
     async def submit_url_batch(
         self,
         request: BingUrlSubmissionRequest,
     ) -> BingUrlSubmissionResponse:
-        """Consume an exact approval before submitting a bounded Bing URL batch."""
-        if self._approvals is None:
-            raise ApprovalDeniedError("Bing URL submission is disabled")
+        """Submit a boundary-limited Bing URL batch."""
         normalized_urls = self._normalized_submission_urls(
             request.account_id,
             request.site_url,
             request.urls,
-        )
-        await self._approvals.consume(
-            request.approval_id,
-            WriteApprovalRequest(
-                operation="bing_url_submit",
-                account_id=request.account_id,
-                resource=request.site_url,
-                arguments={"urls": list(normalized_urls)},
-            ),
         )
         await self._client.submit_url_batch(
             ProviderReadRequest(AccountId(request.account_id), request.timeout_seconds),
@@ -990,37 +933,12 @@ class BingWebmasterService:
             submitted_count=len(normalized_urls),
         )
 
-    async def approve_sitemap_submission(
-        self,
-        request: BingSitemapApprovalRequest,
-    ) -> WriteApproval:
-        """Mint an approval for one exact Bing sitemap submission or removal."""
-        if self._approvals is None:
-            raise ApprovalDeniedError("Bing sitemap mutation is disabled")
-        sitemap_url = self._normalized_sitemap_url(request)
-        return await self._approvals.mint(self._sitemap_approval_request(request, sitemap_url))
-
-    async def approve_site_submission(
-        self,
-        request: BingSiteApprovalRequest,
-    ) -> WriteApproval:
-        """Mint one approval for an exact configured Bing property mutation."""
-
-        if self._approvals is None:
-            raise ApprovalDeniedError("Bing site submission is disabled")
-        self._require_site(request.account_id, request.site_url)
-        return await self._approvals.mint(self._site_approval_request(request))
-
     async def submit_site(
         self,
         request: BingSiteSubmissionRequest,
     ) -> BingSiteSubmissionResponse:
-        """Consume one exact approval before a fixed-origin Bing property mutation."""
-
-        if self._approvals is None:
-            raise ApprovalDeniedError("Bing site submission is disabled")
+        """Run one boundary-limited fixed-origin Bing property mutation."""
         self._require_site(request.account_id, request.site_url)
-        await self._approvals.consume(request.approval_id, self._site_approval_request(request))
         provider_request = ProviderReadRequest(
             AccountId(request.account_id),
             request.timeout_seconds,
@@ -1059,14 +977,8 @@ class BingWebmasterService:
         self,
         request: BingSitemapSubmissionRequest,
     ) -> BingSitemapSubmissionResponse:
-        """Consume one exact approval before the fixed Bing sitemap mutation."""
-        if self._approvals is None:
-            raise ApprovalDeniedError("Bing sitemap mutation is disabled")
+        """Run one boundary-limited fixed-origin Bing sitemap mutation."""
         sitemap_url = self._normalized_sitemap_url(request)
-        await self._approvals.consume(
-            request.approval_id,
-            self._sitemap_approval_request(request, sitemap_url),
-        )
         provider_request = ProviderReadRequest(
             AccountId(request.account_id),
             request.timeout_seconds,
@@ -1123,32 +1035,11 @@ class BingWebmasterService:
             site_url,
         )
 
-    def _normalized_sitemap_url(self, request: BingSitemapApprovalRequest) -> str:
+    def _normalized_sitemap_url(self, request: BingSitemapSubmissionRequest) -> str:
         return self._policy.require_bing_site_url(
             request.account_id,
             request.site_url,
             request.sitemap_url,
-        )
-
-    @staticmethod
-    def _sitemap_approval_request(
-        request: BingSitemapApprovalRequest,
-        sitemap_url: str,
-    ) -> WriteApprovalRequest:
-        return WriteApprovalRequest(
-            operation=f"bing_sitemap_{request.operation.value}",
-            account_id=request.account_id,
-            resource=request.site_url,
-            arguments={"sitemap_url": sitemap_url},
-        )
-
-    @staticmethod
-    def _site_approval_request(request: BingSiteApprovalRequest) -> WriteApprovalRequest:
-        return WriteApprovalRequest(
-            operation=f"bing_site_{request.operation.value}",
-            account_id=request.account_id,
-            resource=request.site_url,
-            arguments={},
         )
 
 

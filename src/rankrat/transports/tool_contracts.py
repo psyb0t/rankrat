@@ -923,9 +923,9 @@ SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT = cast(
 )
 
 
-def tool_catalog(enable_writes: bool) -> tuple[ToolContract[object, object], ...]:
+def tool_catalog(writes_enabled: bool) -> tuple[ToolContract[object, object], ...]:
     """Expose write tools only when the immutable startup setting permits them."""
-    if enable_writes:
+    if writes_enabled:
         return (
             *READ_ONLY_TOOL_CATALOG,
             INDEXNOW_TOOL_CONTRACT,

@@ -1330,7 +1330,7 @@ async def test_http_bearer_auth_covers_errors_and_health_is_public(
 
 
 @pytest.mark.asyncio
-async def test_http_indexnow_contract_when_explicitly_enabled(
+async def test_http_write_contract_when_read_only_is_disabled(
     indexnow_deployment: tuple[Settings, ApplicationServices],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1345,39 +1345,12 @@ async def test_http_indexnow_contract_when_explicitly_enabled(
         transport=httpx.ASGITransport(app=app),
         base_url="http://rankrat.test",
     ) as client:
-        approval_request = {
-            "target_id": "site-main",
-            "urls": ["https://example.com/article"],
-        }
-        unauthorized_approval = await client.post(
-            "/v1/admin/write-approvals",
-            json=approval_request,
-        )
-        assert unauthorized_approval.status_code == 401
-        approval_response = await client.post(
-            "/v1/admin/write-approvals",
-            json=approval_request,
-            headers={"authorization": f"Bearer {'a' * 32}"},
-        )
-        assert approval_response.status_code == 200
-        approval_id = approval_response.json()["approval_id"]
-        bing_approval_response = await client.post(
-            "/v1/admin/bing-url-submission-approvals",
-            json={
-                "account_id": "bing-main",
-                "site_url": "https://example.com/",
-                "urls": ["https://example.com/article"],
-            },
-            headers={"authorization": f"Bearer {'a' * 32}"},
-        )
-        assert bing_approval_response.status_code == 200
         bing_submission = await client.post(
             "/v1/bing-url-submissions",
             json={
                 "account_id": "bing-main",
                 "site_url": "https://example.com/",
                 "urls": ["https://example.com/article"],
-                "approval_id": bing_approval_response.json()["approval_id"],
             },
         )
         assert bing_submission.json() == {
@@ -1394,17 +1367,6 @@ async def test_http_indexnow_contract_when_explicitly_enabled(
             "submit_feed",
             mock_bing_sitemap_submission,
         )
-        bing_sitemap_approval_response = await client.post(
-            "/v1/admin/bing-sitemap-approvals",
-            json={
-                "account_id": "bing-main",
-                "site_url": "https://example.com/",
-                "sitemap_url": "https://example.com/sitemap.xml",
-                "operation": "submit",
-            },
-            headers={"authorization": f"Bearer {'a' * 32}"},
-        )
-        assert bing_sitemap_approval_response.status_code == 200
         bing_sitemap_submission = await client.post(
             "/v1/bing-sitemap-submissions",
             json={
@@ -1412,7 +1374,6 @@ async def test_http_indexnow_contract_when_explicitly_enabled(
                 "site_url": "https://example.com/",
                 "sitemap_url": "https://example.com/sitemap.xml",
                 "operation": "submit",
-                "approval_id": bing_sitemap_approval_response.json()["approval_id"],
             },
         )
         assert bing_sitemap_submission.json() == {
@@ -1425,7 +1386,6 @@ async def test_http_indexnow_contract_when_explicitly_enabled(
             json={
                 "target_id": "site-main",
                 "urls": ["https://example.com/article"],
-                "approval_id": approval_id,
             },
         )
         invalid = await client.post(
@@ -1433,7 +1393,6 @@ async def test_http_indexnow_contract_when_explicitly_enabled(
             json={
                 "target_id": "site-main",
                 "urls": ["http://example.com/article"],
-                "approval_id": "unused",
             },
         )
 

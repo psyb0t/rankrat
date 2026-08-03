@@ -2,6 +2,10 @@ openapi: 3.1.0
 info:
   title: rankrat
   version: "0.1.0"
+  description: >-
+    Boundary-limited SEO operations over REST and MCP. The source document lists
+    the full writable contract; a read-only runtime removes write routes from
+    its served OpenAPI document.
 security:
 - BearerAuth: []
 paths:
@@ -54,222 +58,6 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Accounts List
-  /v1/admin/bing-site-approvals:
-    post:
-      operationId: adminBingSiteApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_BingSiteApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Bing Site Approval
-  /v1/admin/bing-sitemap-approvals:
-    post:
-      operationId: adminBingSitemapApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_BingSitemapApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Bing Sitemap Approval
-  /v1/admin/bing-url-submission-approvals:
-    post:
-      operationId: adminBingUrlSubmissionApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_BingUrlSubmissionApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Bing Url Submission Approval
-  /v1/admin/google-indexing-approvals:
-    post:
-      operationId: adminGoogleIndexingApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_GoogleIndexingApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Google Indexing Approval
-  /v1/admin/google-indexing-batch-approvals:
-    post:
-      operationId: adminGoogleIndexingBatchApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_GoogleIndexingBatchApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Google Indexing Batch Approval
-  /v1/admin/google-site-approvals:
-    post:
-      operationId: adminGoogleSiteApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_GoogleSiteApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Google Site Approval
-  /v1/admin/google-sitemap-approvals:
-    post:
-      operationId: adminGoogleSitemapApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_GoogleSitemapApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Google Sitemap Approval
-  /v1/admin/site-onboarding-approvals:
-    post:
-      operationId: adminSiteOnboardingApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_SiteOnboardingApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Site Onboarding Approval
-  /v1/admin/write-approvals:
-    post:
-      operationId: adminWriteApprovalCreate
-      security:
-      - AdminBearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/_IndexNowApprovalBody'
-        required: true
-      responses:
-        '200':
-          content:
-            application/json:
-              schema: {}
-          description: Successful Response
-        '422':
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-          description: Validation Error
-      summary: Create Indexnow Approval
   /v1/bing-site-submissions:
     post:
       operationId: bingSiteSubmissionCreate
@@ -1856,14 +1644,9 @@ paths:
       summary: Sites List
 components:
   securitySchemes:
-    AdminBearerAuth:
-      bearerFormat: opaque
-      description: Required for `/v1/admin/*`; configure it separately from the regular API bearer.
-      scheme: bearer
-      type: http
     BearerAuth:
       bearerFormat: opaque
-      description: Required for every protected non-admin endpoint.
+      description: Required for protected HTTP endpoints.
       scheme: bearer
       type: http
   schemas:
@@ -2236,37 +2019,12 @@ components:
       - end_date
       title: _BingRelatedKeywordsBody
       type: object
-    _BingSiteApprovalBody:
-      additionalProperties: false
-      properties:
-        account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Account Id
-          type: string
-        operation:
-          $ref: '#/components/schemas/BingSiteOperation'
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-      required:
-      - account_id
-      - site_url
-      - operation
-      title: _BingSiteApprovalBody
-      type: object
     _BingSiteSubmissionBody:
       additionalProperties: false
       properties:
         account_id:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Account Id
-          type: string
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
           type: string
         operation:
           $ref: '#/components/schemas/BingSiteOperation'
@@ -2285,34 +2043,7 @@ components:
       - account_id
       - site_url
       - operation
-      - approval_id
       title: _BingSiteSubmissionBody
-      type: object
-    _BingSitemapApprovalBody:
-      additionalProperties: false
-      properties:
-        account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Account Id
-          type: string
-        operation:
-          $ref: '#/components/schemas/BingSitemapOperation'
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-        sitemap_url:
-          maxLength: 2048
-          minLength: 1
-          title: Sitemap Url
-          type: string
-      required:
-      - account_id
-      - site_url
-      - sitemap_url
-      - operation
-      title: _BingSitemapApprovalBody
       type: object
     _BingSitemapSubmissionBody:
       additionalProperties: false
@@ -2321,11 +2052,6 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Account Id
           type: string
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
-          type: string
         operation:
           $ref: '#/components/schemas/BingSitemapOperation'
         site_url:
@@ -2349,7 +2075,6 @@ components:
       - site_url
       - sitemap_url
       - operation
-      - approval_id
       title: _BingSitemapSubmissionBody
       type: object
     _BingTrafficBody:
@@ -2457,42 +2182,12 @@ components:
       - page_url
       title: _BingUrlInformationBody
       type: object
-    _BingUrlSubmissionApprovalBody:
-      additionalProperties: false
-      properties:
-        account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Account Id
-          type: string
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-        urls:
-          items:
-            type: string
-          maxItems: 500
-          minItems: 1
-          title: Urls
-          type: array
-      required:
-      - account_id
-      - site_url
-      - urls
-      title: _BingUrlSubmissionApprovalBody
-      type: object
     _BingUrlSubmissionBody:
       additionalProperties: false
       properties:
         account_id:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Account Id
-          type: string
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
           type: string
         site_url:
           maxLength: 2048
@@ -2516,7 +2211,6 @@ components:
       - account_id
       - site_url
       - urls
-      - approval_id
       title: _BingUrlSubmissionBody
       type: object
     _Ga4AccountDiscoveryBody:
@@ -2833,57 +2527,6 @@ components:
       - end_date
       title: _Ga4SearchConsoleComparisonBody
       type: object
-    _GoogleIndexingApprovalBody:
-      additionalProperties: false
-      properties:
-        account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Account Id
-          type: string
-        notification_type:
-          $ref: '#/components/schemas/GoogleIndexingNotificationType'
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-        url:
-          maxLength: 2048
-          minLength: 1
-          title: Url
-          type: string
-      required:
-      - account_id
-      - site_url
-      - url
-      - notification_type
-      title: _GoogleIndexingApprovalBody
-      type: object
-    _GoogleIndexingBatchApprovalBody:
-      additionalProperties: false
-      properties:
-        account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Account Id
-          type: string
-        notifications:
-          items:
-            $ref: '#/components/schemas/_GoogleIndexingBatchNotificationBody'
-          maxItems: 100
-          minItems: 1
-          title: Notifications
-          type: array
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-      required:
-      - account_id
-      - site_url
-      - notifications
-      title: _GoogleIndexingBatchApprovalBody
-      type: object
     _GoogleIndexingBatchNotificationBody:
       additionalProperties: false
       properties:
@@ -2905,11 +2548,6 @@ components:
         account_id:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Account Id
-          type: string
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
           type: string
         notifications:
           items:
@@ -2933,7 +2571,6 @@ components:
       - account_id
       - site_url
       - notifications
-      - approval_id
       title: _GoogleIndexingBatchSubmissionBody
       type: object
     _GoogleIndexingMetadataBody:
@@ -2972,11 +2609,6 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Account Id
           type: string
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
-          type: string
         notification_type:
           $ref: '#/components/schemas/GoogleIndexingNotificationType'
         site_url:
@@ -3000,28 +2632,7 @@ components:
       - site_url
       - url
       - notification_type
-      - approval_id
       title: _GoogleIndexingSubmissionBody
-      type: object
-    _GoogleSiteApprovalBody:
-      additionalProperties: false
-      properties:
-        account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Account Id
-          type: string
-        operation:
-          $ref: '#/components/schemas/GoogleSiteOperation'
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-      required:
-      - account_id
-      - site_url
-      - operation
-      title: _GoogleSiteApprovalBody
       type: object
     _GoogleSiteSubmissionBody:
       additionalProperties: false
@@ -3030,11 +2641,6 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Account Id
           type: string
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
-          type: string
         operation:
           $ref: '#/components/schemas/GoogleSiteOperation'
         site_url:
@@ -3052,34 +2658,7 @@ components:
       - account_id
       - site_url
       - operation
-      - approval_id
       title: _GoogleSiteSubmissionBody
-      type: object
-    _GoogleSitemapApprovalBody:
-      additionalProperties: false
-      properties:
-        account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Account Id
-          type: string
-        operation:
-          $ref: '#/components/schemas/GoogleSitemapOperation'
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-        sitemap_url:
-          maxLength: 2048
-          minLength: 1
-          title: Sitemap Url
-          type: string
-      required:
-      - account_id
-      - site_url
-      - sitemap_url
-      - operation
-      title: _GoogleSitemapApprovalBody
       type: object
     _GoogleSitemapSubmissionBody:
       additionalProperties: false
@@ -3087,11 +2666,6 @@ components:
         account_id:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Account Id
-          type: string
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
           type: string
         operation:
           $ref: '#/components/schemas/GoogleSitemapOperation'
@@ -3116,36 +2690,11 @@ components:
       - site_url
       - sitemap_url
       - operation
-      - approval_id
       title: _GoogleSitemapSubmissionBody
-      type: object
-    _IndexNowApprovalBody:
-      additionalProperties: false
-      properties:
-        target_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Target Id
-          type: string
-        urls:
-          items:
-            type: string
-          maxItems: 1000
-          minItems: 1
-          title: Urls
-          type: array
-      required:
-      - target_id
-      - urls
-      title: _IndexNowApprovalBody
       type: object
     _IndexNowSubmissionBody:
       additionalProperties: false
       properties:
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
-          type: string
         target_id:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Target Id
@@ -3160,7 +2709,6 @@ components:
       required:
       - target_id
       - urls
-      - approval_id
       title: _IndexNowSubmissionBody
       type: object
     _LocalSchemaValidationBody:
@@ -3665,54 +3213,9 @@ components:
       - end_date
       title: _SearchEngineTrafficHealthBody
       type: object
-    _SiteOnboardingApprovalBody:
-      additionalProperties: false
-      properties:
-        bing_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Bing Account Id
-          type: string
-        currency_code:
-          default: USD
-          maxLength: 3
-          minLength: 3
-          title: Currency Code
-          type: string
-        display_name:
-          anyOf:
-          - maxLength: 100
-            type: string
-          - type: 'null'
-          title: Display Name
-        google_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
-          title: Google Account Id
-          type: string
-        site_url:
-          maxLength: 2048
-          minLength: 1
-          title: Site Url
-          type: string
-        time_zone:
-          default: Etc/UTC
-          maxLength: 64
-          minLength: 1
-          title: Time Zone
-          type: string
-      required:
-      - google_account_id
-      - bing_account_id
-      - site_url
-      title: _SiteOnboardingApprovalBody
-      type: object
     _SiteOnboardingSubmissionBody:
       additionalProperties: false
       properties:
-        approval_id:
-          maxLength: 256
-          minLength: 1
-          title: Approval Id
-          type: string
         bing_account_id:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Bing Account Id
@@ -3733,6 +3236,12 @@ components:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Google Account Id
           type: string
+        google_analytics_parent_account_id:
+          anyOf:
+          - maxLength: 64
+            type: string
+          - type: 'null'
+          title: Google Analytics Parent Account Id
         site_url:
           maxLength: 2048
           minLength: 1
@@ -3754,7 +3263,6 @@ components:
       - google_account_id
       - bing_account_id
       - site_url
-      - approval_id
       title: _SiteOnboardingSubmissionBody
       type: object
     _UrlInspectionBatchBody:

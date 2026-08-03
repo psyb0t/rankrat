@@ -33,6 +33,7 @@ ENV PATH="/app/.venv/bin:${PATH}" \
 RUN groupadd --gid 10001 rankrat \
     && useradd --create-home --uid 10001 --gid rankrat --shell /usr/sbin/nologin rankrat \
     && install --directory --owner=rankrat --group=rankrat --mode=0750 \
+        /run/config \
         /run/oauth \
         /run/secrets/google \
         /run/secrets/bing \

@@ -1,0 +1,57 @@
+{
+  "name": "@psyb0t/rankrat",
+  "version": "0.0.0",
+  "mcpName": "io.github.psyb0t/rankrat",
+  "description": "Connect an OpenClaw/MCP agent to a self-hosted rankrat server (Search Console, Bing Webmaster, GA4, PageSpeed, IndexNow) over stdio or Streamable HTTP.",
+  "type": "module",
+  "bin": {
+    "rankrat-mcp": "bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "openclaw.plugin.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "license": "WTFPL",
+  "author": "psyb0t",
+  "homepage": "https://github.com/psyb0t/rankrat",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/psyb0t/rankrat.git"
+  },
+  "bugs": {
+    "url": "https://github.com/psyb0t/rankrat/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "rankrat",
+    "seo",
+    "search-console",
+    "bing-webmaster",
+    "ga4",
+    "pagespeed",
+    "indexnow",
+    "openclaw",
+    "ai-agent"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "mcp-remote": "0.1.38"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "openclaw": {
+    "extensions": ["./bin/cli.js"],
+    "compat": {
+      "pluginApi": ">=2026.3.24-beta.2"
+    },
+    "build": {
+      "openclawVersion": "2026.3.24-beta.2"
+    }
+  }
+}

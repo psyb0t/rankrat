@@ -27,7 +27,7 @@ def _boundary_file(path: Path) -> Path:
 
 def _environment_file(path: Path) -> Path:
     environment_file = path / ".env"
-    environment_file.write_text("RANKRAT_ENABLE_WRITES=false\n", encoding="utf-8")
+    environment_file.write_text("RANKRAT_READ_ONLY=true\n", encoding="utf-8")
     return environment_file
 
 
@@ -54,7 +54,7 @@ def test_initialize_creates_a_mode_600_key_and_exact_target(tmp_path: Path) -> N
             "key_file": "/run/secrets/indexnow/key",
         }
     ]
-    assert "RANKRAT_ENABLE_WRITES=false" in environment
+    assert "RANKRAT_READ_ONLY=true" in environment
     assert "RANKRAT_LIVE_INDEXNOW_TARGET_ID=site" in environment
     assert "RANKRAT_LIVE_INDEXNOW_URL=https://example.com/" in environment
 
@@ -110,7 +110,7 @@ def test_initialize_is_idempotent_and_does_not_change_explicit_write_values(tmp_
     boundary_file = _boundary_file(tmp_path)
     environment_file = _environment_file(tmp_path)
     environment_file.write_text(
-        "RANKRAT_ENABLE_WRITES=true\nRANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true\n",
+        "RANKRAT_READ_ONLY=false\nRANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true\n",
         encoding="utf-8",
     )
     key_file = tmp_path / "secrets" / "indexnow-main-key"
@@ -123,7 +123,7 @@ def test_initialize_is_idempotent_and_does_not_change_explicit_write_values(tmp_
     assert second.created_key is False
     assert second.configured_target is False
     assert key_file.read_text(encoding="utf-8") == key_before
-    assert "RANKRAT_ENABLE_WRITES=true" in environment_file.read_text(encoding="utf-8")
+    assert "RANKRAT_READ_ONLY=false" in environment_file.read_text(encoding="utf-8")
     assert "RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true" in environment_file.read_text(
         encoding="utf-8"
     )
@@ -186,7 +186,7 @@ def test_initialize_rejects_conflicting_target_without_overwrite(tmp_path: Path)
 
 @pytest.mark.parametrize(
     ("boundary_contents", "environment_contents"),
-    (("not-json", "RANKRAT_ENABLE_WRITES=false\n"), ("{}", "broken assignment")),
+    (("not-json", "RANKRAT_READ_ONLY=true\n"), ("{}", "broken assignment")),
 )
 def test_initialize_rejects_invalid_inputs_without_creating_a_key(
     tmp_path: Path,

@@ -1,4 +1,4 @@
-"""Approval-gated provisioning of one newly launched website."""
+"""Boundary-limited provisioning of one newly launched website."""
 
 from __future__ import annotations
 
@@ -59,6 +59,7 @@ class SiteOnboardingRequest:
     google_account_id: str
     bing_account_id: str
     site_url: str
+    google_analytics_parent_account_id: str | None = None
     display_name: str | None = None
     time_zone: str = "Etc/UTC"
     currency_code: str = "USD"
@@ -90,6 +91,16 @@ class SiteOnboardingRequest:
         object.__setattr__(self, "display_name", display_name)
         object.__setattr__(self, "time_zone", time_zone)
         object.__setattr__(self, "currency_code", currency_code)
+        parent_account_id = self.google_analytics_parent_account_id
+        if parent_account_id is not None:
+            normalized_parent_account_id = parent_account_id.strip()
+            if not normalized_parent_account_id.isdigit():
+                raise InputLimitError("Google Analytics parent account ID must be numeric")
+            object.__setattr__(
+                self,
+                "google_analytics_parent_account_id",
+                normalized_parent_account_id,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,16 +185,23 @@ class SiteOnboardingOperator:
         )
 
     def validate_request(self, request: SiteOnboardingRequest) -> str:
-        """Authorize one requested site before an approval is minted or consumed."""
+        """Validate one requested site before any provider write occurs."""
 
         google_account = self._policy.require_google_onboarding_account(request.google_account_id)
         bing_account = self._policy.require_bing_onboarding_account(request.bing_account_id)
         self._assert_new_site(google_account, bing_account, request.site_url)
-        parent_account_id = google_account.google_analytics_parent_account_id
+        parent_account_id = (
+            request.google_analytics_parent_account_id
+            or google_account.google_analytics_parent_account_id
+        )
         if parent_account_id is None:
             raise ConfigurationError(
                 "Google onboarding requires google_analytics_parent_account_id"
             )
+        self._policy.require_google_analytics_onboarding_account(
+            request.google_account_id,
+            parent_account_id,
+        )
         return parent_account_id
 
     @staticmethod

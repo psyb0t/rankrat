@@ -6,6 +6,8 @@ readonly HTTP_RETRY_COUNT=10
 readonly HTTP_CONNECT_TIMEOUT_SECONDS=2
 readonly MCP_TIMEOUT_SECONDS=10
 readonly SCHEMA_VALIDATE_URL_PATH="/v1/schema/validate-url"
+readonly SERVER_INFO_URL_PATH="/v1/server-info"
+readonly SITE_ONBOARDING_URL_PATH="/v1/site-onboarding-submissions"
 readonly OPENAPI_PATH="/openapi.json"
 readonly OPENAPI_VERSION="3.1.0"
 readonly SERVER_INFO_OPERATION_ID="serverInfo"
@@ -250,6 +252,79 @@ private_schema_response=$(curl --silent --show-error --config "$curl_authorizati
 	--data "$PRIVATE_SCHEMA_URL_REQUEST" "$schema_validate_url")
 grep -Fq '"code":"REQUEST_REJECTED"' <<<"$private_schema_response" || {
 	log ERROR "public schema validation did not reject a loopback target"
+	exit 1
+}
+
+log INFO "checking unbounded HTTP startup permits the persisted-boundary writer"
+docker rm -f "$container_name" >/dev/null
+http_container_started=false
+chmod 700 "$config_directory"
+chmod 600 "$boundary_file"
+container_name="rankrat-final-image-unbounded-$$-${RANDOM}"
+docker run -d --name "$container_name" --network bridge \
+	-p "127.0.0.1::${HTTP_PORT}" \
+	--init --user "$TEST_CONTAINER_UID_GID" --read-only --cap-drop=ALL \
+	--security-opt no-new-privileges:true --pids-limit "$TEST_PIDS_LIMIT" \
+	--memory "$TEST_MEMORY_LIMIT" --cpus "$TEST_CPU_LIMIT" \
+	--tmpfs "/tmp:rw,noexec,nosuid,size=32m" \
+	--mount "type=bind,src=$config_directory,dst=/run/config" \
+	--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly" \
+	--mount "type=bind,src=$oauth_directory,dst=/run/oauth,readonly" \
+	-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
+	-e RANKRAT_SECRET_ROOT=/run/secrets \
+	-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
+	-e RANKRAT_HTTP_HOST=0.0.0.0 \
+	-e RANKRAT_HTTP_PORT="$HTTP_PORT" \
+	-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/test-http-bearer \
+	-e RANKRAT_READ_ONLY=false \
+	-e RANKRAT_UNBOUNDED=true \
+	-e RANKRAT_ENABLE_OPENAPI=true \
+	"$image_reference" http >/dev/null
+http_container_started=true
+
+unbounded_port_mapping=$(docker port "$container_name" "${HTTP_PORT}/tcp")
+unbounded_host_port="${unbounded_port_mapping##*:}"
+[[ "$unbounded_host_port" =~ ^[0-9]+$ ]] || {
+	log ERROR "Docker did not expose a numeric unbounded loopback port"
+	exit 1
+}
+readonly unbounded_health_url="http://127.0.0.1:${unbounded_host_port}/healthz"
+readonly unbounded_server_info_url="http://127.0.0.1:${unbounded_host_port}${SERVER_INFO_URL_PATH}"
+readonly unbounded_openapi_url="http://127.0.0.1:${unbounded_host_port}${OPENAPI_PATH}"
+
+for ((attempt = 1; attempt <= HTTP_RETRY_COUNT; attempt++)); do
+	if curl --silent --show-error --fail --noproxy '*' --proto '=http' \
+		--max-redirs 0 --connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+		--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$unbounded_health_url" >/dev/null; then
+		break
+	fi
+	if [[ "$attempt" -eq "$HTTP_RETRY_COUNT" ]]; then
+		log ERROR "unbounded HTTP health endpoint did not become ready"
+		log_http_container_output
+		exit 1
+	fi
+	sleep 1
+done
+
+unbounded_server_info=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$unbounded_server_info_url")
+grep -Fq '"read_only":false' <<<"$unbounded_server_info" || {
+	log ERROR "unbounded server did not expose writable capability"
+	exit 1
+}
+grep -Fq '"unbounded":true' <<<"$unbounded_server_info" || {
+	log ERROR "unbounded server did not report active unbounded capability"
+	exit 1
+}
+
+unbounded_openapi=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$unbounded_openapi_url")
+grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$unbounded_openapi" || {
+	log ERROR "unbounded server did not publish the site onboarding route"
 	exit 1
 }
 

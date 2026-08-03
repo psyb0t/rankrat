@@ -24,8 +24,9 @@ from rankrat.policy.limits import require_boundary_file_size
 class BoundaryPolicy:
     """Immutable authorization policy derived from one validated document."""
 
-    def __init__(self, document: BoundaryDocument) -> None:
+    def __init__(self, document: BoundaryDocument, *, unbounded: bool = False) -> None:
         self._document = document
+        self._unbounded = unbounded
 
     @classmethod
     def from_file(
@@ -33,6 +34,8 @@ class BoundaryPolicy:
         path: Path,
         secret_root: Path,
         oauth_token_root: Path | None = None,
+        *,
+        unbounded: bool = False,
     ) -> BoundaryPolicy:
         """Read and validate a bounded JSON document once at startup."""
         try:
@@ -73,7 +76,7 @@ class BoundaryPolicy:
                     raise ConfigurationError("IndexNow key path escapes the configured secret root")
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError) as error:
             raise ConfigurationError("invalid Rankrat boundary configuration") from error
-        return cls(document)
+        return cls(document, unbounded=unbounded)
 
     def accounts(self) -> tuple[ConfiguredAccount, ...]:
         """Return immutable accounts for safe read-only summaries."""
@@ -119,6 +122,8 @@ class BoundaryPolicy:
     ) -> ConfiguredAccount:
         """Authorize an exact resource under a single configured account."""
         account = self.resolve_account(account_id, provider)
+        if self._unbounded:
+            return account
         resources = self._resources_for_kind(account, resource_kind)
         if resource in resources:
             return account
@@ -133,6 +138,8 @@ class BoundaryPolicy:
         """Authorize an explicit Google resource or an operator-enabled read discovery resource."""
 
         account = self.resolve_account(account_id, Provider.GOOGLE)
+        if self._unbounded:
+            return account
         if resource in self._resources_for_kind(account, resource_kind):
             return account
         if account.allows_google_read_discovery(resource_kind):
@@ -143,6 +150,8 @@ class BoundaryPolicy:
         """Authorize the account-wide Google inventory endpoint only when explicitly enabled."""
 
         account = self.resolve_account(account_id, Provider.GOOGLE)
+        if self._unbounded:
+            return account
         if not account.google_account_discovery:
             raise BoundaryDeniedError("Google account discovery is not enabled for this account")
         return account
@@ -155,6 +164,8 @@ class BoundaryPolicy:
         """Authorize local GA4 provisioning only under one configured parent account."""
 
         account = self.resolve_account(account_id, Provider.GOOGLE)
+        if self._unbounded:
+            return account
         if account.google_analytics_parent_account_id != parent_account_id:
             raise BoundaryDeniedError("configured Google Analytics parent account was not selected")
         return account

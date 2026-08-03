@@ -6,6 +6,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from rankrat.models.boundaries import Provider, ResourceKind
 from rankrat.operator.site_onboarding import (
     SiteOnboardingOperator,
     SiteOnboardingPartialError,
@@ -24,6 +25,8 @@ async def _token(_: Path) -> str:
 def _operator(
     tmp_path: Path,
     handler: httpx.MockTransport,
+    *,
+    unbounded: bool = False,
 ) -> tuple[Path, SiteOnboardingOperator]:
     secret_root = tmp_path / "secrets"
     secret_root.mkdir()
@@ -55,7 +58,12 @@ def _operator(
     )
     oauth_root = tmp_path / "oauth"
     oauth_root.mkdir(mode=0o700)
-    policy = BoundaryPolicy.from_file(boundary_file, secret_root, oauth_root)
+    policy = BoundaryPolicy.from_file(
+        boundary_file,
+        secret_root,
+        oauth_root,
+        unbounded=unbounded,
+    )
     return boundary_file, SiteOnboardingOperator(
         boundary_file,
         policy,
@@ -126,6 +134,82 @@ async def test_site_onboarding_creates_all_provider_resources_then_updates_bound
         "ssl.bing.com",
     ]
     assert "apikey=test-bing-key" not in boundary_file.read_text(encoding="utf-8")
+
+
+@pytest.mark.asyncio
+async def test_unbounded_site_onboarding_accepts_a_discovered_parent_and_persists_boundaries(
+    tmp_path: Path,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.host == "analyticsadmin.googleapis.com" and request.url.path.endswith(
+            "/properties"
+        ):
+            payload = json.loads(request.content)
+            return httpx.Response(
+                200,
+                json={
+                    "name": "properties/456",
+                    "parent": payload["parent"],
+                    "displayName": "example.com",
+                    "timeZone": "Etc/UTC",
+                    "currencyCode": "USD",
+                },
+            )
+        if request.url.host == "analyticsadmin.googleapis.com":
+            return httpx.Response(
+                200,
+                json={
+                    "name": "properties/456/dataStreams/789",
+                    "displayName": "example.com",
+                    "type": "WEB_DATA_STREAM",
+                    "webStreamData": {
+                        "defaultUri": "https://example.com/",
+                        "measurementId": "G-ABC123",
+                    },
+                },
+            )
+        if request.url.host == "www.googleapis.com":
+            return httpx.Response(204)
+        return httpx.Response(200, json={"d": None})
+
+    boundary_file, operator = _operator(
+        tmp_path,
+        httpx.MockTransport(handler),
+        unbounded=True,
+    )
+    receipt = await operator.onboard(
+        SiteOnboardingRequest(
+            "google-main",
+            "bing-main",
+            "https://example.com/",
+            google_analytics_parent_account_id="456",
+        )
+    )
+
+    persisted_policy = BoundaryPolicy.from_file(
+        boundary_file,
+        tmp_path / "secrets",
+        tmp_path / "oauth",
+    )
+    assert receipt.boundary_updated is True
+    assert (
+        persisted_policy.require_resource(
+            "google-main",
+            Provider.GOOGLE,
+            ResourceKind.GA4_PROPERTY,
+            "456",
+        ).id
+        == "google-main"
+    )
+    assert (
+        persisted_policy.require_resource(
+            "bing-main",
+            Provider.BING,
+            ResourceKind.BING_SITE,
+            "https://example.com/",
+        ).id
+        == "bing-main"
+    )
 
 
 @pytest.mark.asyncio

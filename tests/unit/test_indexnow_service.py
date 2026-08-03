@@ -6,14 +6,8 @@ from typing import cast
 import pytest
 
 from rankrat.constants import MAX_INDEXNOW_URLS
-from rankrat.errors import (
-    ApprovalDeniedError,
-    BoundaryDeniedError,
-    IndexNowRateLimitError,
-    InputLimitError,
-)
+from rankrat.errors import BoundaryDeniedError, IndexNowRateLimitError, InputLimitError
 from rankrat.models.boundaries import BoundaryDocument
-from rankrat.policy.approvals import WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import (
     IndexNowSubmission,
@@ -23,11 +17,7 @@ from rankrat.providers.base import (
     ProviderOperationError,
 )
 from rankrat.providers.indexnow import IndexNowClient
-from rankrat.services.indexnow import (
-    IndexNowApprovalRequest,
-    IndexNowService,
-    IndexNowSubmissionRequest,
-)
+from rankrat.services.indexnow import IndexNowService, IndexNowSubmissionRequest
 
 
 class _Client:
@@ -74,20 +64,10 @@ def _service(
     return IndexNowService(
         _policy(),
         cast(IndexNowClient, client),
-        WriteApprovalStore(),
         monotonic_clock=clock,
         max_submissions_per_window=rate_limit,
         max_dedupe_entries_per_target=dedupe_limit,
     )
-
-
-async def _approved_request(
-    service: IndexNowService,
-    target_id: str,
-    urls: tuple[str, ...],
-) -> IndexNowSubmissionRequest:
-    approval = await service.approve(IndexNowApprovalRequest(target_id, urls))
-    return IndexNowSubmissionRequest(target_id, urls, approval.approval_id)
 
 
 @pytest.mark.asyncio
@@ -95,18 +75,13 @@ async def test_service_deduplicates_and_suppresses_prior_successes() -> None:
     client = _Client([_submission()])
     service = _service(client)
     first = await service.submit(
-        await _approved_request(
-            service,
+        IndexNowSubmissionRequest(
             "site-main",
             ("https://Example.com/keys/article", "https://example.com/keys/article"),
         )
     )
     second = await service.submit(
-        await _approved_request(
-            service,
-            "site-main",
-            ("https://example.com/keys/article",),
-        )
+        IndexNowSubmissionRequest("site-main", ("https://example.com/keys/article",))
     )
 
     assert first.submitted_count == 1
@@ -122,20 +97,12 @@ async def test_service_releases_failed_pending_urls_and_tracks_provider_deduplic
     error = ProviderOperationError(ProviderFailureCode.UNAVAILABLE, "safe")
     client = _Client([error, _submission(count=0, pending=True)])
     service = _service(client)
-    request = await _approved_request(
-        service,
-        "site-main",
-        ("https://example.com/keys/article",),
-    )
+    request = IndexNowSubmissionRequest("site-main", ("https://example.com/keys/article",))
 
     with pytest.raises(ProviderOperationError):
         await service.submit(request)
     response = await service.submit(
-        await _approved_request(
-            service,
-            "site-main",
-            ("https://example.com/keys/article",),
-        )
+        IndexNowSubmissionRequest("site-main", ("https://example.com/keys/article",))
     )
 
     assert response.submitted_count == 0
@@ -154,21 +121,17 @@ async def test_service_rate_limit_recovers_after_window_and_prunes_dedupe_state(
         rate_limit=1,
         dedupe_limit=1,
     )
-    await service.submit(
-        await _approved_request(service, "site-main", ("https://example.com/keys/one",))
-    )
+    await service.submit(IndexNowSubmissionRequest("site-main", ("https://example.com/keys/one",)))
     with pytest.raises(IndexNowRateLimitError):
         await service.submit(
-            await _approved_request(service, "site-main", ("https://example.com/keys/two",))
+            IndexNowSubmissionRequest("site-main", ("https://example.com/keys/two",))
         )
 
     now[0] = 62.0
-    await service.submit(
-        await _approved_request(service, "site-main", ("https://example.com/keys/two",))
-    )
+    await service.submit(IndexNowSubmissionRequest("site-main", ("https://example.com/keys/two",)))
     now[0] = 123.0
     response = await service.submit(
-        await _approved_request(service, "site-main", ("https://example.com/keys/one",))
+        IndexNowSubmissionRequest("site-main", ("https://example.com/keys/one",))
     )
 
     assert response.submitted_count == 1
@@ -180,8 +143,7 @@ async def test_service_evicts_oldest_dedupe_entry_when_capacity_is_reached() -> 
     client = _Client([_submission(count=2)])
     service = _service(client, dedupe_limit=1)
     await service.submit(
-        await _approved_request(
-            service,
+        IndexNowSubmissionRequest(
             "site-main",
             ("https://example.com/keys/one", "https://example.com/keys/two"),
         )
@@ -201,7 +163,7 @@ async def test_service_evicts_oldest_dedupe_entry_when_capacity_is_reached() -> 
 async def test_service_rejects_empty_and_oversized_batches(urls: tuple[str, ...]) -> None:
     service = _service(_Client([]))
     with pytest.raises(InputLimitError):
-        await service.submit(IndexNowSubmissionRequest("site-main", urls, "unused"))
+        await service.submit(IndexNowSubmissionRequest("site-main", urls))
 
 
 @pytest.mark.asyncio
@@ -223,7 +185,7 @@ async def test_service_rejects_empty_and_oversized_batches(urls: tuple[str, ...]
 async def test_service_rejects_urls_outside_immutable_scope(url: str) -> None:
     service = _service(_Client([]))
     with pytest.raises(BoundaryDeniedError):
-        await service.submit(IndexNowSubmissionRequest("site-main", (url,), "unused"))
+        await service.submit(IndexNowSubmissionRequest("site-main", (url,)))
 
 
 def test_service_rejects_invalid_unicode_host() -> None:
@@ -242,7 +204,6 @@ def test_service_and_provider_request_validate_limits() -> None:
             IndexNowService(
                 _policy(),
                 cast(IndexNowClient, client),
-                WriteApprovalStore(),
                 rate_window_seconds=arguments[0],
                 max_submissions_per_window=arguments[1],
                 max_dedupe_entries_per_target=arguments[2],
@@ -256,19 +217,3 @@ def test_service_and_provider_request_validate_limits() -> None:
     for urls, timeout in invalid_requests:
         with pytest.raises(ValueError):
             IndexNowSubmitRequest(IndexNowTargetId("site-main"), urls, timeout)
-
-
-@pytest.mark.asyncio
-async def test_service_rejects_missing_or_replayed_approval_before_network_submission() -> None:
-    client = _Client([_submission()])
-    service = _service(client)
-    urls = ("https://example.com/keys/article",)
-    with pytest.raises(ApprovalDeniedError):
-        await service.submit(IndexNowSubmissionRequest("site-main", urls, "missing"))
-
-    approved = await _approved_request(service, "site-main", urls)
-    await service.submit(approved)
-    with pytest.raises(ApprovalDeniedError):
-        await service.submit(approved)
-
-    assert len(client.requests) == 1

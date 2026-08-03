@@ -36,7 +36,7 @@ def test_indexnow_initializer_script_is_idempotent_and_never_submits(tmp_path: P
     environment_file = tmp_path / ".env"
     key_file = tmp_path / "secrets" / "indexnow" / "key"
     boundary_file.write_text(json.dumps({"accounts": []}), encoding="utf-8")
-    environment_file.write_text("RANKRAT_ENABLE_WRITES=false\n", encoding="utf-8")
+    environment_file.write_text("RANKRAT_READ_ONLY=true\n", encoding="utf-8")
     command = [
         sys.executable,
         str(_SCRIPT),

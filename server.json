@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "name": "io.github.psyb0t/rankrat",
   "title": "Rankrat",
-  "description": "Read-only SEO and search analytics through local Docker MCP.",
+  "description": "Boundary-limited SEO and search analytics through local Docker MCP; read-only by default with opt-in, boundary-limited writes.",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/psyb0t/rankrat",

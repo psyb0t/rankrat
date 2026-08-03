@@ -11,10 +11,8 @@ services:
       RANKRAT_HTTP_BEARER_SECRET_FILE: /run/secrets/rankrat/http-bearer-token
       RANKRAT_HTTP_HOST: 0.0.0.0
       RANKRAT_HTTP_PORT: "8080"
-      RANKRAT_ENABLE_WRITES: "false"
-      # To enable IndexNow writes, set this to true and add the separate
-      # rankrat_admin_bearer_token secret mount below.
-      # RANKRAT_ADMIN_BEARER_SECRET_FILE: /run/secrets/rankrat/admin-bearer-token
+      RANKRAT_READ_ONLY: "true"
+      RANKRAT_UNBOUNDED: "false"
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -31,8 +29,6 @@ services:
         target: /run/secrets/bing/api-key
       - source: indexnow_key
         target: /run/secrets/indexnow/key
-      # - source: rankrat_admin_bearer_token
-      #   target: rankrat_admin_bearer_token
     cap_drop:
       - ALL
     security_opt:
@@ -73,5 +69,3 @@ secrets:
     file: ./secrets/bing/api-key
   indexnow_key:
     file: ./secrets/indexnow/key
-  # rankrat_admin_bearer_token:
-  #   file: ./secrets/rankrat/admin-bearer-token

@@ -8,7 +8,6 @@ import httpx
 import pytest
 
 from rankrat.config import Settings
-from rankrat.policy.approvals import WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.indexnow import IndexNowClient
 from rankrat.services.indexnow import IndexNowService
@@ -70,9 +69,6 @@ def indexnow_deployment(tmp_path: Path) -> tuple[Settings, ApplicationServices]:
     key_file.write_text("test-indexnow-key", encoding="utf-8")
     bing_key_file = secret_root / "bing-main-key"
     bing_key_file.write_text("test-bing-key", encoding="utf-8")
-    admin_bearer_file = secret_root / "admin-bearer"
-    admin_bearer_file.write_text("a" * 32, encoding="utf-8")
-    admin_bearer_file.chmod(0o600)
     boundary_file = tmp_path / "boundaries.json"
     boundary_file.write_text(
         json.dumps(
@@ -108,8 +104,7 @@ def indexnow_deployment(tmp_path: Path) -> tuple[Settings, ApplicationServices]:
         boundary_file=boundary_file,
         secret_root=secret_root,
         log_file=tmp_path / "rankrat.log",
-        enable_writes=True,
-        admin_bearer_secret_file=admin_bearer_file,
+        read_only=False,
     )
     policy = BoundaryPolicy.from_file(boundary_file, secret_root)
     client = IndexNowClient(
@@ -119,5 +114,5 @@ def indexnow_deployment(tmp_path: Path) -> tuple[Settings, ApplicationServices]:
     services = build_services(settings)
     return settings, replace(
         services,
-        indexnow=IndexNowService(policy, client, WriteApprovalStore()),
+        indexnow=IndexNowService(policy, client),
     )

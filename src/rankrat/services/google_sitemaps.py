@@ -1,4 +1,4 @@
-"""Approval-gated Google Search Console sitemap mutations."""
+"""Bounded Google Search Console sitemap mutations."""
 
 from __future__ import annotations
 
@@ -8,7 +8,6 @@ from enum import StrEnum
 
 from rankrat.constants import DEFAULT_PROVIDER_TIMEOUT_SECONDS
 from rankrat.logging import log_event
-from rankrat.policy.approvals import WriteApproval, WriteApprovalRequest, WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import AccountId, ProviderReadRequest
 from rankrat.providers.google_search_console import GoogleSearchConsoleClient
@@ -24,20 +23,14 @@ class GoogleSitemapOperation(StrEnum):
 
 
 @dataclass(frozen=True, slots=True)
-class GoogleSitemapApprovalRequest:
-    """One exact sitemap mutation an administrator can approve once."""
+class GoogleSitemapSubmissionRequest:
+    """One configured sitemap mutation for the fixed provider client."""
 
     account_id: str
     site_url: str
     sitemap_url: str
     operation: GoogleSitemapOperation
 
-
-@dataclass(frozen=True, slots=True)
-class GoogleSitemapSubmissionRequest(GoogleSitemapApprovalRequest):
-    """One approved sitemap mutation ready for the fixed provider client."""
-
-    approval_id: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
 
@@ -51,35 +44,23 @@ class GoogleSitemapSubmissionResponse:
 
 
 class GoogleSitemapService:
-    """Bind sitemap mutations to one configured property and exact approval."""
+    """Bind sitemap mutations to one configured property."""
 
     def __init__(
         self,
         policy: BoundaryPolicy,
         client: GoogleSearchConsoleClient,
-        approvals: WriteApprovalStore,
     ) -> None:
         self._policy = policy
         self._client = client
-        self._approvals = approvals
-
-    async def approve(self, request: GoogleSitemapApprovalRequest) -> WriteApproval:
-        """Mint one short-lived approval for a normalized sitemap mutation."""
-
-        sitemap_url = self._normalized_sitemap_url(request)
-        return await self._approvals.mint(self._approval_request(request, sitemap_url))
 
     async def submit(
         self,
         request: GoogleSitemapSubmissionRequest,
     ) -> GoogleSitemapSubmissionResponse:
-        """Consume an exact approval before the fixed-origin mutation request."""
+        """Run one boundary-limited fixed-origin mutation request."""
 
         sitemap_url = self._normalized_sitemap_url(request)
-        await self._approvals.consume(
-            request.approval_id,
-            self._approval_request(request, sitemap_url),
-        )
         provider_request = ProviderReadRequest(
             AccountId(request.account_id),
             request.timeout_seconds,
@@ -121,21 +102,9 @@ class GoogleSitemapService:
             request.operation,
         )
 
-    def _normalized_sitemap_url(self, request: GoogleSitemapApprovalRequest) -> str:
+    def _normalized_sitemap_url(self, request: GoogleSitemapSubmissionRequest) -> str:
         return self._policy.require_search_console_url(
             request.account_id,
             request.site_url,
             request.sitemap_url,
-        )
-
-    @staticmethod
-    def _approval_request(
-        request: GoogleSitemapApprovalRequest,
-        sitemap_url: str,
-    ) -> WriteApprovalRequest:
-        return WriteApprovalRequest(
-            operation=f"google_sitemap_{request.operation.value}",
-            account_id=request.account_id,
-            resource=request.site_url,
-            arguments={"sitemap_url": sitemap_url},
         )

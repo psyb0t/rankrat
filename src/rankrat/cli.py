@@ -44,7 +44,6 @@ from rankrat.providers.google_search_console import (
     GoogleSearchConsoleClient,
 )
 from rankrat.services.provider_readiness import ProviderReadinessRequest
-from rankrat.transports.auth import load_bearer_secret
 from rankrat.transports.http import create_http_app
 from rankrat.transports.mcp import build_mcp_server
 from rankrat.transports.runtime import build_services
@@ -54,6 +53,16 @@ _LOGGER = logging.getLogger(__name__)
 _SERVE_MODES = ("stdio", "http")
 _OAUTH_MODES = ("auth-google", "revoke-google")
 _OPERATOR_MODES = ("onboard-site", "setup")
+_SETUP_GA4_CONFIGURATION_ACTION = (
+    "SETUP ACTION: {account_id} has no configured GA4 property. Create a GA4 property and "
+    "web stream, add its numeric property ID to the boundary file, then deploy the returned "
+    "G- Measurement ID in the site's public <head>."
+)
+_SETUP_READY_MESSAGE = (
+    "SETUP READY: configured provider checks passed. Confirm each configured GA4 web stream's "
+    "G- Measurement ID is deployed in its site's public <head>, then run make test-live for "
+    "extended checks."
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -71,6 +80,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--google-account-id")
     parser.add_argument("--bing-account-id")
     parser.add_argument("--site-url")
+    parser.add_argument("--google-analytics-parent-account-id")
     parser.add_argument("--display-name")
     parser.add_argument("--time-zone", default="Etc/UTC")
     parser.add_argument("--currency-code", default="USD")
@@ -140,7 +150,7 @@ def _run_google_oauth_operator(arguments: argparse.Namespace, settings: Settings
         asyncio.run(
             authorize_google_oauth_account(
                 account,
-                settings.enable_writes,
+                True,
                 None if arguments.print_authorization_url else webbrowser.open,
                 authorization_url_sink,
                 listener_host=(
@@ -154,7 +164,7 @@ def _run_google_oauth_operator(arguments: argparse.Namespace, settings: Settings
         log_event(_LOGGER, logging.INFO, "Google OAuth authorization stored", account_id=account.id)
         sys.stdout.write("Google OAuth authorization stored.\n")
         return 0
-    asyncio.run(revoke_google_oauth_account(account, settings.enable_writes))
+    asyncio.run(revoke_google_oauth_account(account, True))
     log_event(_LOGGER, logging.INFO, "Google OAuth authorization revoked", account_id=account.id)
     sys.stdout.write("Google OAuth authorization revoked.\n")
     return 0
@@ -168,9 +178,8 @@ def _stdout_authorization_url(authorization_url: str) -> None:
 def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Settings) -> int:
     """Provision one site from the local terminal; this mode is never HTTP or MCP exposed."""
 
-    if not settings.enable_writes:
-        raise ConfigurationError("site onboarding requires RANKRAT_ENABLE_WRITES=true")
-    load_bearer_secret(settings.admin_bearer_secret_file)
+    if settings.read_only:
+        raise ConfigurationError("site onboarding requires RANKRAT_READ_ONLY=false")
     google_account_id = _required_operator_argument(
         arguments.google_account_id, "--google-account-id"
     )
@@ -180,6 +189,7 @@ def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Setti
         settings.boundary_file,
         settings.secret_root,
         settings.oauth_token_root,
+        unbounded=settings.unbounded,
     )
     operator = SiteOnboardingOperator(
         settings.boundary_file,
@@ -200,6 +210,9 @@ def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Setti
                 google_account_id=google_account_id,
                 bing_account_id=bing_account_id,
                 site_url=site_url,
+                google_analytics_parent_account_id=(
+                    arguments.google_analytics_parent_account_id or None
+                ),
                 display_name=arguments.display_name or None,
                 time_zone=arguments.time_zone,
                 currency_code=arguments.currency_code,
@@ -265,10 +278,10 @@ def _run_setup_operator(settings: Settings) -> int:
             sys.stdout.write(f"READY: {account.id} — {readiness.detail}\n")
 
     asyncio.run(check())
-    sys.stdout.write(
-        "SETUP READY: Google Search Console and Bing passed live checks. "
-        "Run make test-live for GA4, PageSpeed, IndexNow, and extended checks.\n"
-    )
+    for account in policy.accounts():
+        if account.provider is Provider.GOOGLE and not account.ga4_properties:
+            sys.stdout.write(_SETUP_GA4_CONFIGURATION_ACTION.format(account_id=account.id) + "\n")
+    sys.stdout.write(_SETUP_READY_MESSAGE + "\n")
     return 0
 
 

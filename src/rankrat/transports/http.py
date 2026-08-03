@@ -28,7 +28,7 @@ from rankrat.transports.auth import bearer_is_valid, load_bearer_secret
 from rankrat.transports.mcp import build_mcp_server
 from rankrat.transports.openapi import (
     apply_openapi_operation_ids,
-    load_openapi_document,
+    load_openapi_document_for_routes,
     openapi_info_version,
 )
 from rankrat.transports.rest import build_api_router
@@ -37,7 +37,6 @@ from rankrat.transports.runtime import ApplicationServices
 _JSON_CONTENT_TYPE = b"application/json"
 _REQUEST_ID_HEADER = b"x-request-id"
 _AUTHORIZATION_HEADER = b"authorization"
-_ADMIN_API_PREFIX = "/v1/admin/"
 _CONTENT_LENGTH_HEADER = b"content-length"
 _UUID_PATTERN = re.compile(
     r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
@@ -155,19 +154,15 @@ class _BearerAuthASGI:
         self,
         app: ASGIApp,
         secret: str | None,
-        admin_secret: str | None,
     ) -> None:
         self._app = app
         self._secret = secret
-        self._admin_secret = admin_secret
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http" or scope.get("path") == HEALTH_PATH:
             await self._app(scope, receive, send)
             return
-        path = scope.get("path", "")
-        expected_secret = self._admin_secret if path.startswith(_ADMIN_API_PREFIX) else self._secret
-        if not bearer_is_valid(_header(scope, _AUTHORIZATION_HEADER), expected_secret):
+        if not bearer_is_valid(_header(scope, _AUTHORIZATION_HEADER), self._secret):
             await _send_json_error(send, 401, "UNAUTHORIZED", "missing or invalid bearer token")
             return
         await self._app(scope, receive, send)
@@ -244,7 +239,7 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
         # schema whenever its private _openapi_routes_version stops matching the
         # router, so pinning the document that way means depending on a private
         # attribute that can change between releases.
-        app.openapi = load_openapi_document  # type: ignore[method-assign]
+        app.openapi = lambda: load_openapi_document_for_routes(app.routes)  # type: ignore[method-assign]
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(_: Request, __: RequestValidationError) -> JSONResponse:
@@ -282,7 +277,6 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
     wrapped: ASGIApp = _BearerAuthASGI(
         app,
         load_bearer_secret(settings.http_bearer_secret_file),
-        load_bearer_secret(settings.admin_bearer_secret_file),
     )
     wrapped = _BodyLimitASGI(wrapped, MAX_HTTP_BODY_BYTES)
     wrapped = _RequestIDASGI(wrapped)

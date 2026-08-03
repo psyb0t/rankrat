@@ -43,19 +43,13 @@ class Settings(BaseSettings):
     http_port: int = Field(default=DEFAULT_HTTP_PORT, ge=1, le=65_535)
     log_level: str = DEFAULT_LOG_LEVEL
     enable_openapi: bool = False
-    enable_writes: bool = False
+    read_only: bool = True
+    unbounded: bool = False
     http_bearer_secret_file: Path | None = Field(
         default=None,
         validation_alias=AliasChoices(
             "RANKRAT_HTTP_BEARER_SECRET_FILE",
             "RANKRAT_HTTP_BEARER_TOKEN_FILE",
-        ),
-    )
-    admin_bearer_secret_file: Path | None = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "RANKRAT_ADMIN_BEARER_SECRET_FILE",
-            "RANKRAT_ADMIN_BEARER_TOKEN_FILE",
         ),
     )
 
@@ -65,7 +59,6 @@ class Settings(BaseSettings):
         "oauth_token_root",
         "log_file",
         "http_bearer_secret_file",
-        "admin_bearer_secret_file",
     )
     @classmethod
     def validate_absolute_path(cls, value: Path | None) -> Path | None:
@@ -99,9 +92,15 @@ class Settings(BaseSettings):
     def validate_network_exposure(self) -> Settings:
         if not self.is_loopback_bind and self.http_bearer_secret_file is None:
             raise ValueError("non-loopback HTTP bind requires an HTTP bearer secret file")
-        if self.enable_writes and self.admin_bearer_secret_file is None:
-            raise ValueError("enabled writes require an admin bearer secret file")
+        if self.unbounded and self.read_only:
+            raise ValueError("unbounded mode requires RANKRAT_READ_ONLY=false")
         return self
+
+    @property
+    def writes_enabled(self) -> bool:
+        """Expose write tools only when the operator explicitly disables read-only mode."""
+
+        return not self.read_only
 
     @property
     def is_loopback_bind(self) -> bool:

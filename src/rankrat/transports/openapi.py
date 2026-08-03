@@ -26,6 +26,22 @@ def load_openapi_document() -> dict[str, object]:
     return deepcopy(_load_openapi_document())
 
 
+def load_openapi_document_for_routes(routes: Sequence[BaseRoute]) -> dict[str, object]:
+    """Return the YAML-owned contract restricted to routes active in this process."""
+
+    document = load_openapi_document()
+    active_operations = _application_operation_keys(routes)
+    paths = _mapping(document.get("paths"), "OpenAPI source document requires paths")
+    for path in tuple(paths):
+        path_item = _mapping(paths[path], "OpenAPI source document has an invalid path")
+        for method in tuple(path_item):
+            if method in _OPERATION_METHODS and (path, method) not in active_operations:
+                del path_item[method]
+        if not any(method in _OPERATION_METHODS for method in path_item):
+            del paths[path]
+    return document
+
+
 def openapi_info_version() -> str:
     """Return the API document version used by the FastAPI application."""
 
@@ -41,6 +57,12 @@ def fastapi_drift_document(document: dict[str, object]) -> dict[str, object]:
 
     expected_document = deepcopy(document)
     expected_document.pop("security", None)
+    # info.description is authored in the YAML and served verbatim, but
+    # get_openapi() derives its info block from title and version alone, so the
+    # drift comparison would always differ on a field routes cannot produce.
+    info = expected_document.get("info")
+    if info is not None:
+        _mapping(info, "OpenAPI source document has invalid info").pop("description", None)
     components = expected_document.get("components")
     if components is not None:
         _mapping(components, "OpenAPI source document has invalid components").pop(
@@ -72,6 +94,29 @@ def apply_openapi_operation_ids(
     """Make the OAS source own the operation IDs for the supplied FastAPI routes."""
 
     source_operations = _source_operations(_load_openapi_document())
+    application_operations = _application_operations(routes)
+    missing_routes = sorted(source_operations.keys() - application_operations.keys())
+    unexpected_routes = sorted(application_operations.keys() - source_operations.keys())
+    if unexpected_routes or (require_complete and missing_routes):
+        raise ConfigurationError(
+            "FastAPI routes do not match the OpenAPI source document: "
+            f"missing={missing_routes}, unexpected={unexpected_routes}"
+        )
+    for key, route in application_operations.items():
+        route.operation_id = source_operations[key]
+
+
+def _application_operation_keys(routes: Sequence[BaseRoute]) -> set[tuple[str, str]]:
+    """Return documented operation keys currently exposed by one application."""
+
+    return set(_application_operations(routes))
+
+
+def _application_operations(
+    routes: Sequence[BaseRoute],
+) -> dict[tuple[str, str], APIRoute]:
+    """Map active FastAPI operations by their public path and HTTP method."""
+
     application_operations: dict[tuple[str, str], APIRoute] = {}
     for route_context in iter_route_contexts(routes):
         route = route_context.original_route
@@ -91,15 +136,7 @@ def apply_openapi_operation_ids(
         if key in application_operations:
             raise ConfigurationError("FastAPI route must be unique in the OpenAPI contract")
         application_operations[key] = route
-    missing_routes = sorted(source_operations.keys() - application_operations.keys())
-    unexpected_routes = sorted(application_operations.keys() - source_operations.keys())
-    if unexpected_routes or (require_complete and missing_routes):
-        raise ConfigurationError(
-            "FastAPI routes do not match the OpenAPI source document: "
-            f"missing={missing_routes}, unexpected={unexpected_routes}"
-        )
-    for key, route in application_operations.items():
-        route.operation_id = source_operations[key]
+    return application_operations
 
 
 @cache

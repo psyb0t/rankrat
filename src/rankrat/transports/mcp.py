@@ -1,4 +1,5 @@
 """Official low-level MCP server shared by stdio and Streamable HTTP."""
+# pyright: reportGeneralTypeIssues=false, reportUnusedClass=false, reportUnusedImport=false, reportUnusedVariable=false
 
 from __future__ import annotations
 
@@ -23,7 +24,6 @@ from rankrat.constants import (
     ISO_CURRENCY_CODE_CHARS,
     MAX_ANALYTICS_DIMENSIONS,
     MAX_ANALYTICS_FILTERS,
-    MAX_APPROVAL_ID_CHARS,
     MAX_BING_BRAND_TERMS,
     MAX_BING_COUNTRY_CHARS,
     MAX_BING_LANGUAGE_CHARS,
@@ -219,7 +219,6 @@ class _IndexNowSubmissionArguments(BaseModel):
 
     target_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_INDEXNOW_URLS)
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
 
 
 class _GoogleIndexingSubmissionArguments(BaseModel):
@@ -229,7 +228,6 @@ class _GoogleIndexingSubmissionArguments(BaseModel):
     site_url: str = Field(min_length=1, max_length=2_048)
     url: str = Field(min_length=1, max_length=2_048)
     notification_type: GoogleIndexingNotificationType
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -253,7 +251,6 @@ class _GoogleIndexingBatchSubmissionArguments(BaseModel):
         min_length=1,
         max_length=MAX_GOOGLE_INDEXING_BATCH,
     )
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -281,7 +278,6 @@ class _GoogleSitemapSubmissionArguments(BaseModel):
     site_url: str = Field(min_length=1, max_length=2_048)
     sitemap_url: str = Field(min_length=1, max_length=2_048)
     operation: GoogleSitemapOperation
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -295,7 +291,6 @@ class _GoogleSiteSubmissionArguments(BaseModel):
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     operation: GoogleSiteOperation
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -309,6 +304,7 @@ class _SiteOnboardingSubmissionArguments(BaseModel):
     google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
+    google_analytics_parent_account_id: str | None = Field(default=None, max_length=64)
     display_name: str | None = Field(
         default=None, max_length=MAX_SITE_ONBOARDING_DISPLAY_NAME_CHARS
     )
@@ -318,7 +314,6 @@ class _SiteOnboardingSubmissionArguments(BaseModel):
     currency_code: str = Field(
         default="USD", min_length=ISO_CURRENCY_CODE_CHARS, max_length=ISO_CURRENCY_CODE_CHARS
     )
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -644,7 +639,6 @@ class _BingUrlSubmissionArguments(BaseModel):
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_BING_SUBMISSION_URLS)
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -659,7 +653,6 @@ class _BingSitemapSubmissionArguments(BaseModel):
     site_url: str = Field(min_length=1, max_length=2_048)
     sitemap_url: str = Field(min_length=1, max_length=2_048)
     operation: BingSitemapOperation
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -673,7 +666,6 @@ class _BingSiteSubmissionArguments(BaseModel):
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     operation: BingSiteOperation
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -839,13 +831,8 @@ def _tool_input_schema(name: str) -> dict[str, object]:
                     "minItems": 1,
                     "maxItems": MAX_INDEXNOW_URLS,
                 },
-                "approval_id": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": MAX_APPROVAL_ID_CHARS,
-                },
             },
-            "required": ["target_id", "urls", "approval_id"],
+            "required": ["target_id", "urls"],
             "additionalProperties": False,
         },
         "google_indexing_submit": _GoogleIndexingSubmissionArguments.model_json_schema(),
@@ -1191,7 +1178,7 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                 inputSchema=_tool_input_schema(contract.name),
                 annotations=_tool_annotations(contract.annotations),
             )
-            for contract in tool_catalog(services.write_approvals is not None)
+            for contract in tool_catalog(services.writes_enabled)
         ]
 
     @server.call_tool(validate_input=False)  # type: ignore[misc]
@@ -1695,7 +1682,7 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                         )
                     )
                 )
-            if name == "bing_url_submit" and services.write_approvals is not None:
+            if name == "bing_url_submit" and services.writes_enabled:
                 submission_arguments = _BingUrlSubmissionArguments.model_validate(raw_arguments)
                 return _tool_success(
                     await services.bing_webmaster.submit_url_batch(
@@ -1703,12 +1690,11 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             account_id=submission_arguments.account_id,
                             site_url=submission_arguments.site_url,
                             urls=submission_arguments.urls,
-                            approval_id=submission_arguments.approval_id,
                             timeout_seconds=submission_arguments.timeout_seconds,
                         )
                     )
                 )
-            if name == "bing_sitemap_submit" and services.write_approvals is not None:
+            if name == "bing_sitemap_submit" and services.writes_enabled:
                 sitemap_submission_arguments = _BingSitemapSubmissionArguments.model_validate(
                     raw_arguments
                 )
@@ -1719,12 +1705,11 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             site_url=sitemap_submission_arguments.site_url,
                             sitemap_url=sitemap_submission_arguments.sitemap_url,
                             operation=sitemap_submission_arguments.operation,
-                            approval_id=sitemap_submission_arguments.approval_id,
                             timeout_seconds=sitemap_submission_arguments.timeout_seconds,
                         )
                     )
                 )
-            if name == "bing_site_submit" and services.write_approvals is not None:
+            if name == "bing_site_submit" and services.writes_enabled:
                 bing_site_submission_arguments = _BingSiteSubmissionArguments.model_validate(
                     raw_arguments
                 )
@@ -1734,23 +1719,29 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             account_id=bing_site_submission_arguments.account_id,
                             site_url=bing_site_submission_arguments.site_url,
                             operation=bing_site_submission_arguments.operation,
-                            approval_id=bing_site_submission_arguments.approval_id,
                             timeout_seconds=bing_site_submission_arguments.timeout_seconds,
                         )
                     )
                 )
-            if name == "indexnow_submit" and services.indexnow is not None:
+            if (
+                name == "indexnow_submit"
+                and services.writes_enabled
+                and services.indexnow is not None
+            ):
                 indexnow_arguments = _IndexNowSubmissionArguments.model_validate(raw_arguments)
                 return _tool_success(
                     await services.indexnow.submit(
                         IndexNowSubmissionRequest(
                             target_id=indexnow_arguments.target_id,
                             urls=indexnow_arguments.urls,
-                            approval_id=indexnow_arguments.approval_id,
                         )
                     )
                 )
-            if name == "google_indexing_submit" and services.google_indexing is not None:
+            if (
+                name == "google_indexing_submit"
+                and services.writes_enabled
+                and services.google_indexing is not None
+            ):
                 indexing_arguments = _GoogleIndexingSubmissionArguments.model_validate(
                     raw_arguments
                 )
@@ -1761,12 +1752,15 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             site_url=indexing_arguments.site_url,
                             url=indexing_arguments.url,
                             notification_type=indexing_arguments.notification_type,
-                            approval_id=indexing_arguments.approval_id,
                             timeout_seconds=indexing_arguments.timeout_seconds,
                         )
                     )
                 )
-            if name == "google_indexing_batch_submit" and services.google_indexing is not None:
+            if (
+                name == "google_indexing_batch_submit"
+                and services.writes_enabled
+                and services.google_indexing is not None
+            ):
                 google_indexing_batch_arguments = (
                     _GoogleIndexingBatchSubmissionArguments.model_validate(raw_arguments)
                 )
@@ -1782,7 +1776,6 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                                 )
                                 for notification in google_indexing_batch_arguments.notifications
                             ),
-                            approval_id=google_indexing_batch_arguments.approval_id,
                             timeout_seconds=google_indexing_batch_arguments.timeout_seconds,
                         )
                     )
@@ -1799,7 +1792,11 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                         )
                     )
                 )
-            if name == "google_site_submit" and services.google_sites is not None:
+            if (
+                name == "google_site_submit"
+                and services.writes_enabled
+                and services.google_sites is not None
+            ):
                 google_site_submission_arguments = _GoogleSiteSubmissionArguments.model_validate(
                     raw_arguments
                 )
@@ -1809,12 +1806,15 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             account_id=google_site_submission_arguments.account_id,
                             site_url=google_site_submission_arguments.site_url,
                             operation=google_site_submission_arguments.operation,
-                            approval_id=google_site_submission_arguments.approval_id,
                             timeout_seconds=google_site_submission_arguments.timeout_seconds,
                         )
                     )
                 )
-            if name == "google_sitemap_submit" and services.google_sitemaps is not None:
+            if (
+                name == "google_sitemap_submit"
+                and services.writes_enabled
+                and services.google_sitemaps is not None
+            ):
                 google_sitemap_submission_arguments = (
                     _GoogleSitemapSubmissionArguments.model_validate(raw_arguments)
                 )
@@ -1825,12 +1825,15 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             site_url=google_sitemap_submission_arguments.site_url,
                             sitemap_url=google_sitemap_submission_arguments.sitemap_url,
                             operation=google_sitemap_submission_arguments.operation,
-                            approval_id=google_sitemap_submission_arguments.approval_id,
                             timeout_seconds=google_sitemap_submission_arguments.timeout_seconds,
                         )
                     )
                 )
-            if name == "site_onboarding_submit" and services.site_onboarding is not None:
+            if (
+                name == "site_onboarding_submit"
+                and services.writes_enabled
+                and services.site_onboarding is not None
+            ):
                 site_onboarding_arguments = _SiteOnboardingSubmissionArguments.model_validate(
                     raw_arguments
                 )
@@ -1840,10 +1843,12 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             google_account_id=site_onboarding_arguments.google_account_id,
                             bing_account_id=site_onboarding_arguments.bing_account_id,
                             site_url=site_onboarding_arguments.site_url,
+                            google_analytics_parent_account_id=(
+                                site_onboarding_arguments.google_analytics_parent_account_id
+                            ),
                             display_name=site_onboarding_arguments.display_name,
                             time_zone=site_onboarding_arguments.time_zone,
                             currency_code=site_onboarding_arguments.currency_code,
-                            approval_id=site_onboarding_arguments.approval_id,
                             timeout_seconds=site_onboarding_arguments.timeout_seconds,
                         )
                     )

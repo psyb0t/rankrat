@@ -23,7 +23,6 @@ from rankrat.constants import (
     ISO_CURRENCY_CODE_CHARS,
     MAX_ANALYTICS_DIMENSIONS,
     MAX_ANALYTICS_FILTERS,
-    MAX_APPROVAL_ID_CHARS,
     MAX_BING_BRAND_TERMS,
     MAX_BING_COUNTRY_CHARS,
     MAX_BING_LANGUAGE_CHARS,
@@ -68,8 +67,6 @@ from rankrat.services.bing import (
     BingPerformanceRequest,
     BingQueryPagePerformanceRequest,
     BingRelatedKeywordsRequest,
-    BingSiteApprovalRequest,
-    BingSitemapApprovalRequest,
     BingSitemapOperation,
     BingSitemapSubmissionRequest,
     BingSiteOperation,
@@ -77,7 +74,6 @@ from rankrat.services.bing import (
     BingTrafficComparisonRequest,
     BingTrafficPeriodRequest,
     BingUrlInformationRequest,
-    BingUrlSubmissionApprovalRequest,
     BingUrlSubmissionQuotaRequest,
     BingUrlSubmissionRequest,
 )
@@ -97,8 +93,6 @@ from rankrat.services.google_analytics import (
     Ga4ReportRequest,
 )
 from rankrat.services.google_indexing import (
-    GoogleIndexingApprovalRequest,
-    GoogleIndexingBatchApprovalRequest,
     GoogleIndexingBatchNotification,
     GoogleIndexingBatchSubmissionRequest,
     GoogleIndexingNotificationType,
@@ -127,16 +121,14 @@ from rankrat.services.google_search_console import (
     UrlInspectionRequest,
 )
 from rankrat.services.google_sitemaps import (
-    GoogleSitemapApprovalRequest,
     GoogleSitemapOperation,
     GoogleSitemapSubmissionRequest,
 )
 from rankrat.services.google_sites import (
-    GoogleSiteApprovalRequest,
     GoogleSiteOperation,
     GoogleSiteSubmissionRequest,
 )
-from rankrat.services.indexnow import IndexNowApprovalRequest, IndexNowSubmissionRequest
+from rankrat.services.indexnow import IndexNowSubmissionRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisRequest,
     PageSpeedCategory,
@@ -147,10 +139,7 @@ from rankrat.services.schema import (
     LocalSchemaValidationRequest,
     PublicSchemaValidationRequest,
 )
-from rankrat.services.site_onboarding import (
-    SiteOnboardingApprovalRequest,
-    SiteOnboardingSubmissionRequest,
-)
+from rankrat.services.site_onboarding import SiteOnboardingSubmissionRequest
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.runtime import ApplicationServices
 
@@ -160,17 +149,9 @@ class _IndexNowSubmissionBody(BaseModel):
 
     target_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_INDEXNOW_URLS)
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
 
 
-class _IndexNowApprovalBody(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    target_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
-    urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_INDEXNOW_URLS)
-
-
-class _GoogleIndexingApprovalBody(BaseModel):
+class _GoogleIndexingSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
@@ -178,9 +159,6 @@ class _GoogleIndexingApprovalBody(BaseModel):
     url: str = Field(min_length=1, max_length=2_048)
     notification_type: GoogleIndexingNotificationType
 
-
-class _GoogleIndexingSubmissionBody(_GoogleIndexingApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -195,7 +173,7 @@ class _GoogleIndexingBatchNotificationBody(BaseModel):
     notification_type: GoogleIndexingNotificationType
 
 
-class _GoogleIndexingBatchApprovalBody(BaseModel):
+class _GoogleIndexingBatchSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
@@ -205,9 +183,6 @@ class _GoogleIndexingBatchApprovalBody(BaseModel):
         max_length=MAX_GOOGLE_INDEXING_BATCH,
     )
 
-
-class _GoogleIndexingBatchSubmissionBody(_GoogleIndexingBatchApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -228,7 +203,7 @@ class _GoogleIndexingMetadataBody(BaseModel):
     )
 
 
-class _GoogleSitemapApprovalBody(BaseModel):
+class _GoogleSitemapSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
@@ -236,9 +211,6 @@ class _GoogleSitemapApprovalBody(BaseModel):
     sitemap_url: str = Field(min_length=1, max_length=2_048)
     operation: GoogleSitemapOperation
 
-
-class _GoogleSitemapSubmissionBody(_GoogleSitemapApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -246,16 +218,13 @@ class _GoogleSitemapSubmissionBody(_GoogleSitemapApprovalBody):
     )
 
 
-class _GoogleSiteApprovalBody(BaseModel):
+class _GoogleSiteSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     operation: GoogleSiteOperation
 
-
-class _GoogleSiteSubmissionBody(_GoogleSiteApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -263,12 +232,13 @@ class _GoogleSiteSubmissionBody(_GoogleSiteApprovalBody):
     )
 
 
-class _SiteOnboardingApprovalBody(BaseModel):
+class _SiteOnboardingSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
+    google_analytics_parent_account_id: str | None = Field(default=None, max_length=64)
     display_name: str | None = Field(
         default=None, max_length=MAX_SITE_ONBOARDING_DISPLAY_NAME_CHARS
     )
@@ -279,9 +249,6 @@ class _SiteOnboardingApprovalBody(BaseModel):
         default="USD", min_length=ISO_CURRENCY_CODE_CHARS, max_length=ISO_CURRENCY_CODE_CHARS
     )
 
-
-class _SiteOnboardingSubmissionBody(_SiteOnboardingApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -555,16 +522,13 @@ class _BingLinkCountsBody(_BingPerformanceBody):
     page: int = Field(default=0, ge=0, le=MAX_BING_LINK_PAGE)
 
 
-class _BingUrlSubmissionApprovalBody(BaseModel):
+class _BingUrlSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_BING_SUBMISSION_URLS)
 
-
-class _BingUrlSubmissionBody(_BingUrlSubmissionApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -572,7 +536,7 @@ class _BingUrlSubmissionBody(_BingUrlSubmissionApprovalBody):
     )
 
 
-class _BingSitemapApprovalBody(BaseModel):
+class _BingSitemapSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
@@ -580,9 +544,6 @@ class _BingSitemapApprovalBody(BaseModel):
     sitemap_url: str = Field(min_length=1, max_length=2_048)
     operation: BingSitemapOperation
 
-
-class _BingSitemapSubmissionBody(_BingSitemapApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -590,16 +551,13 @@ class _BingSitemapSubmissionBody(_BingSitemapApprovalBody):
     )
 
 
-class _BingSiteApprovalBody(BaseModel):
+class _BingSiteSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     operation: BingSiteOperation
 
-
-class _BingSiteSubmissionBody(_BingSiteApprovalBody):
-    approval_id: str = Field(min_length=1, max_length=MAX_APPROVAL_ID_CHARS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -1824,25 +1782,7 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
             )
         )
 
-    if services.write_approvals is not None:
-
-        @router.post(
-            "/admin/bing-url-submission-approvals",
-            response_model=None,
-            operation_id="admin_bing_url_submission_approval_create",
-        )
-        async def create_bing_url_submission_approval(
-            body: _BingUrlSubmissionApprovalBody,
-        ) -> JsonValue:
-            return to_json_value(
-                await services.bing_webmaster.approve_url_submission(
-                    BingUrlSubmissionApprovalRequest(
-                        account_id=body.account_id,
-                        site_url=body.site_url,
-                        urls=body.urls,
-                    )
-                )
-            )
+    if services.writes_enabled:
 
         @router.post(
             "/bing-url-submissions",
@@ -1856,27 +1796,7 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         account_id=body.account_id,
                         site_url=body.site_url,
                         urls=body.urls,
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
-                    )
-                )
-            )
-
-        @router.post(
-            "/admin/bing-sitemap-approvals",
-            response_model=None,
-            operation_id="admin_bing_sitemap_approval_create",
-        )
-        async def create_bing_sitemap_approval(
-            body: _BingSitemapApprovalBody,
-        ) -> JsonValue:
-            return to_json_value(
-                await services.bing_webmaster.approve_sitemap_submission(
-                    BingSitemapApprovalRequest(
-                        account_id=body.account_id,
-                        site_url=body.site_url,
-                        sitemap_url=body.sitemap_url,
-                        operation=body.operation,
                     )
                 )
             )
@@ -1894,24 +1814,7 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         site_url=body.site_url,
                         sitemap_url=body.sitemap_url,
                         operation=body.operation,
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
-                    )
-                )
-            )
-
-        @router.post(
-            "/admin/bing-site-approvals",
-            response_model=None,
-            operation_id="admin_bing_site_approval_create",
-        )
-        async def create_bing_site_approval(body: _BingSiteApprovalBody) -> JsonValue:
-            return to_json_value(
-                await services.bing_webmaster.approve_site_submission(
-                    BingSiteApprovalRequest(
-                        account_id=body.account_id,
-                        site_url=body.site_url,
-                        operation=body.operation,
                     )
                 )
             )
@@ -1928,7 +1831,6 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         account_id=body.account_id,
                         site_url=body.site_url,
                         operation=body.operation,
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
                     )
                 )
@@ -1952,26 +1854,7 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
         )
 
     google_indexing = services.google_indexing
-    if google_indexing is not None:
-
-        @router.post(
-            "/admin/google-indexing-approvals",
-            response_model=None,
-            operation_id="admin_google_indexing_approval_create",
-        )
-        async def create_google_indexing_approval(
-            body: _GoogleIndexingApprovalBody,
-        ) -> JsonValue:
-            return to_json_value(
-                await google_indexing.approve(
-                    GoogleIndexingApprovalRequest(
-                        account_id=body.account_id,
-                        site_url=body.site_url,
-                        url=body.url,
-                        notification_type=body.notification_type,
-                    )
-                )
-            )
+    if services.writes_enabled and google_indexing is not None:
 
         @router.post(
             "/google-indexing-submissions",
@@ -1988,32 +1871,7 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         site_url=body.site_url,
                         url=body.url,
                         notification_type=body.notification_type,
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
-                    )
-                )
-            )
-
-        @router.post(
-            "/admin/google-indexing-batch-approvals",
-            response_model=None,
-            operation_id="admin_google_indexing_batch_approval_create",
-        )
-        async def create_google_indexing_batch_approval(
-            body: _GoogleIndexingBatchApprovalBody,
-        ) -> JsonValue:
-            return to_json_value(
-                await google_indexing.approve_batch(
-                    GoogleIndexingBatchApprovalRequest(
-                        account_id=body.account_id,
-                        site_url=body.site_url,
-                        notifications=tuple(
-                            GoogleIndexingBatchNotification(
-                                url=notification.url,
-                                notification_type=notification.notification_type,
-                            )
-                            for notification in body.notifications
-                        ),
                     )
                 )
             )
@@ -2038,33 +1896,13 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                             )
                             for notification in body.notifications
                         ),
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
                     )
                 )
             )
 
     google_sitemaps = services.google_sitemaps
-    if google_sitemaps is not None:
-
-        @router.post(
-            "/admin/google-sitemap-approvals",
-            response_model=None,
-            operation_id="admin_google_sitemap_approval_create",
-        )
-        async def create_google_sitemap_approval(
-            body: _GoogleSitemapApprovalBody,
-        ) -> JsonValue:
-            return to_json_value(
-                await google_sitemaps.approve(
-                    GoogleSitemapApprovalRequest(
-                        account_id=body.account_id,
-                        site_url=body.site_url,
-                        sitemap_url=body.sitemap_url,
-                        operation=body.operation,
-                    )
-                )
-            )
+    if services.writes_enabled and google_sitemaps is not None:
 
         @router.post(
             "/google-sitemap-submissions",
@@ -2081,30 +1919,13 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         site_url=body.site_url,
                         sitemap_url=body.sitemap_url,
                         operation=body.operation,
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
                     )
                 )
             )
 
     google_sites = services.google_sites
-    if google_sites is not None:
-
-        @router.post(
-            "/admin/google-site-approvals",
-            response_model=None,
-            operation_id="admin_google_site_approval_create",
-        )
-        async def create_google_site_approval(body: _GoogleSiteApprovalBody) -> JsonValue:
-            return to_json_value(
-                await google_sites.approve(
-                    GoogleSiteApprovalRequest(
-                        account_id=body.account_id,
-                        site_url=body.site_url,
-                        operation=body.operation,
-                    )
-                )
-            )
+    if services.writes_enabled and google_sites is not None:
 
         @router.post(
             "/google-site-submissions",
@@ -2118,35 +1939,13 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         account_id=body.account_id,
                         site_url=body.site_url,
                         operation=body.operation,
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
                     )
                 )
             )
 
     site_onboarding = services.site_onboarding
-    if site_onboarding is not None:
-
-        @router.post(
-            "/admin/site-onboarding-approvals",
-            response_model=None,
-            operation_id="admin_site_onboarding_approval_create",
-        )
-        async def create_site_onboarding_approval(
-            body: _SiteOnboardingApprovalBody,
-        ) -> JsonValue:
-            return to_json_value(
-                await site_onboarding.approve(
-                    SiteOnboardingApprovalRequest(
-                        google_account_id=body.google_account_id,
-                        bing_account_id=body.bing_account_id,
-                        site_url=body.site_url,
-                        display_name=body.display_name,
-                        time_zone=body.time_zone,
-                        currency_code=body.currency_code,
-                    )
-                )
-            )
+    if services.writes_enabled and site_onboarding is not None:
 
         @router.post(
             "/site-onboarding-submissions",
@@ -2162,32 +1961,19 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         google_account_id=body.google_account_id,
                         bing_account_id=body.bing_account_id,
                         site_url=body.site_url,
+                        google_analytics_parent_account_id=(
+                            body.google_analytics_parent_account_id
+                        ),
                         display_name=body.display_name,
                         time_zone=body.time_zone,
                         currency_code=body.currency_code,
-                        approval_id=body.approval_id,
                         timeout_seconds=body.timeout_seconds,
                     )
                 )
             )
 
     indexnow = services.indexnow
-    if indexnow is not None:
-
-        @router.post(
-            "/admin/write-approvals",
-            response_model=None,
-            operation_id="admin_write_approval_create",
-        )
-        async def create_indexnow_approval(body: _IndexNowApprovalBody) -> JsonValue:
-            return to_json_value(
-                await indexnow.approve(
-                    IndexNowApprovalRequest(
-                        target_id=body.target_id,
-                        urls=body.urls,
-                    )
-                )
-            )
+    if services.writes_enabled and indexnow is not None:
 
         @router.post(
             "/indexnow-submissions",
@@ -2200,7 +1986,6 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                     IndexNowSubmissionRequest(
                         target_id=body.target_id,
                         urls=body.urls,
-                        approval_id=body.approval_id,
                     )
                 )
             )

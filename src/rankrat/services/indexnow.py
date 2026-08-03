@@ -14,7 +14,6 @@ from rankrat.constants import DEFAULT_PROVIDER_TIMEOUT_SECONDS, MAX_INDEXNOW_URL
 from rankrat.errors import BoundaryDeniedError, IndexNowRateLimitError, InputLimitError
 from rankrat.logging import log_event
 from rankrat.models.boundaries import IndexNowTarget
-from rankrat.policy.approvals import WriteApproval, WriteApprovalRequest, WriteApprovalStore
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import IndexNowSubmitRequest, IndexNowTargetId
 from rankrat.providers.indexnow import IndexNowClient
@@ -35,16 +34,7 @@ class IndexNowSubmissionRequest:
 
     target_id: str
     urls: tuple[str, ...]
-    approval_id: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
-
-
-@dataclass(frozen=True, slots=True)
-class IndexNowApprovalRequest:
-    """Exact IndexNow intent an administrator wants to authorize once."""
-
-    target_id: str
-    urls: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +65,6 @@ class IndexNowService:
         self,
         policy: BoundaryPolicy,
         client: IndexNowClient,
-        approvals: WriteApprovalStore,
         monotonic_clock: Callable[[], float] = time.monotonic,
         rate_window_seconds: float = _INDEXNOW_RATE_WINDOW_SECONDS,
         max_submissions_per_window: int = _MAX_INDEXNOW_SUBMISSIONS_PER_WINDOW,
@@ -89,7 +78,6 @@ class IndexNowService:
             raise ValueError("max_dedupe_entries_per_target must be positive")
         self._policy = policy
         self._client = client
-        self._approvals = approvals
         self._monotonic_clock = monotonic_clock
         self._rate_window_seconds = rate_window_seconds
         self._max_submissions_per_window = max_submissions_per_window
@@ -101,10 +89,6 @@ class IndexNowService:
         """Submit only newly eligible URLs to the configured target's fixed client."""
         target = self._policy.resolve_indexnow_target(request.target_id)
         normalized_urls = self._normalize_urls(target, request.urls)
-        await self._approvals.consume(
-            request.approval_id,
-            self._approval_request(target, normalized_urls),
-        )
         now = self._monotonic_clock()
         eligible_urls, duplicate_count, suppressed_count = await self._reserve_submission(
             target.id,
@@ -170,32 +154,6 @@ class IndexNowService:
             deduplicated_count=deduplicated_count,
             suppressed_count=suppressed_count,
             key_validation_pending=submitted.key_validation_pending,
-        )
-
-    async def approve(self, request: IndexNowApprovalRequest) -> WriteApproval:
-        """Mint one short-lived approval for a normalized, bounded IndexNow intent."""
-        return await self._approvals.mint(self.approval_request(request.target_id, request.urls))
-
-    def approval_request(
-        self,
-        target_id: str,
-        urls: tuple[str, ...],
-    ) -> WriteApprovalRequest:
-        """Return the exact normalized intent an administrator must approve."""
-        target = self._policy.resolve_indexnow_target(target_id)
-        normalized_urls = self._normalize_urls(target, urls)
-        return self._approval_request(target, normalized_urls)
-
-    @staticmethod
-    def _approval_request(
-        target: IndexNowTarget,
-        normalized_urls: tuple[str, ...],
-    ) -> WriteApprovalRequest:
-        return WriteApprovalRequest(
-            operation="indexnow_submit",
-            account_id=target.id,
-            resource=target.host,
-            arguments={"urls": list(normalized_urls)},
         )
 
     def _normalize_urls(self, target: IndexNowTarget, urls: tuple[str, ...]) -> tuple[str, ...]:

@@ -11,6 +11,7 @@ from rankrat.transports.openapi import (
     _validate_document,
     apply_openapi_operation_ids,
     load_openapi_document,
+    load_openapi_document_for_routes,
 )
 
 
@@ -20,7 +21,15 @@ def test_openapi_source_is_isolated_between_callers() -> None:
 
     first_document["info"] = {"title": "changed", "version": "0.0.0"}
 
-    assert second_document["info"] == {"title": "rankrat", "version": "0.1.0"}
+    assert second_document["info"] == {
+        "title": "rankrat",
+        "version": "0.1.0",
+        "description": (
+            "Boundary-limited SEO operations over REST and MCP. The source document "
+            "lists the full writable contract; a read-only runtime removes write routes "
+            "from its served OpenAPI document."
+        ),
+    }
 
 
 def test_openapi_source_declares_the_runtime_bearer_boundaries() -> None:
@@ -29,14 +38,12 @@ def test_openapi_source_declares_the_runtime_bearer_boundaries() -> None:
     assert document["security"] == [{"BearerAuth": []}]
     components = _mapping(document["components"])
     security_schemes = _mapping(components["securitySchemes"])
-    assert set(security_schemes) == {"AdminBearerAuth", "BearerAuth"}
+    assert set(security_schemes) == {"BearerAuth"}
     paths = _mapping(document["paths"])
     health = _mapping(paths["/healthz"])
     health_operation = _mapping(health["get"])
     assert health_operation["security"] == []
-    admin_approval = _mapping(paths["/v1/admin/site-onboarding-approvals"])
-    admin_operation = _mapping(admin_approval["post"])
-    assert admin_operation["security"] == [{"AdminBearerAuth": []}]
+    assert all(not path.startswith("/v1/admin/") for path in paths)
 
 
 def test_openapi_operation_ids_are_applied_from_the_source(
@@ -83,6 +90,32 @@ def test_openapi_operation_ids_reject_an_implementation_mismatch(
 
     with pytest.raises(ConfigurationError, match="routes do not match"):
         apply_openapi_operation_ids(app.routes, require_complete=True)
+
+
+def test_runtime_openapi_hides_source_operations_not_active_in_the_router(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = FastAPI()
+
+    @app.get("/v1/reads")
+    def reads() -> dict[str, bool]:
+        return {"ok": True}
+
+    monkeypatch.setattr(
+        "rankrat.transports.openapi._load_openapi_document",
+        lambda: {
+            "openapi": "3.1.0",
+            "info": {"title": "rankrat", "version": "0.1.0"},
+            "paths": {
+                "/v1/reads": {"get": {"operationId": "readsList"}},
+                "/v1/writes": {"post": {"operationId": "writesCreate"}},
+            },
+        },
+    )
+
+    document = load_openapi_document_for_routes(app.routes)
+
+    assert set(_mapping(document["paths"])) == {"/v1/reads"}
 
 
 @pytest.mark.parametrize(

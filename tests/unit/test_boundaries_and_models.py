@@ -262,6 +262,60 @@ def test_google_account_discovery_allows_only_google_read_resources(tmp_path: Pa
         )
 
 
+def test_unbounded_policy_preserves_accounts_but_bypasses_resource_allow_lists(
+    tmp_path: Path,
+) -> None:
+    credential = tmp_path / "credential"
+    document = BoundaryDocument.model_validate(
+        {
+            "accounts": [
+                {
+                    "id": "google-main",
+                    "provider": "google",
+                    "credential": str(credential),
+                },
+                {
+                    "id": "bing-main",
+                    "provider": "bing",
+                    "credential": str(credential),
+                    "sites": [],
+                },
+            ]
+        }
+    )
+    bounded_policy = BoundaryPolicy(document)
+    with pytest.raises(BoundaryDeniedError):
+        bounded_policy.require_resource(
+            "google-main",
+            Provider.GOOGLE,
+            ResourceKind.GA4_PROPERTY,
+            "456",
+        )
+
+    policy = BoundaryPolicy(document, unbounded=True)
+    assert (
+        policy.require_resource(
+            "google-main",
+            Provider.GOOGLE,
+            ResourceKind.GA4_PROPERTY,
+            "456",
+        )
+        == document.accounts[0]
+    )
+    assert policy.require_google_account_discovery("google-main") == document.accounts[0]
+    assert (
+        policy.require_google_analytics_onboarding_account("google-main", "789")
+        == document.accounts[0]
+    )
+    with pytest.raises(BoundaryDeniedError):
+        policy.require_resource(
+            "missing",
+            Provider.GOOGLE,
+            ResourceKind.GA4_PROPERTY,
+            "456",
+        )
+
+
 def test_google_account_discovery_requests_only_its_read_scopes(tmp_path: Path) -> None:
     account = _document(
         {

@@ -112,14 +112,7 @@ def test_write_tools_are_absent_by_default_and_explicitly_annotated_when_enabled
         "submit" in contract.name or "delete" in contract.name
         for contract in READ_ONLY_TOOL_CATALOG
     )
-    admin_bearer = tmp_path / "admin-bearer"
-    admin_bearer.write_text("a" * 32, encoding="utf-8")
-    enabled_catalog = tool_catalog(
-        Settings(
-            enable_writes=True,
-            admin_bearer_secret_file=admin_bearer,
-        ).enable_writes
-    )
+    enabled_catalog = tool_catalog(Settings(read_only=False).writes_enabled)
     indexnow = next(contract for contract in enabled_catalog if contract.name == "indexnow_submit")
     assert indexnow.annotations.read_only_hint is False
     assert indexnow.annotations.destructive_hint is True
