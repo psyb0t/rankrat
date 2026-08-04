@@ -29,6 +29,20 @@ reading" without the Google Analytics UI.
   Account *creation* is not implementable at all — the Admin API has no
   `accounts.create`, only `provisionAccountTicket`, which must be completed in
   the UI.
+- **The onboarding guide now hands over the click path for what it cannot do.**
+  A caller with no GA4 account previously hit a dead end: onboarding creates a
+  property *inside* an account, the Admin API has no `accounts.create`, and
+  nothing said where to go instead. The guide's new `manual_provisioning` block
+  names the resource, why no tool can create it, the start URL
+  (`https://analytics.google.com`) and the ordered steps — Admin, Create →
+  Account, name it, accept the Terms of Service, then read the numeric ID back
+  with `google_analytics_account_inventory`. It also describes
+  `accounts:provisionAccountTicket` explicitly as *not* an automation escape
+  hatch, because it returns a ticket that still has to be carried into a Terms
+  of Service page a human accepts.
+- **The guide is now on the REST API too** — `POST /v1/onboarding-guides`,
+  returning the identical document the MCP resource and tool serve. It was
+  MCP-only before, which left every non-MCP caller without the procedure.
 - Renames send a `PATCH` with an explicit `updateMask` and verify that the
   response names the resource that was requested, so a response describing a
   different account or property is rejected rather than reported as success.

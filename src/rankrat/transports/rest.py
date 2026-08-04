@@ -53,6 +53,8 @@ from rankrat.constants import (
     MAX_URL_INSPECTION_BATCH,
     MIN_GA4_FUNNEL_STEPS,
     MIN_PROVIDER_TIMEOUT_SECONDS,
+    ONBOARDING_GUIDE_OPERATION,
+    ONBOARDING_GUIDE_PATH,
     PAGESPEED_CORE_WEB_VITALS_OPERATION,
     PAGESPEED_CORE_WEB_VITALS_PATH,
     SEARCH_ENGINE_COMPARISON_OPERATION,
@@ -140,6 +142,7 @@ from rankrat.services.google_sites import (
     GoogleSiteSubmissionRequest,
 )
 from rankrat.services.indexnow import IndexNowSubmissionRequest
+from rankrat.services.onboarding_guide import OnboardingGuideRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisRequest,
     PageSpeedCategory,
@@ -372,6 +375,12 @@ class _Ga4DateRangeBody(BaseModel):
 
     start_date: date
     end_date: date
+
+
+class _OnboardingGuideBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    site_url: str | None = Field(default=None, min_length=1, max_length=2048)
 
 
 class _Ga4DataStreamsBody(BaseModel):
@@ -1094,6 +1103,20 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                     inspection_urls=body.inspection_urls,
                     timeout_seconds=body.timeout_seconds,
                 )
+            )
+        )
+
+    @router.post(
+        ONBOARDING_GUIDE_PATH,
+        response_model=None,
+        operation_id=ONBOARDING_GUIDE_OPERATION,
+    )
+    async def onboarding_guide(body: _OnboardingGuideBody) -> JsonValue:
+        return to_json_value(
+            services.onboarding_guide.render(
+                OnboardingGuideRequest(site_url=body.site_url),
+                writes_enabled=services.writes_enabled,
+                agent_onboarding_enabled=services.agent_onboarding_enabled,
             )
         )
 

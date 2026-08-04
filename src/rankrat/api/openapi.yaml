@@ -1498,6 +1498,28 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Indexnow Submit
+  /v1/onboarding-guides:
+    post:
+      operationId: onboardingGuide
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_OnboardingGuideBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Onboarding Guide
   /v1/pagespeed/analyses:
     post:
       operationId: pagespeedAnalyze
@@ -2866,6 +2888,18 @@ components:
       required:
       - document
       title: _LocalSchemaValidationBody
+      type: object
+    _OnboardingGuideBody:
+      additionalProperties: false
+      properties:
+        site_url:
+          anyOf:
+          - maxLength: 2048
+            minLength: 1
+            type: string
+          - type: 'null'
+          title: Site Url
+      title: _OnboardingGuideBody
       type: object
     _PageSpeedAnalysisBody:
       additionalProperties: false

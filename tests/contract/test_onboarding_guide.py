@@ -7,6 +7,7 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from pydantic import AnyUrl
 
 from rankrat.config import Settings
+from rankrat.transports.http import create_http_app
 from rankrat.transports.mcp import build_mcp_server
 from rankrat.transports.runtime import ApplicationServices
 
@@ -45,6 +46,67 @@ async def test_read_only_runtime_still_serves_the_onboarding_resource(
         "cannot" in claim or "Prove site ownership" in claim
         for claim in guide["tell_the_user"] + guide["rankrat_cannot_perform"]
     )
+
+
+@pytest.mark.asyncio
+async def test_guide_tells_the_caller_how_to_create_a_ga4_account_by_hand(
+    deployment: tuple[Settings, ApplicationServices],
+) -> None:
+    """No tool can create a GA4 account, so the guide has to hand over the click path."""
+
+    _, services = deployment
+    server = build_mcp_server(services)
+
+    async with create_connected_server_and_client_session(server) as client:
+        contents = await client.read_resource(AnyUrl(_ONBOARDING_URI))
+        guide = json.loads(contents.contents[0].text)  # type: ignore[union-attr]
+
+    provisioning = {item["resource"]: item for item in guide["manual_provisioning"]}
+    account = provisioning["google_analytics_account"]
+
+    assert account["start_url"] == "https://analytics.google.com"
+    assert "accounts.create" in account["why_no_tool"]
+    assert "Terms of Service" in account["why_no_tool"]
+
+    steps = account["steps"]
+    assert [step["order"] for step in steps] == list(range(1, len(steps) + 1))
+    assert any(step["url"] == "https://analytics.google.com" for step in steps)
+    joined = " ".join(step["action"] for step in steps)
+    assert "Admin" in joined
+    assert "Create" in joined and "Account" in joined
+    assert "google_analytics_account_inventory" in joined
+
+    # The adjacent API must be described as not removing the browser step, so a
+    # model does not go looking for it as an automation escape hatch.
+    assert "provisionAccountTicket" in account["api_note"]
+    assert "redirectUri" in account["api_note"]
+    assert "analytics.edit" in account["api_note"]
+
+
+@pytest.mark.asyncio
+async def test_guide_is_reachable_over_rest_with_the_same_document(
+    deployment: tuple[Settings, ApplicationServices],
+) -> None:
+    """Callers that do not speak MCP still need the procedure."""
+
+    import httpx
+
+    settings, services = deployment
+    server = build_mcp_server(services)
+
+    async with create_connected_server_and_client_session(server) as client:
+        contents = await client.read_resource(AnyUrl(_ONBOARDING_URI))
+        from_resource = json.loads(contents.contents[0].text)  # type: ignore[union-attr]
+
+    app = create_http_app(settings.model_copy(update={"enable_openapi": True}), services)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://rankrat.test",
+    ) as http_client:
+        response = await http_client.post("/v1/onboarding-guides", json={})
+
+    assert response.status_code == 200
+    assert response.json() == from_resource
 
 
 @pytest.mark.asyncio

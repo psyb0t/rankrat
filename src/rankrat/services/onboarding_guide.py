@@ -50,7 +50,13 @@ _TELL_THE_USER = (
     "onboard the https:// URL-prefix form instead.",
     "Provider data is not retroactive. Collection starts at verification, so the first "
     "useful reads are days away.",
+    "A GA4 account cannot be created by any tool — see manual_provisioning for the "
+    "exact click path. Onboarding creates the property inside an account that must "
+    "already exist, so a caller with no account has to be sent to the browser first.",
 )
+
+_GOOGLE_ANALYTICS_ADMIN_URL = "https://analytics.google.com"
+_GOOGLE_ANALYTICS_ACCOUNT_RESOURCE = "google_analytics_account"
 
 _HTML_FILE_METHOD = "html_file"
 _META_TAG_METHOD = "meta_tag"
@@ -116,6 +122,26 @@ class SiteGuidance:
 
 
 @dataclass(frozen=True, slots=True)
+class ManualStep:
+    """One thing the operator does in a browser, with the page it happens on."""
+
+    order: int
+    action: str
+    url: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class ManualProvisioning:
+    """A resource no tool here can create, and the exact click path that does."""
+
+    resource: str
+    why_no_tool: str
+    start_url: str
+    steps: tuple[ManualStep, ...]
+    api_note: str
+
+
+@dataclass(frozen=True, slots=True)
 class OnboardingGuide:
     """The operator procedure plus this runtime's onboarding posture."""
 
@@ -126,8 +152,71 @@ class OnboardingGuide:
     rankrat_cannot_perform: tuple[str, ...]
     recommended_order: tuple[GuideStep, ...]
     tell_the_user: tuple[str, ...]
+    manual_provisioning: tuple[ManualProvisioning, ...]
     sites: tuple[SiteGuidance, ...]
 
+
+_GOOGLE_ANALYTICS_ACCOUNT_PROVISIONING = ManualProvisioning(
+    resource=_GOOGLE_ANALYTICS_ACCOUNT_RESOURCE,
+    why_no_tool=(
+        "The Google Analytics Admin API has no accounts.create method. Creating an "
+        "account means accepting the Analytics Terms of Service, which only a "
+        "signed-in human can do in a browser, so no tool on any server can finish it. "
+        "A GA4 account is the container properties live in; onboarding creates the "
+        "property, never the account."
+    ),
+    start_url=_GOOGLE_ANALYTICS_ADMIN_URL,
+    steps=(
+        ManualStep(
+            order=1,
+            action=(
+                "Open Google Analytics signed in as the Google user whose credential "
+                "this server uses. A first-time user sees Start measuring rather than "
+                "the admin area."
+            ),
+            url=_GOOGLE_ANALYTICS_ADMIN_URL,
+        ),
+        ManualStep(order=2, action="Go to Admin.", url=None),
+        ManualStep(order=3, action="Choose Create, then Account.", url=None),
+        ManualStep(
+            order=4,
+            action=(
+                "Enter an account name and set the data-sharing options. Name it for "
+                "what it will hold. The name is cosmetic, but every property created "
+                "later sits inside this account, and a name borrowed from an "
+                "unrelated product is how properties become impossible to find."
+            ),
+            url=None,
+        ),
+        ManualStep(
+            order=5,
+            action=(
+                "Continue and accept the Analytics Terms of Service. The account "
+                "exists once that is accepted."
+            ),
+            url=None,
+        ),
+        ManualStep(
+            order=6,
+            action=(
+                "Read the numeric account ID back with google_analytics_account_"
+                "inventory and pass it as google_analytics_parent_account_id when "
+                "onboarding a site. Let onboarding create the property; only build it "
+                "by hand if onboarding is unavailable."
+            ),
+            url=None,
+        ),
+    ),
+    api_note=(
+        "An adjacent API exists but does not remove the browser step: POST "
+        "https://analyticsadmin.googleapis.com/v1beta/accounts:provisionAccountTicket "
+        "takes an account object plus a redirectUri that must already be registered "
+        "in the Google Cloud console, and returns an accountTicketId. That ticket "
+        "still has to be carried into a Terms of Service page a human accepts. It "
+        "requires the analytics.edit scope. Rankrat does not call it, because calling "
+        "it cannot complete the job."
+    ),
+)
 
 _DNS_TXT_VERIFICATION = VerificationMethod(
     method=_DNS_TXT_METHOD,
@@ -299,6 +388,7 @@ class OnboardingGuideService:
             rankrat_cannot_perform=_RANKRAT_CANNOT_PERFORM,
             recommended_order=_recommended_order(agent_onboarding_enabled),
             tell_the_user=_TELL_THE_USER,
+            manual_provisioning=(_GOOGLE_ANALYTICS_ACCOUNT_PROVISIONING,),
             sites=self._site_guidance(request.site_url),
         )
 

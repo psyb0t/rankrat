@@ -256,11 +256,21 @@ work, no extra APIs.
 
 The procedure is served rather than left implied, so an agent can walk you through
 it instead of guessing: the `rankrat://onboarding` MCP resource, a
-`rankrat://onboarding/{site_url}` template for one percent-encoded site, and an
+`rankrat://onboarding/{site_url}` template for one percent-encoded site, an
 `onboarding_guide` tool returning the same document for clients without resource
-support. All three are read-only and present even on a read-only server — knowing
-the procedure is not a privilege. `rankrat onboard-site` prints the same steps
-when it finishes.
+support, and `POST /v1/onboarding-guides` for callers that do not speak MCP at
+all. All are read-only and present even on a read-only server — knowing the
+procedure is not a privilege. `rankrat onboard-site` prints the same steps when
+it finishes.
+
+The guide also covers the one thing onboarding **cannot** do: create the GA4
+account a property has to live inside. Its `manual_provisioning` block gives the
+start URL and the ordered clicks — Admin, Create → Account, name it, accept the
+Terms of Service — then tells the caller to read the numeric account ID back
+with `google_analytics_account_inventory` and pass it to onboarding. It names
+`accounts:provisionAccountTicket` too, and says plainly that it is not an
+automation route, since the ticket it returns still ends at a Terms of Service
+page a human has to accept.
 
 **Agents cannot reach it unless you say so.** It is the only operation that
 rewrites the boundary file this server enforces, so `RANKRAT_READ_ONLY=false`

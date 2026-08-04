@@ -148,7 +148,15 @@ create API at all, and deletion is deliberately not wrapped.
 Read the `rankrat://onboarding` resource before saying anything about onboarding,
 or call the `onboarding_guide` tool if the client does not support resources —
 pass `site_url` to get the methods that site's property form actually accepts.
-Both are read-only and present on every server, including read-only ones.
+Both are read-only and present on every server, including read-only ones, and
+`POST /v1/onboarding-guides` serves the same document over REST.
+
+If the user has no GA4 account yet, do not attempt to create one and do not
+guess the steps. No tool can create a GA4 account — the Admin API has no
+`accounts.create`, and the flow ends at a Terms of Service page. The guide's
+`manual_provisioning` block carries the start URL and the exact ordered clicks;
+relay those, then ask the user for the numeric account ID, which
+`google_analytics_account_inventory` can also read back once it exists.
 
 The point of reading it: creating the three provider resources is the small part,
 and Rankrat cannot verify site ownership at all. Onboarding reports success while
