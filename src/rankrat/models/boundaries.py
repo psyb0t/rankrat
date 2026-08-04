@@ -166,7 +166,6 @@ class ConfiguredAccount(BaseModel):
     oauth_token_file: Path | None = None
     pagespeed_api_key_file: Path | None = None
     pagespeed_sites: tuple[str, ...] = ()
-    google_analytics_parent_account_id: str | None = None
     search_console_sites: tuple[str, ...] = ()
     ga4_properties: tuple[str, ...] = ()
     google_account_discovery: bool = Field(default=False, strict=True)
@@ -188,13 +187,6 @@ class ConfiguredAccount(BaseModel):
     def validate_optional_secret_path(cls, value: Path | None) -> Path | None:
         if value is not None and not value.is_absolute():
             raise ValueError("configured secret paths must be absolute")
-        return value
-
-    @field_validator("google_analytics_parent_account_id")
-    @classmethod
-    def validate_google_analytics_parent_account_id(cls, value: str | None) -> str | None:
-        if value is not None and not value.isdigit():
-            raise ValueError("google_analytics_parent_account_id must be numeric")
         return value
 
     @field_validator("search_console_sites", "pagespeed_sites", mode="before")
@@ -265,8 +257,6 @@ class ConfiguredAccount(BaseModel):
             raise ValueError("only Google accounts can configure pagespeed_sites")
         if self.provider != Provider.GOOGLE and self.google_account_discovery:
             raise ValueError("only Google accounts can enable google_account_discovery")
-        if self.provider != Provider.GOOGLE and self.google_analytics_parent_account_id is not None:
-            raise ValueError("only Google accounts can configure a Google Analytics parent account")
         if self.google_account_discovery and self.oauth_token_file is None:
             raise ValueError("Google account discovery requires oauth_token_file")
         return self

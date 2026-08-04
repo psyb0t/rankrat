@@ -190,18 +190,11 @@ class SiteOnboardingOperator:
         google_account = self._policy.require_google_onboarding_account(request.google_account_id)
         bing_account = self._policy.require_bing_onboarding_account(request.bing_account_id)
         self._assert_new_site(google_account, bing_account, request.site_url)
-        parent_account_id = (
-            request.google_analytics_parent_account_id
-            or google_account.google_analytics_parent_account_id
-        )
+        parent_account_id = request.google_analytics_parent_account_id
         if parent_account_id is None:
             raise ConfigurationError(
                 "Google onboarding requires google_analytics_parent_account_id"
             )
-        self._policy.require_google_analytics_onboarding_account(
-            request.google_account_id,
-            parent_account_id,
-        )
         return parent_account_id
 
     @staticmethod

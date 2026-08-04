@@ -42,7 +42,6 @@ def _operator(
                         "provider": "google",
                         "credential": str(secret_root / "google-client.json"),
                         "oauth_token_file": str(tmp_path / "oauth" / "google.json"),
-                        "google_analytics_parent_account_id": "123",
                     },
                     {
                         "id": "bing-main",
@@ -117,6 +116,7 @@ async def test_site_onboarding_creates_all_provider_resources_then_updates_bound
             "google-main",
             "bing-main",
             "https://example.com/",
+            google_analytics_parent_account_id="123",
             display_name="Example",
         )
     )
@@ -250,7 +250,12 @@ async def test_site_onboarding_reports_partial_success_without_boundary_write(
 
     with pytest.raises(SiteOnboardingPartialError) as error:
         await operator.onboard(
-            SiteOnboardingRequest("google-main", "bing-main", "https://example.com/")
+            SiteOnboardingRequest(
+                "google-main",
+                "bing-main",
+                "https://example.com/",
+                google_analytics_parent_account_id="123",
+            )
         )
 
     assert error.value.completed_stages == ("google_analytics",)

@@ -79,7 +79,6 @@ def indexnow_deployment(tmp_path: Path) -> tuple[Settings, ApplicationServices]:
                         "provider": "google",
                         "credential": str(secret_root / "google.json"),
                         "search_console_sites": ["sc-domain:example.com"],
-                        "google_analytics_parent_account_id": "123",
                     },
                     {
                         "id": "bing-main",

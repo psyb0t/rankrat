@@ -303,10 +303,6 @@ def test_unbounded_policy_preserves_accounts_but_bypasses_resource_allow_lists(
         == document.accounts[0]
     )
     assert policy.require_google_account_discovery("google-main") == document.accounts[0]
-    assert (
-        policy.require_google_analytics_onboarding_account("google-main", "789")
-        == document.accounts[0]
-    )
     with pytest.raises(BoundaryDeniedError):
         policy.require_resource(
             "missing",

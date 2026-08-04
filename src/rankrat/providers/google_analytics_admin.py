@@ -124,9 +124,11 @@ class GoogleAnalyticsAdminClient:
     ) -> Ga4SiteProperty:
         """Create one GA4 property and its web stream at documented fixed endpoints."""
 
-        account = self._boundary_policy.require_google_analytics_onboarding_account(
+        # The parent GA4 account comes from the caller, not the boundary file. The
+        # credential account is still pinned; which of that identity's own GA4
+        # accounts the new property lands under is the caller's choice.
+        account = self._boundary_policy.require_google_onboarding_account(
             str(request.account_id),
-            create_request.parent_account_id,
         )
         token = await self._token_for_account(account.credential)
         property_payload: dict[str, object] = {

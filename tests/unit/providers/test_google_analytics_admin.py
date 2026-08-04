@@ -34,7 +34,6 @@ def _policy() -> BoundaryPolicy:
                         "id": "google-main",
                         "provider": "google",
                         "credential": "/run/secrets/google.json",
-                        "google_analytics_parent_account_id": "123",
                     }
                 ]
             }

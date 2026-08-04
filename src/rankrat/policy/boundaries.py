@@ -156,20 +156,6 @@ class BoundaryPolicy:
             raise BoundaryDeniedError("Google account discovery is not enabled for this account")
         return account
 
-    def require_google_analytics_onboarding_account(
-        self,
-        account_id: str,
-        parent_account_id: str,
-    ) -> ConfiguredAccount:
-        """Authorize local GA4 provisioning only under one configured parent account."""
-
-        account = self.resolve_account(account_id, Provider.GOOGLE)
-        if self._unbounded:
-            return account
-        if account.google_analytics_parent_account_id != parent_account_id:
-            raise BoundaryDeniedError("configured Google Analytics parent account was not selected")
-        return account
-
     def require_google_onboarding_account(self, account_id: str) -> ConfiguredAccount:
         """Resolve the exact Google account for a local onboarding operation."""
 

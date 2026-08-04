@@ -2,6 +2,27 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.3.0 — 2026-08-04
+
+Drops the GA4 parent-account pin from the boundary file.
+
+- **Breaking. `google_analytics_parent_account_id` is gone from the boundary
+  file.** It constrained exactly one thing — which GA4 account a newly created
+  property was filed under — and constrained nothing else: GA4 reads are gated
+  per-property by `ga4_properties`, and account discovery already returned every
+  account the credential could see. For an operator whose GA4 accounts all sit
+  under one Google identity it bought nothing, while quietly guaranteeing that
+  every property onboarding created landed under whichever account happened to
+  be named there, forever.
+- The parent account is now supplied by the caller on each onboarding request,
+  where it already could be, and nothing validates it against the boundary file.
+  The credential account is still pinned; which of that identity's own GA4
+  accounts the property lands under is now the caller's decision per call.
+- **Migration:** delete the `google_analytics_parent_account_id` line from every
+  account in `boundaries.json`. The document is parsed with unknown fields
+  forbidden, so leaving it in place fails startup with
+  `invalid Rankrat boundary configuration` and no further detail.
+
 ## v0.2.0 — 2026-08-03
 
 Onboarding now explains the half it cannot do, and agents no longer reach it just
