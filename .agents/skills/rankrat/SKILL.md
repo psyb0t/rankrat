@@ -10,7 +10,7 @@ metadata:
     requires:
       bins: [docker]
 permissions:
-  network: "outbound HTTPS to the configured providers (Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights) and inbound only on the port you bind. Traffic goes to the provider APIs, never to a third party."
+  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights, and IndexNow provider endpoints; inbound only on the port you bind. Traffic goes to those provider APIs, never to a third party."
   shell: "docker run invocations for the published image, as shown below; no other host access is required."
   filesystem: "reads the boundary config and provider credentials. Local initialization creates an HTTP bearer secret; Google authorization writes its token record; IndexNow initialization creates or retains its local key and updates .env plus the boundary file; writable unbounded onboarding updates the one configured boundary file with exact created-resource IDs."
 ---

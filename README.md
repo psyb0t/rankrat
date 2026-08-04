@@ -175,11 +175,12 @@ openclaw skills install @psyb0t/rankrat
 openclaw plugins install clawhub:@psyb0t/rankrat
 ```
 
-The [bridge](.agents/plugins/rankrat) covers both transports. It defaults to
-stdio, running the published image itself — set `RANKRAT_CONFIG_DIR` (plus
+The [OpenClaw plugin](.agents/plugins/rankrat) contributes a static stdio MCP
+server that runs the published image directly — set `RANKRAT_CONFIG_DIR` (plus
 `RANKRAT_SECRETS_DIR` and `RANKRAT_OAUTH_DIR` when those are needed) and nothing
-has to be running first. For a shared server, set `RANKRAT_TRANSPORT=http` and
-`RANKRAT_URL`, plus `RANKRAT_AUTH_TOKEN` if a bearer secret is configured.
+has to be running first. For a shared server, replace that static definition with
+OpenClaw's native Streamable HTTP configuration; the plugin README provides the
+copy-paste command with an environment-backed bearer header.
 
 ## Write capability
 
@@ -456,6 +457,12 @@ make test-integration
 make test-security
 make test-image
 ```
+
+`make test` and `make lint` rebuild the versioned development image from their
+pinned base images by default. If an already-built local image is available but
+the registry is temporarily unreachable, `make test-local` reuses only that
+exact versioned image after checking it exists. It never updates the image, so
+use it only as an outage fallback; return to the normal commands before release.
 
 Live read checks use the shipped image and configured accounts:
 

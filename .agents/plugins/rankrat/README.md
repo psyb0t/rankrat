@@ -4,8 +4,8 @@ MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — boundary-limited
 SEO and search-analytics reads over Google Search Console, Bing Webmaster Tools,
 GA4, PageSpeed and IndexNow.
 
-rankrat speaks MCP itself, over both stdio and Streamable HTTP. This bridge
-exists so a client can use either without knowing which one it got.
+rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin
+contributes a static OpenClaw MCP server; it does not execute plugin code.
 
 ## stdio (default)
 
@@ -24,15 +24,22 @@ the container runs with no capabilities and a read-only root.
 
 `RANKRAT_IMAGE` overrides the image (default `psyb0t/rankrat`).
 
-## http
+## Streamable HTTP
 
-Proxies to a server you are already running.
+For a Rankrat server you are already running, replace the plugin's static stdio
+definition with OpenClaw's native Streamable HTTP client. There is no proxy
+process and the bearer token never appears in a child-process argument.
 
 ```bash
-export RANKRAT_TRANSPORT=http
-export RANKRAT_URL=http://127.0.0.1:8080      # the bridge appends /mcp
-export RANKRAT_AUTH_TOKEN=...                 # only if the server requires one
+export RANKRAT_AUTH_TOKEN=REPLACE_ME
+openclaw mcp set rankrat '{"url":"http://127.0.0.1:8080/mcp","transport":"streamable-http","headers":{"Authorization":"Bearer ${RANKRAT_AUTH_TOKEN}"}}'
+openclaw mcp doctor rankrat --probe
 ```
+
+The single quotes preserve `${RANKRAT_AUTH_TOKEN}` for OpenClaw to resolve at
+runtime. If the Rankrat server has no bearer secret, omit the `headers` object.
+`openclaw mcp unset rankrat` removes the override and returns to the plugin's
+default stdio server.
 
 ## Writes
 
@@ -40,7 +47,7 @@ rankrat is read-only by default and its write tools are absent from `tools/list`
 entirely, so an agent cannot discover them. On the stdio transport,
 `RANKRAT_READ_ONLY` and `RANKRAT_UNBOUNDED` are forwarded to the server if you
 set them, which keeps that decision with whoever launched the client rather than
-with this bridge. On the http transport the running server already fixed it.
+with this plugin. On Streamable HTTP the running server already fixed it.
 
 ## License
 

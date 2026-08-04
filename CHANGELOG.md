@@ -46,6 +46,16 @@ reading" without the Google Analytics UI.
 - Renames send a `PATCH` with an explicit `updateMask` and verify that the
   response names the resource that was requested, so a response describing a
   different account or property is rejected rather than reported as success.
+- **OpenClaw now receives Rankrat through its native static MCP-server
+  declaration.** The plugin no longer registers a process launcher as runtime
+  extension code or proxies Streamable HTTP through `mcp-remote`. Stdio still
+  runs the published image directly; shared HTTP deployments use OpenClaw's
+  direct Streamable HTTP client with an environment-backed bearer header, so the
+  bearer does not appear in child-process arguments or proxy logs.
+- **`make test-local` is a deliberate registry-outage fallback.** It validates
+  that the exact versioned development image is already local, then runs the
+  same ephemeral test containers without resolving image metadata remotely.
+  Normal `make test` and `make lint` still rebuild from pinned bases.
 
 ## v0.3.0 — 2026-08-04
 

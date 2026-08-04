@@ -1,81 +1,38 @@
 #!/usr/bin/env node
-// rankrat MCP bridge. Two transports, selected by RANKRAT_TRANSPORT:
-//
-//   stdio (default) — runs the published image and lets it speak MCP straight
-//     down its own stdio. rankrat's default mode is already stdio, so nothing
-//     is proxied here; this only assembles the container invocation.
-//   http            — proxies to an already-running server's Streamable HTTP
-//     endpoint at $RANKRAT_URL/mcp, with a bearer token when one is configured.
-//
-// stdout IS the MCP protocol channel in both modes, so diagnostics go to stderr
-// only. The sole output is a fatal pre-launch console.error, which is
-// user-facing CLI output rather than logging. The bearer token is handed to the
-// proxy as an argv header and never printed.
+// This is an MCP stdio launcher, not an OpenClaw extension. Its stdout belongs
+// exclusively to the Rankrat container's MCP protocol; launcher failures use
+// stderr so they cannot corrupt the protocol stream.
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const require = createRequire(import.meta.url);
-
-const MCP_PATH = "/mcp";
 const DEFAULT_IMAGE = "psyb0t/rankrat";
 const TRANSPORT_STDIO = "stdio";
-const TRANSPORT_HTTP = "http";
-
-// Container-side paths are the server's own defaults, so only the host side is
-// configurable. A caller therefore cannot mount a boundary file somewhere the
-// server will not read it.
 const CONTAINER_CONFIG = "/run/config";
 const CONTAINER_SECRETS = "/run/secrets";
 const CONTAINER_OAUTH = "/run/oauth";
-
-// Forwarded verbatim so a writable or unbounded session stays an explicit
-// choice made by whoever launched the client, never one this bridge makes.
 const FORWARDED_SETTINGS = ["RANKRAT_READ_ONLY", "RANKRAT_UNBOUNDED", "RANKRAT_LOG_LEVEL"];
 
-function fail(message) {
-  console.error(`[rankrat-mcp] ${message}`);
-  process.exit(1);
-}
+function requiredConfigDir(environment) {
+  const configDir = environment.RANKRAT_CONFIG_DIR;
 
-function runHttp() {
-  const base = process.env.RANKRAT_URL;
-  if (!base) {
-    fail(`Missing RANKRAT_URL for RANKRAT_TRANSPORT=http.
-
-Point it at a running rankrat server:
-  export RANKRAT_URL=http://127.0.0.1:8080
-
-Or drop RANKRAT_TRANSPORT to use the default stdio transport, which runs the
-published image itself.`);
-  }
-
-  const url = `${base.replace(/\/+$/, "")}${MCP_PATH}`;
-  const token = process.env.RANKRAT_AUTH_TOKEN;
-  const args = [require.resolve("mcp-remote/dist/proxy.js"), url, "--transport", "http-only"];
-
-  if (token) {
-    args.push("--header", `Authorization: Bearer ${token}`);
-  }
-
-  args.push(...process.argv.slice(2));
-
-  return spawnSync(process.execPath, args, { stdio: "inherit" });
-}
-
-function runStdio() {
-  const configDir = process.env.RANKRAT_CONFIG_DIR;
   if (!configDir) {
-    fail(`Missing RANKRAT_CONFIG_DIR for RANKRAT_TRANSPORT=stdio.
+    throw new Error(`Missing RANKRAT_CONFIG_DIR for the rankrat stdio server.
 
-rankrat answers only for what its boundary file lists, so it needs that file:
+rankrat answers only for resources in its boundary file, so its directory is required:
   export RANKRAT_CONFIG_DIR=/path/to/config     # holds boundaries.json
-  export RANKRAT_SECRETS_DIR=/path/to/secrets   # provider credentials
-  export RANKRAT_OAUTH_DIR=/path/to/oauth       # stored Google OAuth token
+  export RANKRAT_SECRETS_DIR=/path/to/secrets   # provider credentials, when needed
+  export RANKRAT_OAUTH_DIR=/path/to/oauth       # stored Google OAuth token, when needed
 
-See https://github.com/psyb0t/rankrat for how those are created.`);
+See https://github.com/psyb0t/rankrat for setup.`);
   }
 
+  return configDir;
+}
+
+/** Build the direct, hardened Docker invocation for Rankrat's stdio transport. */
+export function buildDockerArgs(environment, commandArgs = []) {
+  const configDir = requiredConfigDir(environment);
   const args = [
     "run",
     "--rm",
@@ -91,40 +48,49 @@ See https://github.com/psyb0t/rankrat for how those are created.`);
     `type=bind,src=${resolve(configDir)},dst=${CONTAINER_CONFIG},readonly`,
   ];
 
-  // Both are optional: a boundary using only the credential-free tools needs
-  // neither, and binding a path that does not exist fails the run outright
-  // rather than degrading to a smaller tool surface.
-  const secretsDir = process.env.RANKRAT_SECRETS_DIR;
-  if (secretsDir) {
-    args.push("--mount", `type=bind,src=${resolve(secretsDir)},dst=${CONTAINER_SECRETS},readonly`);
-  }
+  const optionalMounts = [
+    ["RANKRAT_SECRETS_DIR", CONTAINER_SECRETS],
+    ["RANKRAT_OAUTH_DIR", CONTAINER_OAUTH],
+  ];
 
-  const oauthDir = process.env.RANKRAT_OAUTH_DIR;
-  if (oauthDir) {
-    args.push("--mount", `type=bind,src=${resolve(oauthDir)},dst=${CONTAINER_OAUTH},readonly`);
-  }
-
-  for (const name of FORWARDED_SETTINGS) {
-    if (process.env[name] !== undefined) {
-      args.push("-e", `${name}=${process.env[name]}`);
+  for (const [environmentName, containerPath] of optionalMounts) {
+    const hostPath = environment[environmentName];
+    if (hostPath) {
+      args.push("--mount", `type=bind,src=${resolve(hostPath)},dst=${containerPath},readonly`);
     }
   }
 
-  args.push(process.env.RANKRAT_IMAGE ?? DEFAULT_IMAGE, TRANSPORT_STDIO, ...process.argv.slice(2));
+  for (const setting of FORWARDED_SETTINGS) {
+    if (environment[setting] !== undefined) {
+      args.push("-e", `${setting}=${environment[setting]}`);
+    }
+  }
 
-  return spawnSync("docker", args, { stdio: "inherit" });
+  args.push(environment.RANKRAT_IMAGE ?? DEFAULT_IMAGE, TRANSPORT_STDIO, ...commandArgs);
+  return args;
 }
 
-const transport = (process.env.RANKRAT_TRANSPORT ?? TRANSPORT_STDIO).toLowerCase();
+/** Start Rankrat and return its exit status without handling an MCP message. */
+export function runStdio(
+  environment = process.env,
+  commandArgs = process.argv.slice(2),
+  spawn = spawnSync,
+) {
+  const result = spawn("docker", buildDockerArgs(environment, commandArgs), { stdio: "inherit" });
 
-if (transport !== TRANSPORT_STDIO && transport !== TRANSPORT_HTTP) {
-  fail(`Unknown RANKRAT_TRANSPORT=${transport}. Use "${TRANSPORT_STDIO}" (default) or "${TRANSPORT_HTTP}".`);
+  if (result.error) {
+    throw new Error(`Could not start Rankrat's stdio container: ${result.error.message}`);
+  }
+
+  return result.status ?? 1;
 }
 
-const result = transport === TRANSPORT_HTTP ? runHttp() : runStdio();
-
-if (result.error) {
-  fail(`Could not start the ${transport} transport: ${result.error.message}`);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try {
+    process.exit(runStdio());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown launcher failure";
+    console.error(`[rankrat-mcp] ${message}`);
+    process.exit(1);
+  }
 }
-
-process.exit(result.status ?? 1);

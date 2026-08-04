@@ -1,84 +1,17 @@
 {
-  "name": "@psyb0t/rankrat",
   "id": "@psyb0t/rankrat",
+  "name": "rankrat",
   "version": "0.0.0",
-  "type": "code-plugin",
-  "summary": "Wire an OpenClaw agent to a self-hosted rankrat server over MCP — Google Search Console, Bing Webmaster Tools, GA4, PageSpeed and IndexNow as tools.",
-  "description": "Connects an MCP client (OpenClaw, Claude, Cursor, Codex, ...) to rankrat over either transport. By default it runs the published psyb0t/rankrat image and speaks MCP down its stdio, so no server needs to be running first; set RANKRAT_TRANSPORT=http to proxy to an already-running server's Streamable HTTP endpoint at RANKRAT_URL/mcp instead. Exposes whichever tools that server publishes: Search Console analytics, summaries, comparisons, trends, anomalies and drop attribution; URL inspection, sitemaps, crawl issues and crawl stats; Bing keyword statistics, ranking buckets, opportunity and cannibalization reports; GA4 realtime, content, landing-page, traffic-source, ecommerce, audience and conversion-funnel reports; PageSpeed Insights and schema fetching. rankrat is read-only by default; a server started with writes enabled additionally publishes IndexNow submission, Bing and Search Console URL/sitemap/property changes, Google Indexing notifications and new-site onboarding. The tool list reflects that server's configured providers and settings, not a fixed catalog. rankrat is self-hosted — see https://github.com/psyb0t/rankrat.",
-  "extensions": ["./bin/cli.js"],
-  "compat": {
-    "pluginApi": ">=2026.3.24-beta.2"
-  },
-  "build": {
-    "openclawVersion": "2026.3.24-beta.2"
-  },
-  "environment": {
-    "RANKRAT_TRANSPORT": {
-      "required": false,
-      "description": "\"stdio\" (default) runs the published image; \"http\" proxies to a running server."
-    },
-    "RANKRAT_CONFIG_DIR": {
-      "required": false,
-      "description": "stdio transport: host directory holding boundaries.json. Required for stdio."
-    },
-    "RANKRAT_SECRETS_DIR": {
-      "required": false,
-      "description": "stdio transport: host directory holding provider credentials."
-    },
-    "RANKRAT_OAUTH_DIR": {
-      "required": false,
-      "description": "stdio transport: host directory holding the stored Google OAuth token."
-    },
-    "RANKRAT_IMAGE": {
-      "required": false,
-      "description": "stdio transport: image to run. Defaults to psyb0t/rankrat."
-    },
-    "RANKRAT_URL": {
-      "required": false,
-      "description": "http transport: base URL of the running server, e.g. http://127.0.0.1:8080 (the bridge appends /mcp). Required for http."
-    },
-    "RANKRAT_AUTH_TOKEN": {
-      "required": false,
-      "description": "http transport: bearer token value, when the server was started with a bearer secret configured."
-    },
-    "RANKRAT_READ_ONLY": {
-      "required": false,
-      "description": "stdio transport: forwarded to the server. Defaults to true there; set false only for a deliberately writable session."
-    },
-    "RANKRAT_UNBOUNDED": {
-      "required": false,
-      "description": "stdio transport: forwarded to the server. Trusted onboarding mode; requires RANKRAT_READ_ONLY=false."
+  "description": "Self-hosted, boundary-limited SEO and search-analytics MCP tools. The default server starts the published Rankrat image over stdio.",
+  "mcpServers": {
+    "rankrat": {
+      "transport": "stdio",
+      "command": "node",
+      "args": ["./bin/cli.js"]
     }
   },
   "configSchema": {
     "type": "object",
-    "properties": {
-      "transport": {
-        "type": "string",
-        "enum": ["stdio", "http"],
-        "default": "stdio",
-        "description": "Run the published image over stdio, or proxy to a running server over Streamable HTTP."
-      },
-      "configDir": {
-        "type": "string",
-        "description": "stdio: host directory holding boundaries.json."
-      },
-      "secretsDir": {
-        "type": "string",
-        "description": "stdio: host directory holding provider credentials."
-      },
-      "oauthDir": {
-        "type": "string",
-        "description": "stdio: host directory holding the stored Google OAuth token."
-      },
-      "url": {
-        "type": "string",
-        "description": "http: base URL of the running server, e.g. http://127.0.0.1:8080 (the bridge appends /mcp)."
-      },
-      "authToken": {
-        "type": "string",
-        "description": "http: bearer token value, when the server requires one."
-      }
-    }
+    "additionalProperties": false
   }
 }

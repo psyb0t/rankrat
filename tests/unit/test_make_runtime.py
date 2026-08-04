@@ -23,6 +23,17 @@ def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
     assert "$(WRAPPER) http" in _target(source, "run-http")
 
 
+def test_local_dev_image_mode_is_an_explicit_checked_fallback() -> None:
+    source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    target = _target(source, "dev-image")
+
+    assert "RANKRAT_DEV_IMAGE_SOURCE ?= build" in source
+    assert "build) docker build -f Dockerfile.dev -t $(DEV_IMAGE) ." in target
+    assert 'local) docker image inspect "$(DEV_IMAGE)" >/dev/null 2>&1' in target
+    assert "RANKRAT_DEV_IMAGE_SOURCE must be build or local" in target
+    assert "RANKRAT_DEV_IMAGE_SOURCE=local test" in _target(source, "test-local")
+
+
 def test_wrapper_allows_only_explicit_unbounded_persistence() -> None:
     source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
 

@@ -2,6 +2,7 @@ IMAGE_NAME := psyb0t/rankrat
 VERSION ?= $(shell awk -F\" '/^version *= *"/ {print $$2; exit}' pyproject.toml)
 IMAGE_TAG := v$(VERSION)
 DEV_IMAGE := $(IMAGE_NAME):dev-$(IMAGE_TAG)
+RANKRAT_DEV_IMAGE_SOURCE ?= build
 LOCK_IMAGE := $(IMAGE_NAME):lock-$(IMAGE_TAG)
 SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
 SHFMT_IMAGE := mvdan/shfmt:v3.13.1@sha256:f22f3936140be1ba02d493b5d2b91d0e8b4af93fd903e7f46c477822bca4a3be
@@ -86,7 +87,7 @@ LOCK_RUN := docker run --rm --init \
 	$(LOCK_IMAGE)
 
 .PHONY: help version dev-image lock-image init-config setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove \
-	lint lint-fix format test test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow test-live-http test-image \
+	lint lint-fix format test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow test-live-http test-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
 	 auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
 
@@ -97,7 +98,11 @@ version: ## Print the version-derived production image tag
 	@echo $(IMAGE_TAG)
 
 dev-image: ## Build the sandboxed development image
-	docker build -f Dockerfile.dev -t $(DEV_IMAGE) .
+	@case "$(RANKRAT_DEV_IMAGE_SOURCE)" in \
+		build) docker build -f Dockerfile.dev -t $(DEV_IMAGE) . ;; \
+		local) docker image inspect "$(DEV_IMAGE)" >/dev/null 2>&1 || { echo "local Rankrat development image is missing: $(DEV_IMAGE)" >&2; exit 1; }; echo "using existing local Rankrat development image: $(DEV_IMAGE)" ;; \
+		*) echo "RANKRAT_DEV_IMAGE_SOURCE must be build or local, got: $(RANKRAT_DEV_IMAGE_SOURCE)" >&2; exit 1 ;; \
+	esac
 
 lock-image: ## Build the minimal, sandboxed Python-version-transition lock image
 	docker build -f Dockerfile.lock -t $(LOCK_IMAGE) .
@@ -179,6 +184,9 @@ format: dev-image ## Apply Ruff and shfmt formatting in sandboxed containers
 		-v $(PWD):/mnt -w /mnt $(SHFMT_IMAGE) -w rankrat.sh scripts
 
 test: test-unit test-contract test-integration test-security test-tooling ## Run all mocked tests
+
+test-local: ## Run all mocked tests with the existing versioned development image
+	@$(MAKE) --no-print-directory RANKRAT_DEV_IMAGE_SOURCE=local test
 
 test-unit: dev-image ## Run unit tests in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync pytest -p no:cacheprovider tests/unit
