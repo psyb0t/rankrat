@@ -42,6 +42,7 @@ tool surface is still free to move.
 - [Configuration](#configuration)
 - [Verification](#verification)
 - [Security](#security)
+- [Known gaps](#known-gaps)
 - [Release information](#release-information)
 
 ## Quick start
@@ -442,6 +443,40 @@ set. Use an already-public harmless URL.
 - The production image is non-root; the Compose example uses loopback ports,
   dropped capabilities, no-new-privileges, read-only root, tmpfs, and explicit
   secret mounts.
+
+## Known gaps
+
+**The published image carries a known high-severity advisory.**
+[CVE-2026-69247](https://github.com/advisories/GHSA-g6cj-pr64-35w5) is a
+Bleichenbacher oracle in `cryptography`'s PKCS#7 `EnvelopedData` decryption,
+affecting `>= 44.0.0, < 50.0.0`. The image ships 49.0.0, reached transitively as
+`cryptography` ← `pyjwt` ← `mcp`. Rankrat itself has no PKCS#7 code path — it
+never calls `pkcs7_decrypt_der` / `pkcs7_decrypt_pem` / `pkcs7_decrypt_smime`,
+handles no `EnvelopedData`, and does not import `jwt` — so the vulnerable
+functions are present but unreached. The fix, `cryptography` 50.0.0, was
+published on 2026-07-31 and is held out by the dependency age gate in
+`pyproject.toml` (`exclude-newer`), which refuses releases younger than seven
+days; it becomes installable on 2026-08-07. Waiting was chosen over overriding
+that gate, because a fresh release window is the supply-chain hijack window and
+a cryptography library is a poor candidate for rushing one.
+
+**v0.3.0 is only partly published.** Its image and GitHub Release exist, but the
+image scan gate failed on the advisory above, which skipped the ClawHub and MCP
+registry publishes. The registry's newest entry is 0.2.0 until the follow-up
+release.
+
+**Onboarding does not roll back a partial failure.** `onboard-site` creates the
+GA4 property, then the Search Console property, then the Bing site, and writes
+the boundary file only after all three succeed. A failure at stage two or three
+leaves the earlier resources real but unrecorded, and because the boundary file
+was never written, re-running creates a second copy of them. Check Google
+Analytics before retrying.
+
+**No way to read GA4 data streams.** Nothing exposes the measurement ID attached
+to a configured property, so confirming that a site's `G-` tag matches the
+property Rankrat reads from has to happen in the Google Analytics UI.
+`src/rankrat/providers/google_analytics_admin.py` already calls the
+`properties/{id}/dataStreams` endpoint while onboarding, but only to create.
 
 ## License
 
