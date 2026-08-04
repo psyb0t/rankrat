@@ -95,6 +95,11 @@ from rankrat.services.google_analytics import (
     Ga4RealtimeReportRequest,
     Ga4ReportRequest,
 )
+from rankrat.services.google_analytics_admin import (
+    Ga4AccountRenameRequest,
+    Ga4DataStreamsRequest,
+    Ga4PropertyRenameRequest,
+)
 from rankrat.services.google_indexing import (
     GoogleIndexingBatchNotification,
     GoogleIndexingBatchSubmissionRequest,
@@ -146,6 +151,10 @@ from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.tool_contracts import ToolAnnotations, tool_catalog
 
 _OBJECT_SCHEMA = "object"
+# GA4 account, property and stream IDs are all bare numerics. The same literal is
+# still inlined on the older report arguments below; new arguments use the name.
+_GA4_RESOURCE_ID_PATTERN = r"^[0-9]+$"
+_GA4_DISPLAY_NAME_MAX_CHARS = 255
 _JSON_MIME_TYPE = "application/json"
 _ONBOARDING_RESOURCE_URI = "rankrat://onboarding"
 _ONBOARDING_RESOURCE_NAME = "onboarding"
@@ -312,6 +321,32 @@ class _GoogleSiteSubmissionArguments(BaseModel):
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
         le=MAX_PROVIDER_TIMEOUT_SECONDS,
     )
+
+
+class _Ga4DataStreamsArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    property_id: str = Field(pattern=_GA4_RESOURCE_ID_PATTERN)
+    timeout_seconds: float = Field(default=10.0, gt=0, le=30.0)
+
+
+class _Ga4AccountRenameArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    analytics_account_id: str = Field(pattern=_GA4_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1, max_length=_GA4_DISPLAY_NAME_MAX_CHARS)
+    timeout_seconds: float = Field(default=10.0, gt=0, le=30.0)
+
+
+class _Ga4PropertyRenameArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    property_id: str = Field(pattern=_GA4_RESOURCE_ID_PATTERN)
+    display_name: str = Field(min_length=1, max_length=_GA4_DISPLAY_NAME_MAX_CHARS)
+    timeout_seconds: float = Field(default=10.0, gt=0, le=30.0)
 
 
 class _OnboardingGuideArguments(BaseModel):
@@ -821,6 +856,9 @@ def _onboarding_resource_site_url(uri: str) -> str | None:
 def _tool_input_schema(name: str) -> dict[str, object]:
     schemas: dict[str, dict[str, object]] = {
         "onboarding_guide": _OnboardingGuideArguments.model_json_schema(),
+        "google_analytics_data_streams": _Ga4DataStreamsArguments.model_json_schema(),
+        "google_analytics_account_rename": _Ga4AccountRenameArguments.model_json_schema(),
+        "google_analytics_property_rename": _Ga4PropertyRenameArguments.model_json_schema(),
         "server_info": {"type": _OBJECT_SCHEMA, "properties": {}, "additionalProperties": False},
         "diagnostics": {"type": _OBJECT_SCHEMA, "properties": {}, "additionalProperties": False},
         "accounts_list": {
@@ -1267,6 +1305,43 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
             )
             if analytics_or_pagespeed_result is not None:
                 return analytics_or_pagespeed_result
+            if name == "google_analytics_data_streams":
+                streams_arguments = _Ga4DataStreamsArguments.model_validate(raw_arguments)
+                return _tool_success(
+                    await services.google_analytics_admin.list_data_streams(
+                        Ga4DataStreamsRequest(
+                            account_id=streams_arguments.account_id,
+                            property_id=streams_arguments.property_id,
+                            timeout_seconds=streams_arguments.timeout_seconds,
+                        ),
+                    ),
+                )
+            if name == "google_analytics_account_rename" and services.writes_enabled:
+                account_rename_arguments = _Ga4AccountRenameArguments.model_validate(raw_arguments)
+                return _tool_success(
+                    await services.google_analytics_admin.rename_account(
+                        Ga4AccountRenameRequest(
+                            account_id=account_rename_arguments.account_id,
+                            analytics_account_id=account_rename_arguments.analytics_account_id,
+                            display_name=account_rename_arguments.display_name,
+                            timeout_seconds=account_rename_arguments.timeout_seconds,
+                        ),
+                    ),
+                )
+            if name == "google_analytics_property_rename" and services.writes_enabled:
+                property_rename_arguments = _Ga4PropertyRenameArguments.model_validate(
+                    raw_arguments,
+                )
+                return _tool_success(
+                    await services.google_analytics_admin.rename_property(
+                        Ga4PropertyRenameRequest(
+                            account_id=property_rename_arguments.account_id,
+                            property_id=property_rename_arguments.property_id,
+                            display_name=property_rename_arguments.display_name,
+                            timeout_seconds=property_rename_arguments.timeout_seconds,
+                        ),
+                    ),
+                )
             if name == "onboarding_guide":
                 guide_arguments = _OnboardingGuideArguments.model_validate(raw_arguments)
                 return _tool_success(

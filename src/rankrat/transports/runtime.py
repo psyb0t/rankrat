@@ -30,6 +30,7 @@ from rankrat.services.capabilities import CapabilityService
 from rankrat.services.cross_provider import CrossProviderService
 from rankrat.services.diagnostics import DiagnosticsService
 from rankrat.services.google_analytics import GoogleAnalyticsDataService
+from rankrat.services.google_analytics_admin import GoogleAnalyticsAdminService
 from rankrat.services.google_indexing import GoogleIndexingService
 from rankrat.services.google_indexing_metadata import GoogleIndexingMetadataService
 from rankrat.services.google_search_console import GoogleSearchConsoleService
@@ -60,6 +61,7 @@ class ApplicationServices:
     provider_readiness: ProviderReadinessService
     sites: SitesService
     onboarding_guide: OnboardingGuideService
+    google_analytics_admin: GoogleAnalyticsAdminService
     writes_enabled: bool = False
     agent_onboarding_enabled: bool = False
     indexnow: IndexNowService | None = None
@@ -178,6 +180,15 @@ def build_services(settings: Settings) -> ApplicationServices:
         ),
         sites=SitesService(policy),
         onboarding_guide=OnboardingGuideService(policy),
+        # Reads are bounded per-property and renames need the edit scope, so the
+        # one client serves both and the policy gates each call.
+        google_analytics_admin=GoogleAnalyticsAdminService(
+            policy,
+            GoogleAnalyticsAdminClient(
+                policy,
+                GoogleConfiguredTokenProvider(policy, (GOOGLE_ANALYTICS_EDIT_SCOPE,)),
+            ),
+        ),
         writes_enabled=settings.writes_enabled,
         agent_onboarding_enabled=settings.agent_onboarding_enabled,
         indexnow=indexnow,

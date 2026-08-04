@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import httpx
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from rankrat.constants import (
     GOOGLE_ANALYTICS_EDIT_SCOPE as _GOOGLE_ANALYTICS_EDIT_SCOPE,
@@ -17,7 +17,8 @@ from rankrat.constants import (
     MAX_PROVIDER_RESPONSE_BYTES,
     MAX_SITE_ONBOARDING_DISPLAY_NAME_CHARS,
 )
-from rankrat.models.boundaries import Provider
+from rankrat.errors import InputLimitError
+from rankrat.models.boundaries import Provider, ResourceKind
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import (
     AccessTokenProvider,
@@ -33,9 +34,21 @@ _GOOGLE_ANALYTICS_CREATE_PROPERTY_URL = f"{_GOOGLE_ANALYTICS_ADMIN_ROOT}/propert
 _GOOGLE_ANALYTICS_CREATE_WEB_STREAM_URL = (
     f"{_GOOGLE_ANALYTICS_ADMIN_ROOT}/properties/{{property_id}}/dataStreams"
 )
+_GOOGLE_ANALYTICS_LIST_DATA_STREAMS_URL = (
+    f"{_GOOGLE_ANALYTICS_ADMIN_ROOT}/properties/{{property_id}}/dataStreams"
+)
+_GOOGLE_ANALYTICS_UPDATE_ACCOUNT_URL = f"{_GOOGLE_ANALYTICS_ADMIN_ROOT}/accounts/{{account_id}}"
+_GOOGLE_ANALYTICS_UPDATE_PROPERTY_URL = f"{_GOOGLE_ANALYTICS_ADMIN_ROOT}/properties/{{property_id}}"
 _AUTHORIZATION_HEADER = "Authorization"
 _BEARER_PREFIX = "Bearer "
 _HTTP_POST = "POST"
+_HTTP_GET = "GET"
+_HTTP_PATCH = "PATCH"
+# The Admin API ignores any field absent from updateMask, and the mask is in
+# snake case while the body is camel case.
+_GA4_DISPLAY_NAME_UPDATE_MASK = "display_name"
+_GA4_DATA_STREAM_PAGE_SIZE = 200
+_GA4_MAX_DATA_STREAM_PAGES = 10
 _GA4_ACCOUNT_RESOURCE_PREFIX = "accounts/"
 _GA4_PROPERTY_RESOURCE_PREFIX = "properties/"
 _GA4_WEB_STREAM_TYPE = "WEB_DATA_STREAM"
@@ -61,6 +74,25 @@ class Ga4SiteProperty:
 
     property_id: str
     measurement_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class Ga4DataStream:
+    """One configured property's data stream, with its measurement ID when it is a web stream."""
+
+    stream_id: str
+    display_name: str
+    stream_type: str
+    default_uri: str | None
+    measurement_id: str | None
+
+
+@dataclass(frozen=True, slots=True)
+class Ga4RenamedResource:
+    """The post-rename state of one GA4 account or property."""
+
+    resource_id: str
+    display_name: str
 
 
 class _Ga4PropertyResponse(BaseModel):
@@ -92,14 +124,39 @@ class _Ga4WebStreamDataResponse(BaseModel):
 
 
 class _Ga4DataStreamResponse(BaseModel):
-    """Strict subset of the Admin API data-stream create response."""
+    """Strict subset of the Admin API data-stream response.
+
+    webStreamData is optional because a property's streams may be Android or iOS
+    app streams, which carry no measurement ID. The create path still requires
+    one and checks for it explicitly.
+    """
 
     model_config = ConfigDict(extra="ignore", frozen=True, strict=True)
 
     name: str
     displayName: str
     type: str
-    webStreamData: _Ga4WebStreamDataResponse
+    webStreamData: _Ga4WebStreamDataResponse | None = None
+
+
+class _Ga4DataStreamListResponse(BaseModel):
+    """Strict subset of the Admin API data-stream list page."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, strict=True)
+
+    dataStreams: list[_Ga4DataStreamResponse] = Field(
+        default_factory=list[_Ga4DataStreamResponse],
+    )
+    nextPageToken: str | None = None
+
+
+class _Ga4AccountResponse(BaseModel):
+    """Strict subset of the Admin API account response."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, strict=True)
+
+    name: str
+    displayName: str
 
 
 class GoogleAnalyticsAdminClient:
@@ -162,6 +219,90 @@ class GoogleAnalyticsAdminClient:
         )
         return Ga4SiteProperty(property_id, measurement_id)
 
+    async def list_data_streams(
+        self,
+        request: ProviderReadRequest,
+        property_id: str,
+    ) -> tuple[Ga4DataStream, ...]:
+        """List one configured property's data streams, including their measurement IDs."""
+
+        account = self._boundary_policy.require_resource(
+            str(request.account_id),
+            Provider.GOOGLE,
+            ResourceKind.GA4_PROPERTY,
+            property_id,
+        )
+        token = await self._token_for_account(account.credential)
+        streams: list[Ga4DataStream] = []
+        page_token: str | None = None
+        for _ in range(_GA4_MAX_DATA_STREAM_PAGES):
+            params = {"pageSize": str(_GA4_DATA_STREAM_PAGE_SIZE)}
+            if page_token is not None:
+                params["pageToken"] = page_token
+            payload = await self._request_json(
+                _GOOGLE_ANALYTICS_LIST_DATA_STREAMS_URL.format(property_id=property_id),
+                token,
+                request.timeout_seconds,
+                method=_HTTP_GET,
+                params=params,
+            )
+            page, page_token = self._validate_data_stream_page(payload, property_id)
+            streams.extend(page)
+            if page_token is None:
+                return tuple(streams)
+        raise ProviderOperationError(
+            ProviderFailureCode.INVALID_RESPONSE,
+            "Google Analytics Admin returned more data-stream pages than allowed",
+        )
+
+    async def update_account_display_name(
+        self,
+        request: ProviderReadRequest,
+        analytics_account_id: str,
+        display_name: str,
+    ) -> Ga4RenamedResource:
+        """Rename one GA4 account the configured credential can administer."""
+
+        # Renaming reaches an account-wide resource rather than a listed one, so
+        # it rides the same explicit switch that permits account discovery.
+        account = self._boundary_policy.require_google_account_discovery(str(request.account_id))
+        _require_ga4_resource_id(analytics_account_id, "account")
+        token = await self._token_for_account(account.credential)
+        payload = await self._request_json(
+            _GOOGLE_ANALYTICS_UPDATE_ACCOUNT_URL.format(account_id=analytics_account_id),
+            token,
+            request.timeout_seconds,
+            {"displayName": display_name},
+            method=_HTTP_PATCH,
+            params={"updateMask": _GA4_DISPLAY_NAME_UPDATE_MASK},
+        )
+        return self._validate_renamed_account(payload, analytics_account_id, display_name)
+
+    async def update_property_display_name(
+        self,
+        request: ProviderReadRequest,
+        property_id: str,
+        display_name: str,
+    ) -> Ga4RenamedResource:
+        """Rename one configured GA4 property."""
+
+        account = self._boundary_policy.require_resource(
+            str(request.account_id),
+            Provider.GOOGLE,
+            ResourceKind.GA4_PROPERTY,
+            property_id,
+        )
+        token = await self._token_for_account(account.credential)
+        payload = await self._request_json(
+            _GOOGLE_ANALYTICS_UPDATE_PROPERTY_URL.format(property_id=property_id),
+            token,
+            request.timeout_seconds,
+            {"displayName": display_name},
+            method=_HTTP_PATCH,
+            params={"updateMask": _GA4_DISPLAY_NAME_UPDATE_MASK},
+        )
+        return self._validate_renamed_property(payload, property_id, display_name)
+
     async def _token_for_account(self, credential_path: Path) -> str:
         try:
             return await self._access_token_provider(credential_path)
@@ -178,7 +319,10 @@ class GoogleAnalyticsAdminClient:
         url: str,
         token: str,
         timeout_seconds: float,
-        payload: dict[str, object],
+        payload: dict[str, object] | None = None,
+        *,
+        method: str = _HTTP_POST,
+        params: dict[str, str] | None = None,
     ) -> object:
         try:
             async with (
@@ -189,10 +333,11 @@ class GoogleAnalyticsAdminClient:
                     timeout=httpx.Timeout(timeout_seconds),
                 ) as client,
                 client.stream(
-                    _HTTP_POST,
+                    method,
                     url,
                     headers={_AUTHORIZATION_HEADER: f"{_BEARER_PREFIX}{token}"},
                     json=payload,
+                    params=params,
                 ) as response,
             ):
                 self._raise_for_status(response)
@@ -254,18 +399,101 @@ class GoogleAnalyticsAdminClient:
             stream_id = response.name.removeprefix(expected_prefix)
             if _GA4_RESOURCE_ID_PATTERN.fullmatch(stream_id) is None:
                 raise ValueError("Google Analytics stream ID is invalid")
+            # webStreamData is optional on the shared model because app streams
+            # have none; a create response for a web stream must still carry it.
+            web_data = response.webStreamData
+            if web_data is None:
+                raise ValueError("Google Analytics web stream response has no web stream data")
             if (
                 response.displayName != request.display_name
                 or response.type != _GA4_WEB_STREAM_TYPE
-                or response.webStreamData.defaultUri != request.site_url
-                or _MEASUREMENT_ID_PATTERN.fullmatch(response.webStreamData.measurementId) is None
+                or web_data.defaultUri != request.site_url
+                or _MEASUREMENT_ID_PATTERN.fullmatch(web_data.measurementId) is None
             ):
                 raise ValueError("Google Analytics stream response does not match the request")
-            return response.webStreamData.measurementId
+            return web_data.measurementId
         except (ValidationError, ValueError) as error:
             raise ProviderOperationError(
                 ProviderFailureCode.INVALID_RESPONSE,
                 "Google Analytics Admin returned an invalid web-stream response",
+            ) from error
+
+    @staticmethod
+    def _validate_data_stream_page(
+        payload: object,
+        property_id: str,
+    ) -> tuple[tuple[Ga4DataStream, ...], str | None]:
+        try:
+            page = _Ga4DataStreamListResponse.model_validate(payload)
+            expected_prefix = f"{_GA4_PROPERTY_RESOURCE_PREFIX}{property_id}/dataStreams/"
+            streams: list[Ga4DataStream] = []
+            for stream in page.dataStreams:
+                # A stream naming another property would mean the response does
+                # not belong to the resource that was authorized.
+                if not stream.name.startswith(expected_prefix):
+                    raise ValueError("Google Analytics stream belongs to another property")
+                stream_id = stream.name.removeprefix(expected_prefix)
+                if _GA4_RESOURCE_ID_PATTERN.fullmatch(stream_id) is None:
+                    raise ValueError("Google Analytics stream ID is invalid")
+                web_data = stream.webStreamData
+                measurement_id = web_data.measurementId if web_data is not None else None
+                if (
+                    measurement_id is not None
+                    and _MEASUREMENT_ID_PATTERN.fullmatch(measurement_id) is None
+                ):
+                    raise ValueError("Google Analytics measurement ID is invalid")
+                streams.append(
+                    Ga4DataStream(
+                        stream_id=stream_id,
+                        display_name=stream.displayName,
+                        stream_type=stream.type,
+                        default_uri=web_data.defaultUri if web_data is not None else None,
+                        measurement_id=measurement_id,
+                    )
+                )
+            return tuple(streams), page.nextPageToken or None
+        except (ValidationError, ValueError) as error:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Google Analytics Admin returned an invalid data-stream response",
+            ) from error
+
+    @staticmethod
+    def _validate_renamed_account(
+        payload: object,
+        analytics_account_id: str,
+        display_name: str,
+    ) -> Ga4RenamedResource:
+        try:
+            response = _Ga4AccountResponse.model_validate(payload)
+            if response.name != f"{_GA4_ACCOUNT_RESOURCE_PREFIX}{analytics_account_id}":
+                raise ValueError("Google Analytics renamed a different account")
+            if response.displayName != display_name:
+                raise ValueError("Google Analytics account name does not match the request")
+            return Ga4RenamedResource(analytics_account_id, response.displayName)
+        except (ValidationError, ValueError) as error:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Google Analytics Admin returned an invalid account response",
+            ) from error
+
+    @staticmethod
+    def _validate_renamed_property(
+        payload: object,
+        property_id: str,
+        display_name: str,
+    ) -> Ga4RenamedResource:
+        try:
+            response = _Ga4AccountResponse.model_validate(payload)
+            if response.name != f"{_GA4_PROPERTY_RESOURCE_PREFIX}{property_id}":
+                raise ValueError("Google Analytics renamed a different property")
+            if response.displayName != display_name:
+                raise ValueError("Google Analytics property name does not match the request")
+            return Ga4RenamedResource(property_id, response.displayName)
+        except (ValidationError, ValueError) as error:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Google Analytics Admin returned an invalid property response",
             ) from error
 
     @staticmethod
@@ -319,3 +547,14 @@ def _resource_id(value: str, prefix: str) -> str:
     if resource_id == value or _GA4_RESOURCE_ID_PATTERN.fullmatch(resource_id) is None:
         raise ValueError("Google Analytics resource name is invalid")
     return resource_id
+
+
+def _require_ga4_resource_id(value: str, kind: str) -> None:
+    """Reject anything that is not a bare numeric ID before it reaches a URL path.
+
+    The request models validate this too; this is the last check before the value
+    is interpolated into an Admin API path.
+    """
+
+    if _GA4_RESOURCE_ID_PATTERN.fullmatch(value) is None:
+        raise InputLimitError(f"Google Analytics {kind} ID is invalid")

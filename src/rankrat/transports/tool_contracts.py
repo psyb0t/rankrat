@@ -17,6 +17,7 @@ from rankrat.constants import (
 from rankrat.operator.site_onboarding import SiteOnboardingReceipt
 from rankrat.providers.base import ProviderReadiness
 from rankrat.providers.google_analytics import Ga4AccountSummary, Ga4FunnelReport, Ga4ReportResult
+from rankrat.providers.google_analytics_admin import Ga4RenamedResource
 from rankrat.providers.google_indexing import GoogleIndexingMetadata, GoogleIndexingPublishReceipt
 from rankrat.services.bing import (
     BingBrandAnalysisReport,
@@ -76,6 +77,12 @@ from rankrat.services.google_analytics import (
     Ga4FixedReportRequest,
     Ga4RealtimeReportRequest,
     Ga4ReportRequest,
+)
+from rankrat.services.google_analytics_admin import (
+    Ga4AccountRenameRequest,
+    Ga4DataStreamsReport,
+    Ga4DataStreamsRequest,
+    Ga4PropertyRenameRequest,
 )
 from rankrat.services.google_indexing import (
     GoogleIndexingBatchSubmission,
@@ -200,6 +207,9 @@ _GOOGLE_SITE_SUBMIT_TOOL_NAME = "google_site_submit"
 _GOOGLE_SITEMAP_SUBMIT_TOOL_NAME = "google_sitemap_submit"
 _SITE_ONBOARDING_SUBMIT_TOOL_NAME = "site_onboarding_submit"
 _ONBOARDING_GUIDE_TOOL_NAME = "onboarding_guide"
+_GOOGLE_ANALYTICS_DATA_STREAMS_TOOL_NAME = "google_analytics_data_streams"
+_GOOGLE_ANALYTICS_ACCOUNT_RENAME_TOOL_NAME = "google_analytics_account_rename"
+_GOOGLE_ANALYTICS_PROPERTY_RENAME_TOOL_NAME = "google_analytics_property_rename"
 _PAGESPEED_ANALYZE_TOOL_NAME = "pagespeed_analyze"
 _SCHEMA_VALIDATE_HTML_TOOL_NAME = "schema_validate_html"
 _SCHEMA_VALIDATE_JSON_LD_TOOL_NAME = "schema_validate_json_ld"
@@ -208,6 +218,11 @@ _SCHEMA_VALIDATE_URL_TOOL_NAME = "schema_validate_url"
 _ONBOARDING_GUIDE_DESCRIPTION = (
     "Explain the onboarding steps only the operator can perform, and what to tell them."
 )
+_GOOGLE_ANALYTICS_DATA_STREAMS_DESCRIPTION = (
+    "List one configured GA4 property's data streams and their measurement IDs."
+)
+_GOOGLE_ANALYTICS_ACCOUNT_RENAME_DESCRIPTION = "Rename one reachable Google Analytics account."
+_GOOGLE_ANALYTICS_PROPERTY_RENAME_DESCRIPTION = "Rename one configured Google Analytics property."
 _SERVER_INFO_DESCRIPTION = "Show non-sensitive Rankrat capability metadata."
 _ACCOUNTS_LIST_DESCRIPTION = "List configured account summaries only."
 _SITES_LIST_DESCRIPTION = "List configured site and property boundaries only."
@@ -404,6 +419,13 @@ READ_ONLY_TOOL_CATALOG: tuple[ToolContract[object, object], ...] = (
         description=_ONBOARDING_GUIDE_DESCRIPTION,
         input_type=OnboardingGuideRequest,
         output_type=OnboardingGuide,
+        annotations=_READ_ONLY_ANNOTATIONS,
+    ),
+    ToolContract(
+        name=_GOOGLE_ANALYTICS_DATA_STREAMS_TOOL_NAME,
+        description=_GOOGLE_ANALYTICS_DATA_STREAMS_DESCRIPTION,
+        input_type=Ga4DataStreamsRequest,
+        output_type=Ga4DataStreamsReport,
         annotations=_READ_ONLY_ANNOTATIONS,
     ),
     ToolContract(
@@ -923,6 +945,28 @@ GOOGLE_SITEMAP_SUBMIT_TOOL_CONTRACT = cast(
     ),
 )
 
+GOOGLE_ANALYTICS_ACCOUNT_RENAME_TOOL_CONTRACT = cast(
+    ToolContract[object, object],
+    ToolContract(
+        name=_GOOGLE_ANALYTICS_ACCOUNT_RENAME_TOOL_NAME,
+        description=_GOOGLE_ANALYTICS_ACCOUNT_RENAME_DESCRIPTION,
+        input_type=Ga4AccountRenameRequest,
+        output_type=Ga4RenamedResource,
+        annotations=_INDEXNOW_WRITE_ANNOTATIONS,
+    ),
+)
+
+GOOGLE_ANALYTICS_PROPERTY_RENAME_TOOL_CONTRACT = cast(
+    ToolContract[object, object],
+    ToolContract(
+        name=_GOOGLE_ANALYTICS_PROPERTY_RENAME_TOOL_NAME,
+        description=_GOOGLE_ANALYTICS_PROPERTY_RENAME_DESCRIPTION,
+        input_type=Ga4PropertyRenameRequest,
+        output_type=Ga4RenamedResource,
+        annotations=_INDEXNOW_WRITE_ANNOTATIONS,
+    ),
+)
+
 SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT = cast(
     ToolContract[object, object],
     ToolContract(
@@ -951,6 +995,8 @@ def tool_catalog(
             GOOGLE_INDEXING_BATCH_SUBMIT_TOOL_CONTRACT,
             GOOGLE_SITE_SUBMIT_TOOL_CONTRACT,
             GOOGLE_SITEMAP_SUBMIT_TOOL_CONTRACT,
+            GOOGLE_ANALYTICS_ACCOUNT_RENAME_TOOL_CONTRACT,
+            GOOGLE_ANALYTICS_PROPERTY_RENAME_TOOL_CONTRACT,
         )
         if agent_onboarding_enabled:
             return (*write_catalog, SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT)

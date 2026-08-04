@@ -37,6 +37,7 @@ tool surface is still free to move.
 - [Running it](#running-it)
 - [Agent integrations](#agent-integrations)
 - [Write capability](#write-capability)
+- [Finding and naming GA4 containers](#finding-and-naming-ga4-containers)
 - [Onboarding a new site](#onboarding-a-new-site)
 - [Credentials](#credentials)
 - [Configuration](#configuration)
@@ -201,6 +202,33 @@ HTTP; stdio access is controlled by who can start the process.
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
 Indexing notifications, Search Console site/sitemap changes, and new-site
 onboarding. They are marked destructive/non-idempotent in MCP.
+
+## Finding and naming GA4 containers
+
+GA4 files every property under an *account*, chosen from a dropdown when the
+property is created. Nobody picks it deliberately, so properties routinely end up
+under an account named for something unrelated — an old merch store, or the
+`Google Ads Account` that Ads auto-creates — and then cannot be found in the UI.
+
+Three read-only tools answer "where does this live":
+
+| Tool / route | Answers |
+| --- | --- |
+| `google_analytics_account_inventory` | Every account the credential can see, with its properties |
+| `google_analytics_data_streams` | One configured property's streams and their `G-` measurement IDs |
+| `accounts_list` / `sites_list` | The boundary as this server enforces it |
+
+The data-stream read is the one that closes a specific trap: a site's tag carries
+a `G-` measurement ID, and until now the only way to confirm it belonged to the
+property Rankrat reads from was the Google Analytics UI. Deploying a tag whose
+measurement ID points at a different property produces a property that stays
+empty and a tag that looks correctly installed.
+
+Renaming is available in writable mode — `google_analytics_account_rename` and
+`google_analytics_property_rename`, or `POST /v1/google-analytics/account-renames`
+and `/property-renames`. Account names are cosmetic: the numeric ID is what every
+boundary, measurement ID and report binds to, so renaming an account breaks
+nothing and is the cheapest fix for a misfiled property.
 
 ## Onboarding a new site
 
@@ -472,11 +500,16 @@ leaves the earlier resources real but unrecorded, and because the boundary file
 was never written, re-running creates a second copy of them. Check Google
 Analytics before retrying.
 
-**No way to read GA4 data streams.** Nothing exposes the measurement ID attached
-to a configured property, so confirming that a site's `G-` tag matches the
-property Rankrat reads from has to happen in the Google Analytics UI.
-`src/rankrat/providers/google_analytics_admin.py` already calls the
-`properties/{id}/dataStreams` endpoint while onboarding, but only to create.
+**GA4 accounts cannot be created from here, and that one is Google's limit, not
+Rankrat's.** The Admin API has no `accounts.create`; account provisioning goes
+through `provisionAccountTicket`, which returns a ticket that must be completed
+in the Google Analytics UI because it involves accepting terms. Property
+creation is available and is what `onboard-site` uses.
+
+**Nothing deletes.** `accounts.delete` soft-deletes an entire container and
+everything beneath it, and no report this server serves justifies putting that
+call behind an agent-reachable tool. Renaming is wrapped; deleting is not, and
+that is deliberate rather than pending.
 
 ## License
 

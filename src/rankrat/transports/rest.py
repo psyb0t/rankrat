@@ -20,6 +20,12 @@ from rankrat.constants import (
     GA4_SEARCH_CONSOLE_COMPARISON_PATH,
     GOOGLE_ANALYTICS_ACCOUNT_INVENTORY_OPERATION,
     GOOGLE_ANALYTICS_ACCOUNT_INVENTORY_PATH,
+    GOOGLE_ANALYTICS_ACCOUNT_RENAME_OPERATION,
+    GOOGLE_ANALYTICS_ACCOUNT_RENAME_PATH,
+    GOOGLE_ANALYTICS_DATA_STREAMS_OPERATION,
+    GOOGLE_ANALYTICS_DATA_STREAMS_PATH,
+    GOOGLE_ANALYTICS_PROPERTY_RENAME_OPERATION,
+    GOOGLE_ANALYTICS_PROPERTY_RENAME_PATH,
     ISO_CURRENCY_CODE_CHARS,
     MAX_ANALYTICS_DIMENSIONS,
     MAX_ANALYTICS_FILTERS,
@@ -91,6 +97,11 @@ from rankrat.services.google_analytics import (
     Ga4FixedReportRequest,
     Ga4RealtimeReportRequest,
     Ga4ReportRequest,
+)
+from rankrat.services.google_analytics_admin import (
+    Ga4AccountRenameRequest,
+    Ga4DataStreamsRequest,
+    Ga4PropertyRenameRequest,
 )
 from rankrat.services.google_indexing import (
     GoogleIndexingBatchNotification,
@@ -361,6 +372,44 @@ class _Ga4DateRangeBody(BaseModel):
 
     start_date: date
     end_date: date
+
+
+class _Ga4DataStreamsBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    property_id: str = Field(pattern=r"^[0-9]+$")
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _Ga4AccountRenameBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    analytics_account_id: str = Field(pattern=r"^[0-9]+$")
+    display_name: str = Field(min_length=1, max_length=255)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _Ga4PropertyRenameBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    property_id: str = Field(pattern=r"^[0-9]+$")
+    display_name: str = Field(min_length=1, max_length=255)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
 
 
 class _Ga4AccountDiscoveryBody(BaseModel):
@@ -1043,6 +1092,24 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                     account_id=body.account_id,
                     site_url=body.site_url,
                     inspection_urls=body.inspection_urls,
+                    timeout_seconds=body.timeout_seconds,
+                )
+            )
+        )
+
+    @router.post(
+        GOOGLE_ANALYTICS_DATA_STREAMS_PATH,
+        response_model=None,
+        operation_id=GOOGLE_ANALYTICS_DATA_STREAMS_OPERATION,
+    )
+    async def google_analytics_data_streams(
+        body: _Ga4DataStreamsBody,
+    ) -> JsonValue:
+        return to_json_value(
+            await services.google_analytics_admin.list_data_streams(
+                Ga4DataStreamsRequest(
+                    account_id=body.account_id,
+                    property_id=body.property_id,
                     timeout_seconds=body.timeout_seconds,
                 )
             )
@@ -1919,6 +1986,42 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         site_url=body.site_url,
                         sitemap_url=body.sitemap_url,
                         operation=body.operation,
+                        timeout_seconds=body.timeout_seconds,
+                    )
+                )
+            )
+
+    if services.writes_enabled:
+
+        @router.post(
+            GOOGLE_ANALYTICS_ACCOUNT_RENAME_PATH,
+            response_model=None,
+            operation_id=GOOGLE_ANALYTICS_ACCOUNT_RENAME_OPERATION,
+        )
+        async def google_analytics_account_rename(body: _Ga4AccountRenameBody) -> JsonValue:
+            return to_json_value(
+                await services.google_analytics_admin.rename_account(
+                    Ga4AccountRenameRequest(
+                        account_id=body.account_id,
+                        analytics_account_id=body.analytics_account_id,
+                        display_name=body.display_name,
+                        timeout_seconds=body.timeout_seconds,
+                    )
+                )
+            )
+
+        @router.post(
+            GOOGLE_ANALYTICS_PROPERTY_RENAME_PATH,
+            response_model=None,
+            operation_id=GOOGLE_ANALYTICS_PROPERTY_RENAME_OPERATION,
+        )
+        async def google_analytics_property_rename(body: _Ga4PropertyRenameBody) -> JsonValue:
+            return to_json_value(
+                await services.google_analytics_admin.rename_property(
+                    Ga4PropertyRenameRequest(
+                        account_id=body.account_id,
+                        property_id=body.property_id,
+                        display_name=body.display_name,
                         timeout_seconds=body.timeout_seconds,
                     )
                 )

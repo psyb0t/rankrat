@@ -124,6 +124,25 @@ configured.
 The repo ships a `rankrat.sh` wrapper around exactly these invocations for
 humans; an agent does not need it.
 
+### Finding where a site lives, and matching its tag
+
+GA4 nests every property under an *account*, and properties routinely sit under
+an unrelated one because that is whatever the dropdown defaulted to when they
+were created. `google_analytics_account_inventory` lists every account the
+credential can see with its properties — that is the tool for "which account is
+this site under", and the answer is often surprising.
+
+`google_analytics_data_streams` returns a configured property's streams and their
+`G-` measurement IDs. Use it before telling anyone their tag is installed
+correctly: a tag whose measurement ID belongs to a different property looks
+perfectly installed and reports into a property nobody is reading.
+
+`google_analytics_account_rename` and `google_analytics_property_rename` exist in
+writable mode. Account names are cosmetic — the numeric ID is what boundaries,
+measurement IDs and reports bind to — so renaming is safe and is the usual fix
+for a misfiled property. There is no create and no delete: GA4 has no account
+create API at all, and deletion is deliberately not wrapped.
+
 ### Onboarding a site
 
 Read the `rankrat://onboarding` resource before saying anything about onboarding,

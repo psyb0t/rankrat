@@ -696,6 +696,28 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Google Analytics Account Inventory
+  /v1/google-analytics/account-renames:
+    post:
+      operationId: googleAnalyticsAccountRename
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_Ga4AccountRenameBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Google Analytics Account Rename
   /v1/google-analytics/audience-segments:
     post:
       operationId: googleAnalyticsAudienceSegments
@@ -762,6 +784,28 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Google Analytics Conversion Funnel
+  /v1/google-analytics/data-streams:
+    post:
+      operationId: googleAnalyticsDataStreams
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_Ga4DataStreamsBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Google Analytics Data Streams
   /v1/google-analytics/ecommerce-performance:
     post:
       operationId: googleAnalyticsEcommercePerformance
@@ -828,6 +872,28 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Google Analytics Organic Search Landing Pages
+  /v1/google-analytics/property-renames:
+    post:
+      operationId: googleAnalyticsPropertyRename
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_Ga4PropertyRenameBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Google Analytics Property Rename
   /v1/google-analytics/realtime-reports:
     post:
       operationId: googleAnalyticsRealtimeReport
@@ -2230,6 +2296,34 @@ components:
       - account_id
       title: _Ga4AccountDiscoveryBody
       type: object
+    _Ga4AccountRenameBody:
+      additionalProperties: false
+      properties:
+        account_id:
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+          type: string
+        analytics_account_id:
+          pattern: ^[0-9]+$
+          title: Analytics Account Id
+          type: string
+        display_name:
+          maxLength: 255
+          minLength: 1
+          title: Display Name
+          type: string
+        timeout_seconds:
+          default: 10.0
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          type: number
+      required:
+      - account_id
+      - analytics_account_id
+      - display_name
+      title: _Ga4AccountRenameBody
+      type: object
     _Ga4ConversionFunnelBody:
       additionalProperties: false
       properties:
@@ -2275,6 +2369,28 @@ components:
       - end_date
       - event_names
       title: _Ga4ConversionFunnelBody
+      type: object
+    _Ga4DataStreamsBody:
+      additionalProperties: false
+      properties:
+        account_id:
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+          type: string
+        property_id:
+          pattern: ^[0-9]+$
+          title: Property Id
+          type: string
+        timeout_seconds:
+          default: 10.0
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          type: number
+      required:
+      - account_id
+      - property_id
+      title: _Ga4DataStreamsBody
       type: object
     _Ga4DateRangeBody:
       additionalProperties: false
@@ -2381,6 +2497,34 @@ components:
       - start_date
       - end_date
       title: _Ga4PageSpeedCorrelationBody
+      type: object
+    _Ga4PropertyRenameBody:
+      additionalProperties: false
+      properties:
+        account_id:
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+          type: string
+        display_name:
+          maxLength: 255
+          minLength: 1
+          title: Display Name
+          type: string
+        property_id:
+          pattern: ^[0-9]+$
+          title: Property Id
+          type: string
+        timeout_seconds:
+          default: 10.0
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          type: number
+      required:
+      - account_id
+      - property_id
+      - display_name
+      title: _Ga4PropertyRenameBody
       type: object
     _Ga4RealtimeReportBody:
       additionalProperties: false

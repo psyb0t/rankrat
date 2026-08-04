@@ -2,6 +2,37 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.4.0 — unreleased
+
+Answers "where is this site filed, and does its tag point at the property I am
+reading" without the Google Analytics UI.
+
+- **`google_analytics_data_streams`** — a read-only tool and
+  `POST /v1/google-analytics/data-streams`, returning a configured property's
+  data streams with their `G-` measurement IDs. This closes a real trap: a tag
+  whose measurement ID belongs to a different property looks correctly installed
+  and reports into a property nobody reads, and confirming the match previously
+  required the web UI. Bounded by the same per-property allow-list as every other
+  GA4 read, and present on read-only servers. App streams carry no
+  `webStreamData`, so the measurement ID and URI come back null rather than
+  failing the read.
+- **`google_analytics_account_rename` and `google_analytics_property_rename`** —
+  writable mode only, over MCP and `POST /v1/google-analytics/account-renames`
+  and `/property-renames`. GA4 account names are cosmetic; the numeric ID is what
+  boundaries, measurement IDs and reports bind to, so renaming an account is the
+  cheapest fix for a property filed under an unrelated one. Property renames are
+  gated per-property; account renames ride the existing
+  `google_account_discovery` switch, since a rename reaches an account-wide
+  resource rather than a listed one.
+- **Nothing creates or deletes a GA4 container.** `accounts.delete` soft-deletes
+  an entire container and everything beneath it and is deliberately not wrapped.
+  Account *creation* is not implementable at all — the Admin API has no
+  `accounts.create`, only `provisionAccountTicket`, which must be completed in
+  the UI.
+- Renames send a `PATCH` with an explicit `updateMask` and verify that the
+  response names the resource that was requested, so a response describing a
+  different account or property is rejected rather than reported as success.
+
 ## v0.3.0 — 2026-08-04
 
 Drops the GA4 parent-account pin from the boundary file.
