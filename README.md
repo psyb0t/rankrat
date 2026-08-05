@@ -3,9 +3,9 @@
 <!-- mcp-name: io.github.psyb0t/rankrat -->
 
 [![CI](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml/badge.svg?branch=main)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
-[![coverage](https://raw.githubusercontent.com/psyb0t/rankrat/badges/coverage.svg)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
 [![version](https://raw.githubusercontent.com/psyb0t/rankrat/badges/version.svg)](https://github.com/psyb0t/rankrat/tags)
 [![license](https://raw.githubusercontent.com/psyb0t/rankrat/badges/license.svg)](LICENSE)
+[![coverage](https://raw.githubusercontent.com/psyb0t/rankrat/badges/coverage.svg)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
 
 Search Console, Bing Webmaster Tools, GA4 and PageSpeed each ship a dashboard.
@@ -515,23 +515,6 @@ set. Use an already-public harmless URL.
   secret mounts.
 
 ## Known gaps
-
-**The published image carries a known high-severity advisory.**
-[CVE-2026-69247](https://github.com/advisories/GHSA-g6cj-pr64-35w5) is a
-Bleichenbacher oracle in `cryptography`'s PKCS#7 `EnvelopedData` decryption,
-affecting `>= 44.0.0, < 50.0.0`. The image ships 49.0.0, reached transitively as
-`cryptography` ← `pyjwt` ← `mcp`. Rankrat itself has no PKCS#7 code path — it
-never calls `pkcs7_decrypt_der` / `pkcs7_decrypt_pem` / `pkcs7_decrypt_smime`,
-handles no `EnvelopedData`, and does not import `jwt` — so the vulnerable
-functions are present but unreached. The fix, `cryptography` 50.0.0, was
-published on 2026-07-31 and is held out by the dependency age gate in
-`pyproject.toml` (`exclude-newer`), which refuses releases younger than seven
-days; it becomes installable on 2026-08-07. Waiting was chosen over overriding
-that gate, because a fresh release window is the supply-chain hijack window and
-a cryptography library is a poor candidate for rushing one.
-The tracked OpenVEX statement identifies this exact package version and call
-path; a security regression test fails if Rankrat begins using the affected
-PKCS#7 entry points or if the locked version and scanner exception diverge.
 
 **Onboarding does not roll back a partial failure.** `onboard-site` creates the
 GA4 property, then the Search Console property, then the Bing site, and writes

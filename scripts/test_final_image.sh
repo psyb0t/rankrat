@@ -4,7 +4,7 @@ set -euo pipefail
 readonly HTTP_PORT=8080
 readonly HTTP_RETRY_COUNT=10
 readonly HTTP_CONNECT_TIMEOUT_SECONDS=2
-readonly MCP_TIMEOUT_SECONDS=10
+readonly MCP_TIMEOUT_SECONDS=30
 readonly SCHEMA_VALIDATE_URL_PATH="/v1/schema/validate-url"
 readonly SERVER_INFO_URL_PATH="/v1/server-info"
 readonly SITE_ONBOARDING_URL_PATH="/v1/site-onboarding-submissions"

@@ -23,6 +23,7 @@ _TEST_UPSTREAM_MESSAGE = "upstream response must never appear in verifier output
 _HTTP_OK_STATUS = 200
 _HTTP_BAD_GATEWAY_STATUS = 502
 _MCP_PROTOCOL_VERSION = "2025-03-26"
+_MINIMUM_COLD_START_MCP_TIMEOUT_SECONDS = 30
 _PROVIDER_AUTHENTICATION_CODE = "AUTHENTICATION"
 
 
@@ -211,6 +212,12 @@ def test_final_image_streamable_mcp_uses_the_mcp_timeout_budget() -> None:
     assert '--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS"' in streamable_mcp_block
     assert '--max-time "$MCP_TIMEOUT_SECONDS"' in streamable_mcp_block
     assert '--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS"' not in streamable_mcp_block
+
+    timeout_assignment = next(
+        line for line in script.splitlines() if line.startswith("readonly MCP_TIMEOUT_SECONDS=")
+    )
+    timeout_seconds = int(timeout_assignment.partition("=")[2])
+    assert timeout_seconds >= _MINIMUM_COLD_START_MCP_TIMEOUT_SECONDS
 
 
 @pytest.mark.parametrize("argument_count", [0, 5, 7])

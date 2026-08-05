@@ -2,6 +2,23 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.4.1 — 2026-08-05
+
+Remediates the published image's transitive cryptography advisory and restores
+Dependabot compatibility.
+
+- Upgrades every build stage from uv 0.8.8 to the immutable uv 0.11.31 image
+  and upgrades the locked `cryptography` package from 49.0.0 to 50.0.0, which
+  contains the PKCS#7 decryption fix for CVE-2026-69247.
+- Keeps the seven-day dependency cooldown for the rest of the graph while using
+  a package-specific cutoff that admits the first fixed cryptography release.
+- Removes the obsolete pip-audit suppression and OpenVEX statement for
+  cryptography 49.0.0. The generated production SBOM now contains
+  cryptography 50.0.0 and produces no cryptography match in the image scan.
+- Gives cold-started stdio MCP image checks a 30-second timeout budget. The
+  prior 10-second process timeout could kill a correct response on a loaded
+  Docker host; the container memory and CPU limits are unchanged.
+
 ## v0.4.0 — 2026-08-05
 
 Answers "where is this site filed, and does its tag point at the property I am

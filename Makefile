@@ -37,7 +37,6 @@ SBOM_CYCLONEDX_JSON := $(SBOM_DIR)/rankrat.cyclonedx.json
 VULNERABILITY_DB_DIR := $(PWD)/.grype-db
 VULNERABILITY_REPORT := $(SBOM_DIR)/rankrat.grype.json
 CPYTHON_STDLIB_VEX := $(PWD)/security/rankrat-cpython.openvex.json
-PIP_AUDIT_IGNORED_VULNS := PYSEC-2026-3552
 COVERAGE_LOG := $(PWD)/.coverage-report.log
 COVERAGE_PERCENT_FILE := $(PWD)/coverage-percent.txt
 BUMP_EXCLUDE_NEWER := bash scripts/bump-exclude-newer.sh
@@ -297,8 +296,7 @@ coverage-percent: ## Write the total coverage percentage to coverage-percent.txt
 	@echo "coverage: $$(cat $(COVERAGE_PERCENT_FILE))%"
 
 audit: dev-image ## Audit locked Python dependencies in the dev container
-	$(DEV_RUN) uv run --frozen --no-sync pip-audit \
-		$(foreach vulnerability,$(PIP_AUDIT_IGNORED_VULNS),--ignore-vuln $(vulnerability))
+	$(DEV_RUN) uv run --frozen --no-sync pip-audit
 
 audit-secrets: ## Scan Rankrat-owned files for credentials with pinned Gitleaks
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \

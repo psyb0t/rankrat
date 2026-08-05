@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rankrat"
-version = "0.4.0"
+version = "0.4.1"
 description = "A security-first, boundary-limited SEO and search analytics service over REST and MCP."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
@@ -55,8 +55,9 @@ dev = [
 packages = ["src/rankrat"]
 
 [tool.uv]
-exclude-newer = "2026-07-25T00:00:00Z"
-required-version = "==0.8.8"
+exclude-newer = "2026-07-29T00:00:00Z"
+exclude-newer-package = { cryptography = "2026-08-01T00:00:00Z" }
+required-version = "==0.11.31"
 
 [tool.pytest.ini_options]
 addopts = "--strict-config --strict-markers --import-mode=importlib"

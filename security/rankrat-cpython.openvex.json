@@ -3,8 +3,8 @@
   "@id": "https://github.com/psyb0t/rankrat/security/rankrat-cpython.openvex.json",
   "author": "psyb0t/rankrat maintainers",
   "role": "Product security assessment",
-  "timestamp": "2026-08-05T11:14:56Z",
-  "version": 2,
+  "timestamp": "2026-08-05T14:29:27Z",
+  "version": 3,
   "statements": [
     {
       "vulnerability": {
@@ -44,19 +44,6 @@
       "status": "not_affected",
       "justification": "vulnerable_code_not_in_execute_path",
       "impact_statement": "Rankrat uses a bounded internal JSON-LD scanner and has no html.parser or HTMLParser import or call path."
-    },
-    {
-      "vulnerability": {
-        "name": "GHSA-g6cj-pr64-35w5"
-      },
-      "products": [
-        {
-          "@id": "pkg:pypi/cryptography@49.0.0"
-        }
-      ],
-      "status": "not_affected",
-      "justification": "vulnerable_code_not_in_execute_path",
-      "impact_statement": "Rankrat receives cryptography through MCP JWT support but has no PKCS#7 EnvelopedData decryption import or call path."
     }
   ]
 }
