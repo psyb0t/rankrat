@@ -18,7 +18,12 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from rankrat import __version__
 from rankrat.config import Settings
-from rankrat.constants import HEALTH_PATH, MAX_HTTP_BODY_BYTES, MCP_PATH
+from rankrat.constants import (
+    HEALTH_PATH,
+    MAX_HTTP_BODY_BYTES,
+    MCP_PATH,
+    PROVIDER_OPERATION_FAILED_MESSAGE,
+)
 from rankrat.errors import IndexNowRateLimitError, InputLimitError, RankratError
 from rankrat.logging import reset_log_scope, with_log_scope
 from rankrat.models.common import to_json_value
@@ -261,7 +266,10 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
         status_code = 429 if error.code is ProviderFailureCode.RATE_LIMITED else 502
         return JSONResponse(
             status_code=status_code,
-            content={"code": error.code.value, "message": str(error)},
+            content={
+                "code": error.code.value,
+                "message": PROVIDER_OPERATION_FAILED_MESSAGE,
+            },
         )
 
     @app.get(HEALTH_PATH)

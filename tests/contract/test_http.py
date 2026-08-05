@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import uuid
 from pathlib import Path
 from typing import Protocol, cast
@@ -12,7 +13,12 @@ from starlette.types import Message, Receive, Scope, Send
 from rankrat.config import Settings
 from rankrat.errors import InputLimitError
 from rankrat.models.boundaries import Provider
-from rankrat.providers.base import ProviderReadiness, ProviderReadRequest
+from rankrat.providers.base import (
+    ProviderFailureCode,
+    ProviderOperationError,
+    ProviderReadiness,
+    ProviderReadRequest,
+)
 from rankrat.providers.google_analytics import Ga4ReportResult
 from rankrat.providers.google_indexing import GoogleIndexingMetadata
 from rankrat.providers.google_search_console import (
@@ -30,6 +36,13 @@ from rankrat.transports.runtime import ApplicationServices
 
 class _WrappedApp(Protocol):
     _app: object
+
+
+def _unwrap_fastapi(app: object) -> FastAPI:
+    current = app
+    while not isinstance(current, FastAPI):
+        current = cast(_WrappedApp, current)._app
+    return current
 
 
 @pytest.mark.asyncio
@@ -380,7 +393,10 @@ async def test_http_rest_contract_and_security_headers(
             params={"account_id": "google-main"},
         )
         assert provider_error.status_code == 502
-        assert provider_error.json()["code"] == "AUTHENTICATION"
+        assert provider_error.json() == {
+            "code": "AUTHENTICATION",
+            "message": "provider operation failed",
+        }
 
         analytics_response = await client.post(
             "/v1/google/search-analytics-queries",
@@ -1407,6 +1423,98 @@ async def test_http_write_contract_when_read_only_is_disabled(
     }
     assert invalid.status_code == 400
     assert invalid.json()["code"] == "REQUEST_REJECTED"
+
+
+@pytest.mark.parametrize("failure_code", list(ProviderFailureCode))
+@pytest.mark.asyncio
+async def test_rest_provider_errors_preserve_only_the_safe_failure_category(
+    deployment: tuple[Settings, ApplicationServices],
+    monkeypatch: pytest.MonkeyPatch,
+    failure_code: ProviderFailureCode,
+) -> None:
+    settings, services = deployment
+    upstream_detail = "upstream credential and response must not cross the HTTP boundary"
+
+    async def fail(*_: object) -> ProviderReadiness:
+        raise ProviderOperationError(failure_code, upstream_detail)
+
+    monkeypatch.setattr(services.provider_readiness, "readiness", fail)
+    app = create_http_app(settings, services)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://rankrat.test",
+    ) as client:
+        response = await client.get(
+            "/v1/provider-readiness",
+            params={"account_id": "google-main"},
+        )
+
+    expected_status = 429 if failure_code is ProviderFailureCode.RATE_LIMITED else 502
+    assert response.status_code == expected_status
+    assert response.json() == {
+        "code": failure_code.value,
+        "message": "provider operation failed",
+    }
+    assert upstream_detail not in response.text
+
+
+@pytest.mark.asyncio
+async def test_streamable_http_mcp_calls_tools_and_sanitizes_provider_errors(
+    deployment: tuple[Settings, ApplicationServices],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings, services = deployment
+    upstream_detail = "upstream OAuth token must not cross Streamable HTTP MCP"
+
+    async def fail(*_: object) -> ProviderReadiness:
+        raise ProviderOperationError(ProviderFailureCode.AUTHENTICATION, upstream_detail)
+
+    monkeypatch.setattr(services.provider_readiness, "readiness", fail)
+    app = create_http_app(settings, services)
+    fastapi_app = _unwrap_fastapi(app)
+    headers = {
+        "accept": "application/json, text/event-stream",
+        "content-type": "application/json",
+    }
+    initialize_request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "rankrat-contract", "version": "0"},
+        },
+    }
+    tool_request = {
+        "jsonrpc": "2.0",
+        "id": 2,
+        "method": "tools/call",
+        "params": {
+            "name": "provider_readiness",
+            "arguments": {"account_id": "google-main"},
+        },
+    }
+    async with (
+        fastapi_app.router.lifespan_context(fastapi_app),
+        httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app),
+            base_url="http://rankrat.test",
+        ) as client,
+    ):
+        initialized = await client.post("/mcp/", headers=headers, json=initialize_request)
+        called = await client.post("/mcp/", headers=headers, json=tool_request)
+
+    assert initialized.status_code == 200
+    assert initialized.json()["result"]["protocolVersion"]
+    assert called.status_code == 200
+    content = called.json()["result"]["content"][0]
+    assert json.loads(content["text"]) == {
+        "code": "AUTHENTICATION",
+        "message": "provider operation failed",
+    }
+    assert called.json()["result"]["isError"] is True
+    assert upstream_detail not in called.text
 
 
 @pytest.mark.asyncio

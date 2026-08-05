@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from rankrat.policy.boundaries import BoundaryPolicy
 
 _SCRIPT_PATH = Path("scripts/run_live_http_image.py")
 _SHELL_SCRIPT_PATH = Path("scripts/test_live_http_image.sh")
+_FINAL_IMAGE_SCRIPT_PATH = Path("scripts/test_final_image.sh")
 _MAKEFILE_PATH = Path("Makefile")
 _MODULE_NAME = "rankrat_live_http_image"
 _TEST_BEARER_SECRET = "test-only-not-a-real-secret-value-000000000000"
@@ -176,6 +178,7 @@ def test_live_http_make_target_uses_production_and_dev_images() -> None:
     assert "scripts/test_live_http_image.sh" in target
     assert "$(IMAGE_NAME):$(IMAGE_TAG)" in target
     assert "$(DEV_IMAGE)" in target
+    assert "$(ENV_FILE)" not in target
 
 
 def test_live_http_shell_runner_uses_default_egress_and_never_submits_indexnow() -> None:
@@ -187,11 +190,43 @@ def test_live_http_shell_runner_uses_default_egress_and_never_submits_indexnow()
     assert "--read-only" in script
     assert "--cap-drop=ALL" in script
     assert "no-new-privileges:true" in script
+    assert 'install -m 600 "$boundary_file" "$runtime_config_directory/boundaries.json"' in script
+    assert "src=$runtime_config_directory,dst=/run/config,readonly" in script
+    assert "dst=/run/config/boundaries.json" not in script
     assert '--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly"' in script
     assert '--mount "type=bind,src=$oauth_directory,dst=/run/oauth"' in script
     assert '--mount "type=bind,src=$oauth_directory,dst=/run/oauth,readonly"' in script
     assert "run_live_http_image.py" in script
     assert "indexnow" not in script.lower()
+    assert "environment_file" not in script
+    assert "--env-file" not in script
+
+
+def test_final_image_streamable_mcp_uses_the_mcp_timeout_budget() -> None:
+    script = _FINAL_IMAGE_SCRIPT_PATH.read_text(encoding="utf-8")
+    streamable_mcp_block = script.split('streamable_mcp_output=""', maxsplit=1)[1].split(
+        "unauthorized_openapi_status=", maxsplit=1
+    )[0]
+
+    assert '--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS"' in streamable_mcp_block
+    assert '--max-time "$MCP_TIMEOUT_SECONDS"' in streamable_mcp_block
+    assert '--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS"' not in streamable_mcp_block
+
+
+@pytest.mark.parametrize("argument_count", [0, 5, 7])
+def test_live_http_shell_runner_rejects_wrong_argument_shapes_before_docker(
+    argument_count: int,
+) -> None:
+    result = subprocess.run(  # noqa: S603 -- fixed checked-in script with inert test arguments.
+        ["/bin/bash", str(_SHELL_SCRIPT_PATH), *(["unused"] * argument_count)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert "usage:" in result.stderr
+    assert "docker" not in result.stderr.lower()
 
 
 def test_live_http_report_period_uses_two_finalized_days(

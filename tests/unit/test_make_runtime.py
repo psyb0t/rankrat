@@ -68,10 +68,56 @@ def test_init_config_creates_and_preserves_a_safe_http_bearer_secret() -> None:
     target = _target(source, "init-config")
 
     assert "secrets/rankrat/http-bearer-token" in target
-    assert "chmod 700 config oauth secrets secrets/rankrat" in target
+    assert 'test -L "$$path"' in target
+    assert "config, OAuth, and secret paths must not contain symlinks" in target
+    assert "find config oauth secrets -type d -exec chmod 700 {} +" in target
+    assert "find oauth secrets -type f -exec chmod 600 {} +" in target
+    assert "chmod 600 config/boundaries.json .env" in target
     assert 'test -f "$$token" && test ! -L "$$token"' in target
     assert "secrets.token_urlsafe(32)" in target
-    assert 'chmod 600 "$$token"' in target
+
+
+def test_indexnow_verifier_mounts_the_selected_host_files_read_only() -> None:
+    source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    target = _target(source, "verify-indexnow-key")
+
+    assert "INDEXNOW_VERIFY_RUN := docker run --rm --init" in source
+    assert "src=$(BOUNDARIES),dst=$(INDEXNOW_VERIFY_BOUNDARY_FILE),readonly" in source
+    assert "src=$(INDEXNOW_KEY_FILE),dst=$(INDEXNOW_VERIFY_KEY_FILE),readonly" in source
+    assert "$(INDEXNOW_VERIFY_RUN) uv run --frozen --no-sync python" in target
+    assert "--boundary-file $(INDEXNOW_VERIFY_BOUNDARY_FILE)" in target
+    assert "--key-file $(INDEXNOW_VERIFY_KEY_FILE)" in target
+    assert "--key-file secrets/indexnow/key" not in target
+
+
+def test_search_console_live_target_does_not_select_the_whole_live_test_file() -> None:
+    source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+
+    assert (
+        "test-live-google-search-console: LIVE_SELECTOR := "
+        "test_live_google_search_console_matches_mocked_contract or "
+        "test_live_google_search_console_unique_read_operations"
+    ) in source
+    assert "LIVE_SELECTOR := test_live_google_search_console\n" not in source
+
+
+def test_live_target_runs_every_provider_and_transport_target() -> None:
+    source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    target = _target(source, "test-live")
+    expected_targets = (
+        "test-live-google-search-console",
+        "test-live-google-analytics",
+        "test-live-pagespeed",
+        "test-live-bing",
+        "test-live-indexnow",
+        "test-live-http",
+    )
+
+    assert source.split("\ntest-live:", maxsplit=1)[1].startswith(" dev-image ##")
+    assert target.count("RANKRAT_DEV_IMAGE_SOURCE=local") == len(expected_targets)
+    for expected_target in expected_targets:
+        invocation = f"$(MAKE) --no-print-directory {expected_target}"
+        assert target.count(invocation) == 1
 
 
 def _target(source: str, name: str) -> str:

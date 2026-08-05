@@ -50,6 +50,7 @@ from rankrat.constants import (
     MIN_GA4_FUNNEL_STEPS,
     MIN_PROVIDER_TIMEOUT_SECONDS,
     PAGESPEED_CORE_WEB_VITALS_OPERATION,
+    PROVIDER_OPERATION_FAILED_MESSAGE,
     SEARCH_ENGINE_COMPARISON_OPERATION,
     SEARCH_ENGINE_TRAFFIC_HEALTH_OPERATION,
 )
@@ -2011,7 +2012,12 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                 )
         except ValidationError:
             return _tool_error(_TOOL_ERROR_CODE)
-        except (RankratError, ProviderOperationError):
+        except ProviderOperationError as error:
+            return _tool_error(
+                error.code.value,
+                PROVIDER_OPERATION_FAILED_MESSAGE,
+            )
+        except RankratError:
             return _tool_error(
                 _TOOL_REQUEST_REJECTED_CODE,
                 "MCP tool request was rejected",

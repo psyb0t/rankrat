@@ -7,11 +7,11 @@ from pathlib import Path
 
 _SCRIPT = Path("scripts/init_indexnow.py")
 _MAKEFILE = Path("Makefile")
-_PINNED_PYTHON = "$(DEV_RUN) uv run --frozen --no-sync python"
+_PINNED_PYTHON = "uv run --frozen --no-sync python"
 _INITIALIZER_SCRIPT = "scripts/init_indexnow.py"
 _VERIFIER_SCRIPT = "scripts/verify_indexnow_public_key.py"
-_CONTAINER_BOUNDARY_FILE = "config/boundaries.json"
-_CONTAINER_KEY_FILE = "secrets/indexnow/key"
+_CONTAINER_BOUNDARY_FILE = "$(INDEXNOW_VERIFY_BOUNDARY_FILE)"
+_CONTAINER_KEY_FILE = "$(INDEXNOW_VERIFY_KEY_FILE)"
 _TARGET_ID = "example-site"
 _TARGET_HOST = "example.com"
 
@@ -25,8 +25,8 @@ def test_indexnow_make_targets_use_the_pinned_project_python_runtime() -> None:
         "\n\n", maxsplit=1
     )[0]
 
-    assert f"{_PINNED_PYTHON} {_INITIALIZER_SCRIPT}" in initializer_target
-    assert f"{_PINNED_PYTHON} {_VERIFIER_SCRIPT}" in verifier_target
+    assert f"$(DEV_RUN) {_PINNED_PYTHON} {_INITIALIZER_SCRIPT}" in initializer_target
+    assert f"$(INDEXNOW_VERIFY_RUN) {_PINNED_PYTHON} {_VERIFIER_SCRIPT}" in verifier_target
     assert _CONTAINER_BOUNDARY_FILE in verifier_target
     assert _CONTAINER_KEY_FILE in verifier_target
 

@@ -226,17 +226,17 @@ async def test_property_rename_patches_the_configured_property(tmp_path: Path) -
         assert f"{_ADMIN_ROOT}/properties/{_PROPERTY_ID}" in str(request.url)
         return httpx.Response(
             200,
-            json={"name": f"properties/{_PROPERTY_ID}", "displayName": "ciprian.51k.eu"},
+            json={"name": f"properties/{_PROPERTY_ID}", "displayName": "example.com"},
         )
 
     renamed = await _client(tmp_path, handler).update_property_display_name(
         _request(),
         _PROPERTY_ID,
-        "ciprian.51k.eu",
+        "example.com",
     )
 
     assert renamed.resource_id == _PROPERTY_ID
-    assert renamed.display_name == "ciprian.51k.eu"
+    assert renamed.display_name == "example.com"
 
 
 @pytest.mark.asyncio

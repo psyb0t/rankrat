@@ -50,10 +50,10 @@ jobs:
 
     with:
       repository_name: psyb0t/rankrat
-      # The three CPython stdlib CVEs in this document are assessed
-      # not_affected with a written justification per CVE (no tarfile and no
-      # html.parser call path in the application source). Assertions live in the
-      # repo and are reviewed like any other file.
+      # Every not_affected statement has a written call-path justification and
+      # a source-level regression assertion in tests/security. This includes
+      # the CPython stdlib findings and the transitive cryptography PKCS#7
+      # finding; none of those vulnerable entry points are reachable here.
       scan_vex_file: security/rankrat-cpython.openvex.json
       scan_only_fixed: true
       # Deliberately stricter than the workflow default, and deliberately

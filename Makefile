@@ -28,6 +28,8 @@ ONBOARD_CURRENCY_CODE ?= USD
 INDEXNOW_TARGET_ID ?=
 INDEXNOW_HOST ?=
 INDEXNOW_KEY_FILE ?= $(SECRETS)/indexnow/key
+INDEXNOW_VERIFY_BOUNDARY_FILE := /tmp/rankrat-boundaries.json
+INDEXNOW_VERIFY_KEY_FILE := /tmp/rankrat-indexnow-key
 SBOM_DIR := $(PWD)/.sbom
 SBOM_ARCHIVE := $(SBOM_DIR)/rankrat-image.tar
 SBOM_SYFT_JSON := $(SBOM_DIR)/rankrat.syft.json
@@ -35,6 +37,7 @@ SBOM_CYCLONEDX_JSON := $(SBOM_DIR)/rankrat.cyclonedx.json
 VULNERABILITY_DB_DIR := $(PWD)/.grype-db
 VULNERABILITY_REPORT := $(SBOM_DIR)/rankrat.grype.json
 CPYTHON_STDLIB_VEX := $(PWD)/security/rankrat-cpython.openvex.json
+PIP_AUDIT_IGNORED_VULNS := PYSEC-2026-3552
 COVERAGE_LOG := $(PWD)/.coverage-report.log
 COVERAGE_PERCENT_FILE := $(PWD)/coverage-percent.txt
 BUMP_EXCLUDE_NEWER := bash scripts/bump-exclude-newer.sh
@@ -69,6 +72,24 @@ DEV_RUN := docker run --rm --init \
 	-e PYTHONDONTWRITEBYTECODE=1 \
 	-e PYTHONPATH=/work/src \
 	-v $(PWD):/work \
+	-w /work \
+	$(DEV_IMAGE)
+
+INDEXNOW_VERIFY_RUN := docker run --rm --init \
+	--user $(UID):$(GID) \
+	--network bridge \
+	--read-only \
+	--cap-drop=ALL \
+	--security-opt no-new-privileges:true \
+	--pids-limit 64 \
+	--tmpfs /tmp:rw,noexec,nosuid,size=64m \
+	-e HOME=/tmp \
+	-e XDG_CACHE_HOME=/tmp/cache \
+	-e PYTHONDONTWRITEBYTECODE=1 \
+	-e PYTHONPATH=/work/src \
+	--mount type=bind,src=$(PWD),dst=/work,readonly \
+	--mount type=bind,src=$(BOUNDARIES),dst=$(INDEXNOW_VERIFY_BOUNDARY_FILE),readonly \
+	--mount type=bind,src=$(INDEXNOW_KEY_FILE),dst=$(INDEXNOW_VERIFY_KEY_FILE),readonly \
 	-w /work \
 	$(DEV_IMAGE)
 
@@ -108,15 +129,15 @@ lock-image: ## Build the minimal, sandboxed Python-version-transition lock image
 	docker build -f Dockerfile.lock -t $(LOCK_IMAGE) .
 
 init-config: dev-image ## Create gitignored local boundary, secret, and OAuth-state paths without overwriting
-	$(DEV_RUN) sh -ec 'mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat; chmod 700 config oauth secrets secrets/rankrat; cp -n config/boundaries.json.example config/boundaries.json; chmod 600 config/boundaries.json; cp -n .env.example .env; token=secrets/rankrat/http-bearer-token; if test -e "$$token" || test -L "$$token"; then test -f "$$token" && test ! -L "$$token" || { echo "$$token must be a regular file" >&2; exit 1; }; else umask 077; python -c "import secrets; print(secrets.token_urlsafe(32))" > "$$token"; fi; chmod 600 "$$token"'
+	$(DEV_RUN) sh -ec 'for path in config oauth secrets; do if test -L "$$path" || { test -e "$$path" && test ! -d "$$path"; }; then echo "$$path must be a real directory" >&2; exit 1; fi; done; mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat; if find config oauth secrets -type l -print -quit | grep -q .; then echo "config, OAuth, and secret paths must not contain symlinks" >&2; exit 1; fi; cp -n config/boundaries.json.example config/boundaries.json; cp -n .env.example .env; for file in config/boundaries.json .env; do test -f "$$file" && test ! -L "$$file" || { echo "$$file must be a regular file" >&2; exit 1; }; done; token=secrets/rankrat/http-bearer-token; if test -e "$$token" || test -L "$$token"; then test -f "$$token" && test ! -L "$$token" || { echo "$$token must be a regular file" >&2; exit 1; }; else umask 077; python -c "import secrets; print(secrets.token_urlsafe(32))" > "$$token"; fi; find config oauth secrets -type d -exec chmod 700 {} +; find oauth secrets -type f -exec chmod 600 {} +; chmod 600 config/boundaries.json .env'
 
 setup: init-config build ## Check configured provider access, then verify the shipped HTTP/MCP transport
 	$(WRAPPER) setup
-	@$(MAKE) --no-print-directory test-live-google-search-console
-	@$(MAKE) --no-print-directory test-live-google-analytics
-	@$(MAKE) --no-print-directory test-live-pagespeed
-	@$(MAKE) --no-print-directory test-live-bing
-	@$(MAKE) --no-print-directory test-live-http
+	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-google-analytics RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-pagespeed RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-bing RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-http RANKRAT_DEV_IMAGE_SOURCE=local
 
 init-indexnow: init-config ## Create one operator-selected IndexNow target without uploading or submitting
 	@test -n "$(INDEXNOW_TARGET_ID)" || (echo "INDEXNOW_TARGET_ID is required" >&2; exit 1)
@@ -128,8 +149,8 @@ verify-indexnow-key: dev-image ## Verify the deployed IndexNow key directly with
 	@test -n "$(INDEXNOW_TARGET_ID)" || (echo "INDEXNOW_TARGET_ID is required" >&2; exit 1)
 	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
 	@test -f "$(INDEXNOW_KEY_FILE)" || (echo "$(INDEXNOW_KEY_FILE) is required" >&2; exit 1)
-	$(DEV_RUN) uv run --frozen --no-sync python scripts/verify_indexnow_public_key.py \
-		--boundary-file config/boundaries.json --key-file secrets/indexnow/key \
+	$(INDEXNOW_VERIFY_RUN) uv run --frozen --no-sync python scripts/verify_indexnow_public_key.py \
+		--boundary-file $(INDEXNOW_VERIFY_BOUNDARY_FILE) --key-file $(INDEXNOW_VERIFY_KEY_FILE) \
 		--target-id "$(INDEXNOW_TARGET_ID)"
 
 shell: dev-image ## Start a shell in the development container
@@ -203,9 +224,15 @@ test-security: dev-image ## Run security regression tests in the dev container
 test-tooling: dev-image ## Exercise dependency age-gate tooling in container-local scratch
 	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; test -s bump.log || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "ENV_FILE ?="; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat.sh "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat.sh "CONTAINER_HTTP_HOST=\"0.0.0.0\""; require_fragment rankrat.sh "CONTAINER_HTTP_BEARER_SECRET_FILE=\"/run/secrets/rankrat/http-bearer-token\""; grep -Fq "pagespeed_api_key_file" /work/config/boundaries.json.example; grep -Fq "/run/secrets/google/pagespeed-api-key" /work/config/boundaries.json.example; grep -Fq "target: /run/secrets/google/oauth-client.json" /work/docker-compose.yml.example'
 
-test-live: test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow ## Run every opt-in provider check
+test-live: dev-image ## Run every configured provider and shipped transport check
+	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-google-analytics RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-pagespeed RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-bing RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-indexnow RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-http RANKRAT_DEV_IMAGE_SOURCE=local
 
-test-live-google-search-console: LIVE_SELECTOR := test_live_google_search_console
+test-live-google-search-console: LIVE_SELECTOR := test_live_google_search_console_matches_mocked_contract or test_live_google_search_console_unique_read_operations
 test-live-google-search-console: test-live-one ## Run configured Google Search Console and Indexing metadata checks
 
 test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4
@@ -221,14 +248,13 @@ test-live-indexnow: LIVE_SELECTOR := test_live_indexnow
 test-live-indexnow: test-live-one ## Run the double-opt-in IndexNow submission check
 
 test-live-http: build dev-image ## Exercise configured reads through the shipped production HTTP and MCP transports
-	@test -f "$(ENV_FILE)" || (echo "$(ENV_FILE) is required for live HTTP tests" >&2; exit 1)
 	@test -f "$(BOUNDARIES)" || (echo "$(BOUNDARIES) is required" >&2; exit 1)
 	@test -d "$(SECRETS)" || (echo "$(SECRETS) is required" >&2; exit 1)
 	@test -d "$(OAUTH)" || (echo "$(OAUTH) is required" >&2; exit 1)
 	@test -f "$(HTTP_BEARER_SECRET_FILE)" || (echo "$(HTTP_BEARER_SECRET_FILE) is required for live HTTP tests" >&2; exit 1)
 	bash scripts/test_live_http_image.sh \
 		"$(IMAGE_NAME):$(IMAGE_TAG)" "$(DEV_IMAGE)" "$(BOUNDARIES)" "$(SECRETS)" \
-		"$(OAUTH)" "$(ENV_FILE)" "$(PWD)"
+		"$(OAUTH)" "$(PWD)"
 
 test-live-one: dev-image ## Run one selected opt-in live-provider test group
 	@test -f "$(ENV_FILE)" || (echo "$(ENV_FILE) is required for live tests" >&2; exit 1)
@@ -271,7 +297,8 @@ coverage-percent: ## Write the total coverage percentage to coverage-percent.txt
 	@echo "coverage: $$(cat $(COVERAGE_PERCENT_FILE))%"
 
 audit: dev-image ## Audit locked Python dependencies in the dev container
-	$(DEV_RUN) uv run --frozen --no-sync pip-audit
+	$(DEV_RUN) uv run --frozen --no-sync pip-audit \
+		$(foreach vulnerability,$(PIP_AUDIT_IGNORED_VULNS),--ignore-vuln $(vulnerability))
 
 audit-secrets: ## Scan Rankrat-owned files for credentials with pinned Gitleaks
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \

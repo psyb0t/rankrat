@@ -83,6 +83,12 @@ resource that needs attention. It is the one mode that reads `.env`, where the
 `RANKRAT_LIVE_*` selectors choose which providers it checks — leave the
 selectors for unused providers empty and their checks skip.
 
+From a checkout, `make setup` first refuses symlinked local config, OAuth, or
+secret paths and normalizes their permissions: directories become owner-only,
+credential and OAuth files become mode `0600`, and `.env` plus
+`config/boundaries.json` become mode `0600`. It then runs the same live provider
+checks and verifies the shipped HTTP and MCP transports.
+
 ## Running it
 
 ```sh
@@ -382,6 +388,18 @@ make init-indexnow INDEXNOW_TARGET_ID=site INDEXNOW_HOST=example.com
 make verify-indexnow-key INDEXNOW_TARGET_ID=site
 ```
 
+If the boundary or key lives somewhere else, pass its host path explicitly:
+
+```sh
+make verify-indexnow-key INDEXNOW_TARGET_ID=site \
+  BOUNDARIES=/absolute/path/to/boundaries.json \
+  INDEXNOW_KEY_FILE=/absolute/path/to/indexnow-key
+```
+
+The verifier mounts exactly those two files read-only into its sandboxed
+container; it does not assume the standard key path after validating the host
+file.
+
 Publish the generated `<key>.txt` on the public target host yourself. The
 verifier requires exact key content over direct HTTPS, with no redirect. Skip
 this section entirely if you are not submitting URLs to IndexNow.
@@ -467,12 +485,17 @@ use it only as an outage fallback; return to the normal commands before release.
 Live read checks use the shipped image and configured accounts:
 
 ```sh
+make test-live
 make test-live-google-search-console
 make test-live-google-analytics
 make test-live-pagespeed
 make test-live-bing
 make test-live-http
 ```
+
+`make test-live` runs every provider-specific check in sequence, then exercises
+the shipped authenticated HTTP and Streamable HTTP MCP server. Individual
+targets remain useful while configuring one provider.
 
 `make test-live-indexnow` is a real external submission only when both
 `RANKRAT_READ_ONLY=false` and `RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true` are
@@ -485,6 +508,8 @@ set. Use an already-public harmless URL.
   request limits, provider permissions, fixed origins, and normal HTTP auth.
 - Provider responses are parsed into typed bounded results; credentials,
   OAuth records, raw provider bodies, and Bing key URLs are not returned/logged.
+  Provider failures expose only a finite category and the generic
+  `provider operation failed` message over REST and either MCP transport.
 - The production image is non-root; the Compose example uses loopback ports,
   dropped capabilities, no-new-privileges, read-only root, tmpfs, and explicit
   secret mounts.
@@ -504,11 +529,9 @@ published on 2026-07-31 and is held out by the dependency age gate in
 days; it becomes installable on 2026-08-07. Waiting was chosen over overriding
 that gate, because a fresh release window is the supply-chain hijack window and
 a cryptography library is a poor candidate for rushing one.
-
-**v0.3.0 is only partly published.** Its image and GitHub Release exist, but the
-image scan gate failed on the advisory above, which skipped the ClawHub and MCP
-registry publishes. The registry's newest entry is 0.2.0 until the follow-up
-release.
+The tracked OpenVEX statement identifies this exact package version and call
+path; a security regression test fails if Rankrat begins using the affected
+PKCS#7 entry points or if the locked version and scanner exception diverge.
 
 **Onboarding does not roll back a partial failure.** `onboard-site` creates the
 GA4 property, then the Search Console property, then the Bing site, and writes

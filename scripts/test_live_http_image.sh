@@ -24,10 +24,10 @@ log() {
 }
 
 usage() {
-	printf 'usage: %s <production-image> <development-image> <boundary-file> <secrets-dir> <oauth-dir> <environment-file> <workspace>\n' "${0##*/}" >&2
+	printf 'usage: %s <production-image> <development-image> <boundary-file> <secrets-dir> <oauth-dir> <workspace>\n' "${0##*/}" >&2
 }
 
-[[ "$#" -eq 7 ]] || {
+[[ "$#" -eq 6 ]] || {
 	usage
 	exit 2
 }
@@ -37,12 +37,12 @@ readonly development_image="$2"
 readonly boundary_file="$3"
 readonly secret_directory="$4"
 readonly oauth_directory="$5"
-readonly environment_file="$6"
-readonly workspace="$7"
+readonly workspace="$6"
 container_uid_gid="$(id -u):$(id -g)"
 readonly container_uid_gid
 
 temporary_directory=""
+runtime_config_directory=""
 container_name=""
 container_started=false
 service_ip=""
@@ -87,10 +87,6 @@ trap on_error ERR
 	log ERROR "OAuth directory is required"
 	exit 1
 }
-[[ -f "$environment_file" ]] || {
-	log ERROR "environment file is required"
-	exit 1
-}
 [[ -d "$workspace" ]] || {
 	log ERROR "workspace is required"
 	exit 1
@@ -102,6 +98,9 @@ readonly http_bearer_secret_file="$secret_directory/rankrat/http-bearer-token"
 }
 
 temporary_directory=$(mktemp -d "$workspace/.test-live-http.XXXXXX")
+runtime_config_directory="$temporary_directory/config"
+install -d -m 700 "$runtime_config_directory"
+install -m 600 "$boundary_file" "$runtime_config_directory/boundaries.json"
 LOG_FILE="${LOG_FILE:-$temporary_directory/live-http-image.log}"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
@@ -117,7 +116,7 @@ readonly -a production_security_args=(
 	--memory "$TEST_MEMORY_LIMIT"
 	--cpus "$TEST_CPU_LIMIT"
 	--tmpfs "/tmp:rw,noexec,nosuid,size=32m"
-	--mount "type=bind,src=$boundary_file,dst=/run/config/boundaries.json,readonly"
+	--mount "type=bind,src=$runtime_config_directory,dst=/run/config,readonly"
 	--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly"
 	# Google may rotate a refresh token while satisfying a read request, so this
 	# private state path matches the documented production compose contract.
@@ -125,7 +124,7 @@ readonly -a production_security_args=(
 )
 
 log INFO "starting production Rankrat image on Docker's default egress bridge"
-docker run -d --name "$container_name" --network bridge --env-file "$environment_file" \
+docker run -d --name "$container_name" --network bridge \
 	-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
 	-e RANKRAT_SECRET_ROOT=/run/secrets \
 	-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
@@ -152,7 +151,7 @@ if ! docker run --rm --init --network bridge --add-host "$SERVICE_HOSTNAME:$serv
 	-e RANKRAT_SECRET_ROOT=/run/secrets \
 	-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
 	--mount "type=bind,src=$workspace,dst=/work,readonly" \
-	--mount "type=bind,src=$boundary_file,dst=/run/config/boundaries.json,readonly" \
+	--mount "type=bind,src=$runtime_config_directory,dst=/run/config,readonly" \
 	--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly" \
 	--mount "type=bind,src=$oauth_directory,dst=/run/oauth,readonly" \
 	"$development_image" uv run --frozen --no-sync python "$RUNNER_SCRIPT" \

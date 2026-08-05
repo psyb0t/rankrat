@@ -2,7 +2,7 @@
 
 Notable changes to Rankrat, newest first.
 
-## v0.4.0 — unreleased
+## v0.4.0 — 2026-08-05
 
 Answers "where is this site filed, and does its tag point at the property I am
 reading" without the Google Analytics UI.
@@ -56,6 +56,35 @@ reading" without the Google Analytics UI.
   that the exact versioned development image is already local, then runs the
   same ephemeral test containers without resolving image metadata remotely.
   Normal `make test` and `make lint` still rebuild from pinned bases.
+- **Provider failures no longer carry upstream detail across a public
+  transport.** REST, stdio MCP and Streamable HTTP MCP preserve the bounded
+  `AUTHENTICATION`, `AUTHORIZATION`, `RATE_LIMITED`, `NOT_FOUND`,
+  `INVALID_RESPONSE` or `UPSTREAM` category, but replace the provider message
+  with `provider operation failed`. OAuth details, key-bearing URLs and raw
+  provider responses therefore cannot escape through an error envelope.
+- **The production-image smoke test now exercises complete MCP exchanges on
+  both transports.** It initializes, lists tools and calls `server_info` over
+  stdio and Streamable HTTP, and proves the HTTP MCP endpoint rejects an
+  unauthenticated request. This catches an image that starts but cannot serve a
+  real MCP client.
+- **`make test-live` is the complete configured-system gate.** It runs every
+  provider-specific live target in sequence, then reads configured data through
+  the shipped authenticated REST and Streamable HTTP MCP server. The production
+  service receives only the explicit runtime settings it needs rather than the
+  development `.env`, and its boundary file is copied into an owner-only
+  temporary config directory before the read-only mount.
+- **Local setup and IndexNow verification reject path substitution.**
+  `make setup` refuses symlinked config, OAuth and secret trees and normalizes
+  directories to mode `0700` and sensitive files to mode `0600`.
+  `make verify-indexnow-key` mounts the exact operator-selected boundary and key
+  files read-only, so `BOUNDARIES` and `INDEXNOW_KEY_FILE` overrides are honored
+  instead of silently checking the default paths.
+- **The image scan now carries a reviewable exception for the transitive
+  `cryptography` PKCS#7 advisory.** The OpenVEX statement names the locked
+  package version and unreachable decryption path; a security regression test
+  ties that statement, the `pip-audit` exception, the lockfile and the absence
+  of affected entry-point usage together. Fixable high or critical findings
+  outside an applicable VEX statement still fail the release.
 
 ## v0.3.0 — 2026-08-04
 

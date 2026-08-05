@@ -11,7 +11,12 @@ from mcp.shared.memory import create_connected_server_and_client_session
 from rankrat import __version__
 from rankrat.config import Settings
 from rankrat.models.boundaries import Provider
-from rankrat.providers.base import ProviderReadiness, ProviderReadRequest
+from rankrat.providers.base import (
+    ProviderFailureCode,
+    ProviderOperationError,
+    ProviderReadiness,
+    ProviderReadRequest,
+)
 from rankrat.providers.google_analytics import Ga4ReportResult
 from rankrat.providers.google_indexing import GoogleIndexingMetadata
 from rankrat.providers.google_search_console import (
@@ -1161,6 +1166,37 @@ async def test_mcp_tool_catalog_annotations_and_calls(
         unknown = await client.call_tool("does_not_exist", {})
         assert unknown.isError is True
         assert json.loads(unknown.content[0].text)["code"] == "TOOL_NOT_FOUND"  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize("failure_code", list(ProviderFailureCode))
+@pytest.mark.asyncio
+async def test_mcp_provider_errors_preserve_only_the_safe_failure_category(
+    deployment: tuple[Settings, ApplicationServices],
+    monkeypatch: pytest.MonkeyPatch,
+    failure_code: ProviderFailureCode,
+) -> None:
+    _, services = deployment
+    upstream_detail = "upstream credential and response must not cross the MCP boundary"
+
+    async def fail(*_: object) -> ProviderReadiness:
+        raise ProviderOperationError(failure_code, upstream_detail)
+
+    monkeypatch.setattr(services.provider_readiness, "readiness", fail)
+    server = build_mcp_server(services)
+    async with create_connected_server_and_client_session(server) as client:
+        result = await client.call_tool(
+            "provider_readiness",
+            {"account_id": "google-main"},
+        )
+
+    assert result.isError is True
+    content = result.content[0]
+    assert isinstance(content, types.TextContent)
+    assert json.loads(content.text) == {
+        "code": failure_code.value,
+        "message": "provider operation failed",
+    }
+    assert upstream_detail not in content.text
 
 
 @pytest.mark.asyncio

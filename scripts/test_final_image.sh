@@ -17,6 +17,9 @@ readonly TEST_MEMORY_LIMIT="512m"
 readonly TEST_CPU_LIMIT="1"
 readonly TEST_PIDS_LIMIT=128
 readonly MCP_INITIALIZE_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"rankrat-image-smoke","version":"0"}}}'
+readonly MCP_INITIALIZED_NOTIFICATION='{"jsonrpc":"2.0","method":"notifications/initialized"}'
+readonly MCP_TOOLS_LIST_REQUEST='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+readonly MCP_SERVER_INFO_REQUEST='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"server_info","arguments":{}}}'
 readonly TEST_HTTP_BEARER_SECRET="test-only-not-a-real-secret-value-000000000000"
 readonly PRIVATE_SCHEMA_URL_REQUEST='{"url":"https://127.0.0.1/"}'
 readonly PARENT_BASH_PROCESS_ID="$BASHPID"
@@ -156,11 +159,29 @@ fi
 
 assert_test_mounts_exist
 log INFO "checking stdio MCP initialization without network access"
-mcp_output=$(printf '%s\n' "$MCP_INITIALIZE_REQUEST" | timeout --kill-after=2s \
+mcp_output=$(printf '%s\n' \
+	"$MCP_INITIALIZE_REQUEST" \
+	"$MCP_INITIALIZED_NOTIFICATION" \
+	"$MCP_TOOLS_LIST_REQUEST" | timeout --kill-after=2s \
 	"${MCP_TIMEOUT_SECONDS}s" docker run --rm -i --network none \
 	"${container_security_args[@]}" "$image_reference")
 grep -Fq '"protocolVersion"' <<<"$mcp_output" || {
 	log ERROR "stdio MCP initialization did not return a protocol version"
+	exit 1
+}
+grep -Fq '"name":"server_info"' <<<"$mcp_output" || {
+	log ERROR "stdio MCP tools/list did not expose server_info"
+	exit 1
+}
+
+mcp_call_output=$(printf '%s\n' \
+	"$MCP_INITIALIZE_REQUEST" \
+	"$MCP_INITIALIZED_NOTIFICATION" \
+	"$MCP_SERVER_INFO_REQUEST" | timeout --kill-after=2s \
+	"${MCP_TIMEOUT_SECONDS}s" docker run --rm -i --network none \
+	"${container_security_args[@]}" "$image_reference")
+grep -Fq '\"read_only\":true' <<<"$mcp_call_output" || {
+	log ERROR "stdio MCP tools/call did not execute server_info"
 	exit 1
 }
 
@@ -184,6 +205,7 @@ readonly health_url="http://127.0.0.1:${host_port}/healthz"
 readonly ready_url="http://127.0.0.1:${host_port}/ready"
 readonly openapi_url="http://127.0.0.1:${host_port}${OPENAPI_PATH}"
 readonly schema_validate_url="http://127.0.0.1:${host_port}${SCHEMA_VALIDATE_URL_PATH}"
+readonly mcp_url="http://127.0.0.1:${host_port}/mcp/"
 
 for ((attempt = 1; attempt <= HTTP_RETRY_COUNT; attempt++)); do
 	if health_body=$(curl --silent --show-error --fail --noproxy '*' --proto '=http' \
@@ -219,6 +241,45 @@ authorized_ready_body=$(curl --silent --show-error --fail --config "$curl_author
 	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$ready_url")
 grep -Fq '"ready":true' <<<"$authorized_ready_body" || {
 	log ERROR "protected ready endpoint did not accept the configured bearer secret"
+	exit 1
+}
+
+unauthorized_mcp_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" --request POST \
+	--header 'Content-Type: application/json' \
+	--header 'Accept: application/json, text/event-stream' \
+	--data "$MCP_INITIALIZE_REQUEST" "$mcp_url")
+[[ "$unauthorized_mcp_status" == "401" ]] || {
+	log ERROR "Streamable HTTP MCP accepted an unauthenticated request"
+	exit 1
+}
+
+streamable_mcp_output=""
+for mcp_request in \
+	"$MCP_INITIALIZE_REQUEST" \
+	"$MCP_TOOLS_LIST_REQUEST" \
+	"$MCP_SERVER_INFO_REQUEST"; do
+	mcp_response=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
+		--noproxy '*' --proto '=http' --max-redirs 0 \
+		--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+		--max-time "$MCP_TIMEOUT_SECONDS" --request POST \
+		--header 'Content-Type: application/json' \
+		--header 'Accept: application/json, text/event-stream' \
+		--data "$mcp_request" "$mcp_url")
+	streamable_mcp_output+="$mcp_response"
+done
+grep -Fq '"protocolVersion"' <<<"$streamable_mcp_output" || {
+	log ERROR "Streamable HTTP MCP initialization did not return a protocol version"
+	exit 1
+}
+grep -Fq '"name":"server_info"' <<<"$streamable_mcp_output" || {
+	log ERROR "Streamable HTTP MCP tools/list did not expose server_info"
+	exit 1
+}
+grep -Fq '\"read_only\":true' <<<"$streamable_mcp_output" || {
+	log ERROR "Streamable HTTP MCP tools/call did not execute server_info"
 	exit 1
 }
 
