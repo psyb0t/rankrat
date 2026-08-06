@@ -2,7 +2,7 @@
   "name": "@psyb0t/rankrat",
   "version": "0.0.0",
   "mcpName": "io.github.psyb0t/rankrat",
-  "description": "OpenClaw static MCP server definition and direct Docker stdio launcher for self-hosted Rankrat.",
+  "description": "OpenClaw static MCP server definition and direct Docker stdio launcher for Rankrat SEO, analytics, PageSpeed, and optional Lighthouse tools.",
   "type": "module",
   "bin": {
     "rankrat-mcp": "bin/cli.js"
@@ -32,6 +32,7 @@
     "bing-webmaster",
     "ga4",
     "pagespeed",
+    "lighthouse",
     "indexnow",
     "openclaw",
     "ai-agent"

@@ -3,9 +3,9 @@
 <!-- mcp-name: io.github.psyb0t/rankrat -->
 
 [![CI](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml/badge.svg?branch=main)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
+[![coverage](https://raw.githubusercontent.com/psyb0t/rankrat/badges/coverage.svg)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
 [![version](https://raw.githubusercontent.com/psyb0t/rankrat/badges/version.svg)](https://github.com/psyb0t/rankrat/tags)
 [![license](https://raw.githubusercontent.com/psyb0t/rankrat/badges/license.svg)](LICENSE)
-[![coverage](https://raw.githubusercontent.com/psyb0t/rankrat/badges/coverage.svg)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
 
 Search Console, Bing Webmaster Tools, GA4 and PageSpeed each ship a dashboard.
@@ -21,9 +21,10 @@ ask; it goes and rats out whichever provider knows.
 It's a rat, not a burglar. It answers only for the accounts and properties you
 list in a boundary file, and no tool widens that from inside a session.
 Read-only unless you deliberately turn writes on, at which point the write tools
-appear and stay inside the same boundaries. Nothing here crawls a site, tracks a
-competitor, or touches a domain you haven't verified — it reads what the
-providers already hold about you.
+appear and stay inside the same boundaries. Provider tools read what those
+providers already hold about you. The optional local Lighthouse worker opens
+only an explicitly requested page beneath a configured PageSpeed site; it does
+not crawl a domain or accept an unbounded URL.
 
 Speaks MCP over stdio and Streamable HTTP, plus a REST API for callers that
 don't speak MCP.
@@ -35,6 +36,7 @@ tool surface is still free to move.
 
 - [Quick start](#quick-start)
 - [Running it](#running-it)
+- [Local Lighthouse audits](#local-lighthouse-audits)
 - [Agent integrations](#agent-integrations)
 - [Write capability](#write-capability)
 - [Finding and naming GA4 containers](#finding-and-naming-ga4-containers)
@@ -53,6 +55,12 @@ working layout in a directory of your choosing — Rankrat reads all three paths
 as mounts and never writes outside them:
 
 ```sh
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/rankrat.sh \
+  -o rankrat.sh
+less rankrat.sh
+chmod +x rankrat.sh
+sudo mv rankrat.sh /usr/local/bin/rankrat.sh
+
 mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat
 chmod 700 config oauth secrets secrets/rankrat
 
@@ -97,19 +105,10 @@ rankrat.sh http     # REST + Streamable HTTP MCP on 127.0.0.1:8080
 ```
 
 [`rankrat.sh`](rankrat.sh) is a wrapper around `docker run`: it resolves the
-mounts, publishes the port, and applies the container hardening flags. Install
-it once —
-
-```sh
-curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/rankrat.sh \
-  -o rankrat.sh
-less rankrat.sh                       # it is ~250 lines; read before installing
-chmod +x rankrat.sh
-sudo mv rankrat.sh /usr/local/bin/rankrat.sh
-```
-
-— or skip it entirely and run the image yourself. `docker run` is the supported
-contract and the wrapper is only convenience:
+mounts, publishes the port, and applies the container hardening flags. The
+quick start installs it after giving you a chance to inspect the approximately
+300-line script. You can instead run the image yourself: `docker run` is the
+supported contract and the wrapper is only convenience.
 
 ```sh
 docker run -i --rm --init --read-only \
@@ -149,6 +148,62 @@ On a checkout, the Make targets call the same wrapper against the locally built
 image, so `make run` and `make run-http` exercise the path above rather than a
 second copy of it. See [Verification](#verification) and `make help`.
 
+## Local Lighthouse audits
+
+Rankrat can run Chromium locally and return Lighthouse scores plus failed audit
+findings without sending the page to PageSpeed Insights. Browser execution is
+optional and lives in a separate `psyb0t/rankrat-lighthouse` image. The worker
+gets no Google, Bing, IndexNow, OAuth, or HTTP bearer credentials and has no TCP
+listener; Rankrat reaches it through `/run/lighthouse/lighthouse.sock`.
+
+| Tool | Result |
+| --- | --- |
+| `lighthouse_audit` | Performance, accessibility, best-practices, and SEO scores and findings |
+| `lighthouse_seo_findings` | Failed SEO audits only |
+| `lighthouse_accessibility_findings` | Failed accessibility audits only |
+| `lighthouse_performance_findings` | Failed performance audits only |
+| `lighthouse_best_practices_findings` | Failed best-practices audits only |
+
+The matching REST routes are under `/v1/lighthouse/`; both MCP transports expose
+the same names and strict input schema. Every call requires `account_id`, the
+configured `site_url`, and a child `page_url`. The account's `pagespeed_sites`
+allow-list is the authority for both PageSpeed and Lighthouse, so enabling the
+browser does not create a second URL boundary.
+
+Run the browser worker only against sites whose content you control and trust.
+Chromium uses `--no-sandbox` because its namespace and setuid sandboxes are not
+available under the documented non-root, capability-free,
+`no-new-privileges` container. The worker has no credentials, uses a read-only
+root, and forces normal browser traffic through its public-address-only proxy,
+but those controls are not a substitute for Chromium's renderer sandbox if a
+hostile page exploits the browser. Use a stronger outer runtime such as gVisor
+or Kata Containers before auditing untrusted content.
+
+From a checkout, the Compose example is the supported local stack. It runs two
+long-lived services plus a one-shot volume initializer:
+
+```sh
+make run-http-lighthouse
+```
+
+It builds both images, binds Rankrat HTTP to loopback, shares only the Unix
+socket volume, drops all capabilities, uses read-only roots, applies process,
+CPU, and memory limits, and gives Chromium its own tmpfs and shared-memory
+budget. The example expects the same `config/`, `oauth/`, and `secrets/` layout
+as [Quick start](#quick-start).
+
+To disable browser execution, leave
+`RANKRAT_LIGHTHOUSE_WORKER_SOCKET` empty or do not mount the socket. The five
+tools remain discoverable and return a finite `UNAVAILABLE` provider error; no
+fallback sends the URL to a third party. The worker permits only HTTP/HTTPS
+subresources on ports 80 and 443, resolves targets itself, rejects private and
+reserved addresses, and serializes audits one at a time. Redirected final URLs
+use Lighthouse's actual final document URL and are rechecked against the
+configured site by Rankrat before a report is returned. A public cross-origin
+redirect may be fetched before that post-navigation check rejects the report,
+just as an allowed page may fetch public third-party subresources; private and
+special-address destinations remain blocked at the worker proxy.
+
 ## Agent integrations
 
 The [skill](.agents/skills/rankrat) works in any agent that reads
@@ -186,7 +241,9 @@ server that runs the published image directly — set `RANKRAT_CONFIG_DIR` (plus
 `RANKRAT_SECRETS_DIR` and `RANKRAT_OAUTH_DIR` when those are needed) and nothing
 has to be running first. For a shared server, replace that static definition with
 OpenClaw's native Streamable HTTP configuration; the plugin README provides the
-copy-paste command with an environment-backed bearer header.
+copy-paste command with an environment-backed bearer header. Use the shared
+companion deployment for Lighthouse because a static one-container stdio
+definition cannot also own the isolated browser worker.
 
 ## Write capability
 
@@ -415,6 +472,11 @@ setup` can verify those integrations without requiring credentials for the
 others. HTTP mode requires the bearer-secret file even on loopback, and mounts
 it only into the running container.
 
+`RANKRAT_LIGHTHOUSE_WORKER_SOCKET` is the only Lighthouse setting consumed by
+Rankrat. It defaults to `/run/lighthouse/lighthouse.sock`; set it to an empty
+value to disable the worker. Worker timeout and socket settings belong to the
+companion container and are shown in `docker-compose.yml.example`.
+
 ### Unbounded bootstrap mode
 
 For a trusted agent that needs to discover or onboard a resource not yet listed,
@@ -474,6 +536,11 @@ make test-contract
 make test-integration
 make test-security
 make test-image
+make test-lighthouse-image
+make audit
+make audit-secrets
+make audit-compose
+make audit-image
 ```
 
 `make test` and `make lint` rebuild the versioned development image from their
@@ -501,6 +568,14 @@ targets remain useful while configuring one provider.
 `RANKRAT_READ_ONLY=false` and `RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true` are
 set. Use an already-public harmless URL.
 
+`make test-lighthouse-image` builds both production images and runs real
+public-page audits through production stdio MCP, authenticated REST, and
+authenticated Streamable HTTP MCP. Mocked unit and contract suites cover
+invalid URL boundaries, malformed worker responses, oversized bodies,
+busy/timeout handling, SSRF address classes, and all three transports without
+depending on the public network. `make sbom` and `make audit-image` inventory
+and scan both production images.
+
 ## Security
 
 - Read-only is the safe default and removes write capability discovery.
@@ -513,6 +588,16 @@ set. Use an already-public harmless URL.
 - The production image is non-root; the Compose example uses loopback ports,
   dropped capabilities, no-new-privileges, read-only root, tmpfs, and explicit
   secret mounts.
+- Chromium runs in a separate non-root image with no provider secrets or TCP
+  API. A local forward proxy blocks loopback, link-local, private, multicast,
+  documentation, and other reserved targets after DNS resolution. Rankrat then
+  independently reauthorizes the requested and final URLs before returning the
+  bounded report. Chromium uses `--no-sandbox` inside that locked-down companion
+  because the container is the browser isolation boundary; do not run the
+  worker directly on a host or add provider credential mounts to it.
+- The Compose initializer is the only root process in the Lighthouse stack. It
+  is networkless, receives only `CHOWN` and `FOWNER`, prepares the private Unix
+  socket volume, exits, and is not part of the running service set.
 
 ## Known gaps
 

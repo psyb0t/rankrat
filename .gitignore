@@ -43,6 +43,11 @@ profile.out
 coverage.xml
 htmlcov/
 
+# Node
+lighthouse-worker/node_modules/
+lighthouse-worker/.pnpm-store/
+lighthouse-worker/dist/
+
 # Container / local tooling
 compose.yml
 compose.override.yml
@@ -51,8 +56,10 @@ docker-compose.override.yml
 .dockerignore.local
 .test-image.*/
 .test-live-http.*/
+.test-lighthouse-image.*/
 .sbom/
 .grype-db/
+.gitleaks-scan.*/
 
 # Editor / IDE
 .vscode/

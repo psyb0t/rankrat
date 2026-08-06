@@ -13,6 +13,7 @@ from rankrat.providers.base import (
 from rankrat.providers.google_analytics import GoogleAnalyticsDataClient
 from rankrat.providers.google_search_console import GoogleSearchConsoleClient
 from rankrat.providers.indexnow import IndexNowClient
+from rankrat.providers.lighthouse import LighthouseWorkerClient
 from rankrat.providers.pagespeed import PageSpeedClient
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "IndexNowSubmitRequest",
     "IndexNowTargetId",
     "PageSpeedClient",
+    "LighthouseWorkerClient",
     "ProviderClient",
     "ProviderOperationError",
     "ProviderReadRequest",

@@ -17,12 +17,18 @@ from rankrat import __version__
 from rankrat.constants import (
     APP_NAME,
     BING_OPPORTUNITY_MATRIX_OPERATION,
+    DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS,
     DEFAULT_PAGESPEED_TIMEOUT_SECONDS,
     DEFAULT_PROVIDER_TIMEOUT_SECONDS,
     GA4_PAGESPEED_CORRELATION_OPERATION,
     GA4_SEARCH_CONSOLE_COMPARISON_OPERATION,
     GOOGLE_ANALYTICS_ACCOUNT_INVENTORY_OPERATION,
     ISO_CURRENCY_CODE_CHARS,
+    LIGHTHOUSE_ACCESSIBILITY_FINDINGS_OPERATION,
+    LIGHTHOUSE_AUDIT_OPERATION,
+    LIGHTHOUSE_BEST_PRACTICES_FINDINGS_OPERATION,
+    LIGHTHOUSE_PERFORMANCE_FINDINGS_OPERATION,
+    LIGHTHOUSE_SEO_FINDINGS_OPERATION,
     MAX_ANALYTICS_DIMENSIONS,
     MAX_ANALYTICS_FILTERS,
     MAX_BING_BRAND_TERMS,
@@ -39,6 +45,7 @@ from rankrat.constants import (
     MAX_GA4_ROWS,
     MAX_GOOGLE_INDEXING_BATCH,
     MAX_INDEXNOW_URLS,
+    MAX_LIGHTHOUSE_TIMEOUT_SECONDS,
     MAX_PAGESPEED_CATEGORIES,
     MAX_PROVIDER_TIMEOUT_SECONDS,
     MAX_SCHEMA_FETCH_URL_CHARS,
@@ -48,6 +55,7 @@ from rankrat.constants import (
     MAX_SITE_ONBOARDING_TIME_ZONE_CHARS,
     MAX_URL_INSPECTION_BATCH,
     MIN_GA4_FUNNEL_STEPS,
+    MIN_LIGHTHOUSE_TIMEOUT_SECONDS,
     MIN_PROVIDER_TIMEOUT_SECONDS,
     PAGESPEED_CORE_WEB_VITALS_OPERATION,
     PROVIDER_OPERATION_FAILED_MESSAGE,
@@ -135,6 +143,7 @@ from rankrat.services.google_sitemaps import (
 )
 from rankrat.services.google_sites import GoogleSiteOperation, GoogleSiteSubmissionRequest
 from rankrat.services.indexnow import IndexNowSubmissionRequest
+from rankrat.services.lighthouse import LighthouseAuditRequest, LighthouseCategory
 from rankrat.services.onboarding_guide import OnboardingGuideRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisRequest,
@@ -173,6 +182,12 @@ _UNKNOWN_RESOURCE_CODE = "RESOURCE_NOT_FOUND"
 _TOOL_ERROR_CODE = "TOOL_INPUT_INVALID"
 _UNKNOWN_TOOL_CODE = "TOOL_NOT_FOUND"
 _TOOL_REQUEST_REJECTED_CODE = "TOOL_REQUEST_REJECTED"
+_LIGHTHOUSE_CATEGORY_BY_OPERATION = {
+    LIGHTHOUSE_SEO_FINDINGS_OPERATION: LighthouseCategory.SEO,
+    LIGHTHOUSE_ACCESSIBILITY_FINDINGS_OPERATION: LighthouseCategory.ACCESSIBILITY,
+    LIGHTHOUSE_PERFORMANCE_FINDINGS_OPERATION: LighthouseCategory.PERFORMANCE,
+    LIGHTHOUSE_BEST_PRACTICES_FINDINGS_OPERATION: LighthouseCategory.BEST_PRACTICES,
+}
 _GA4_FIXED_REPORT_TOOL_KINDS: Final[dict[str, Ga4FixedReportKind]] = {
     "google_analytics_content_performance": Ga4FixedReportKind.CONTENT_PERFORMANCE,
     "google_analytics_landing_page_performance": Ga4FixedReportKind.LANDING_PAGE_PERFORMANCE,
@@ -749,6 +764,19 @@ class _PageSpeedAnalysisArguments(BaseModel):
     )
 
 
+class _LighthouseAuditArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    site_url: str = Field(min_length=1, max_length=2_048)
+    page_url: str = Field(min_length=1, max_length=2_048)
+    timeout_seconds: float = Field(
+        default=DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS,
+        ge=MIN_LIGHTHOUSE_TIMEOUT_SECONDS,
+        le=MAX_LIGHTHOUSE_TIMEOUT_SECONDS,
+    )
+
+
 class _Ga4PageSpeedCorrelationArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -956,6 +984,15 @@ def _tool_input_schema(name: str) -> dict[str, object]:
         "google_analytics_conversion_funnel": _Ga4ConversionFunnelArguments.model_json_schema(),
         "pagespeed_analyze": _PageSpeedAnalysisArguments.model_json_schema(),
         PAGESPEED_CORE_WEB_VITALS_OPERATION: _PageSpeedAnalysisArguments.model_json_schema(),
+        LIGHTHOUSE_AUDIT_OPERATION: _LighthouseAuditArguments.model_json_schema(),
+        LIGHTHOUSE_SEO_FINDINGS_OPERATION: _LighthouseAuditArguments.model_json_schema(),
+        LIGHTHOUSE_ACCESSIBILITY_FINDINGS_OPERATION: (
+            _LighthouseAuditArguments.model_json_schema()
+        ),
+        LIGHTHOUSE_PERFORMANCE_FINDINGS_OPERATION: (_LighthouseAuditArguments.model_json_schema()),
+        LIGHTHOUSE_BEST_PRACTICES_FINDINGS_OPERATION: (
+            _LighthouseAuditArguments.model_json_schema()
+        ),
         GA4_PAGESPEED_CORRELATION_OPERATION: (
             _Ga4PageSpeedCorrelationArguments.model_json_schema()
         ),
@@ -1067,6 +1104,20 @@ async def _google_analytics_or_pagespeed_tool(
     name: str,
     raw_arguments: dict[str, Any],
 ) -> list[types.TextContent] | None:
+    if name == LIGHTHOUSE_AUDIT_OPERATION:
+        lighthouse_arguments = _LighthouseAuditArguments.model_validate(raw_arguments)
+        return _tool_success(
+            await services.lighthouse.audit(_lighthouse_request(lighthouse_arguments))
+        )
+    lighthouse_category = _LIGHTHOUSE_CATEGORY_BY_OPERATION.get(name)
+    if lighthouse_category is not None:
+        lighthouse_arguments = _LighthouseAuditArguments.model_validate(raw_arguments)
+        return _tool_success(
+            await services.lighthouse.findings(
+                _lighthouse_request(lighthouse_arguments),
+                lighthouse_category,
+            )
+        )
     if name == GOOGLE_ANALYTICS_ACCOUNT_INVENTORY_OPERATION:
         account_discovery_arguments = _Ga4AccountDiscoveryArguments.model_validate(raw_arguments)
         return _tool_success(
@@ -1239,6 +1290,15 @@ async def _google_analytics_or_pagespeed_tool(
             )
         )
     return None
+
+
+def _lighthouse_request(arguments: _LighthouseAuditArguments) -> LighthouseAuditRequest:
+    return LighthouseAuditRequest(
+        account_id=arguments.account_id,
+        site_url=arguments.site_url,
+        page_url=arguments.page_url,
+        timeout_seconds=arguments.timeout_seconds,
+    )
 
 
 def build_mcp_server(services: ApplicationServices) -> Server[object, object]:

@@ -46,6 +46,35 @@ def test_openapi_source_declares_the_runtime_bearer_boundaries() -> None:
     assert all(not path.startswith("/v1/admin/") for path in paths)
 
 
+def test_openapi_source_types_every_lighthouse_success_response() -> None:
+    document = load_openapi_document()
+    paths = _mapping(document["paths"])
+    lighthouse_paths = (
+        "/v1/lighthouse/audits",
+        "/v1/lighthouse/seo-findings",
+        "/v1/lighthouse/accessibility-findings",
+        "/v1/lighthouse/performance-findings",
+        "/v1/lighthouse/best-practices-findings",
+    )
+
+    for path in lighthouse_paths:
+        operation = _mapping(_mapping(paths[path])["post"])
+        responses = _mapping(operation["responses"])
+        success = _mapping(responses["200"])
+        content = _mapping(success["content"])
+        schema = _mapping(_mapping(content["application/json"])["schema"])
+        assert schema == {"$ref": "#/components/schemas/LighthouseAuditReport"}
+
+    components = _mapping(document["components"])
+    schemas = _mapping(components["schemas"])
+    assert {
+        "LighthouseAuditReport",
+        "LighthouseCategory",
+        "LighthouseCategoryScore",
+        "LighthouseFinding",
+    }.issubset(schemas)
+
+
 def test_openapi_operation_ids_are_applied_from_the_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

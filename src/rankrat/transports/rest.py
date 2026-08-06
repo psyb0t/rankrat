@@ -12,6 +12,7 @@ from rankrat.constants import (
     API_PREFIX,
     BING_OPPORTUNITY_MATRIX_OPERATION,
     BING_OPPORTUNITY_MATRIX_PATH,
+    DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS,
     DEFAULT_PAGESPEED_TIMEOUT_SECONDS,
     DEFAULT_PROVIDER_TIMEOUT_SECONDS,
     GA4_PAGESPEED_CORRELATION_OPERATION,
@@ -27,6 +28,16 @@ from rankrat.constants import (
     GOOGLE_ANALYTICS_PROPERTY_RENAME_OPERATION,
     GOOGLE_ANALYTICS_PROPERTY_RENAME_PATH,
     ISO_CURRENCY_CODE_CHARS,
+    LIGHTHOUSE_ACCESSIBILITY_FINDINGS_OPERATION,
+    LIGHTHOUSE_ACCESSIBILITY_FINDINGS_PATH,
+    LIGHTHOUSE_AUDIT_OPERATION,
+    LIGHTHOUSE_AUDIT_PATH,
+    LIGHTHOUSE_BEST_PRACTICES_FINDINGS_OPERATION,
+    LIGHTHOUSE_BEST_PRACTICES_FINDINGS_PATH,
+    LIGHTHOUSE_PERFORMANCE_FINDINGS_OPERATION,
+    LIGHTHOUSE_PERFORMANCE_FINDINGS_PATH,
+    LIGHTHOUSE_SEO_FINDINGS_OPERATION,
+    LIGHTHOUSE_SEO_FINDINGS_PATH,
     MAX_ANALYTICS_DIMENSIONS,
     MAX_ANALYTICS_FILTERS,
     MAX_BING_BRAND_TERMS,
@@ -43,6 +54,14 @@ from rankrat.constants import (
     MAX_GA4_ROWS,
     MAX_GOOGLE_INDEXING_BATCH,
     MAX_INDEXNOW_URLS,
+    MAX_LIGHTHOUSE_CATEGORIES,
+    MAX_LIGHTHOUSE_DISPLAY_VALUE_CHARS,
+    MAX_LIGHTHOUSE_FINDINGS,
+    MAX_LIGHTHOUSE_ID_CHARS,
+    MAX_LIGHTHOUSE_TEXT_CHARS,
+    MAX_LIGHTHOUSE_TIMEOUT_SECONDS,
+    MAX_LIGHTHOUSE_TITLE_CHARS,
+    MAX_LIGHTHOUSE_URL_CHARS,
     MAX_PAGESPEED_CATEGORIES,
     MAX_PROVIDER_TIMEOUT_SECONDS,
     MAX_SCHEMA_FETCH_URL_CHARS,
@@ -52,6 +71,7 @@ from rankrat.constants import (
     MAX_SITE_ONBOARDING_TIME_ZONE_CHARS,
     MAX_URL_INSPECTION_BATCH,
     MIN_GA4_FUNNEL_STEPS,
+    MIN_LIGHTHOUSE_TIMEOUT_SECONDS,
     MIN_PROVIDER_TIMEOUT_SECONDS,
     ONBOARDING_GUIDE_OPERATION,
     ONBOARDING_GUIDE_PATH,
@@ -142,6 +162,7 @@ from rankrat.services.google_sites import (
     GoogleSiteSubmissionRequest,
 )
 from rankrat.services.indexnow import IndexNowSubmissionRequest
+from rankrat.services.lighthouse import LighthouseAuditRequest, LighthouseCategory
 from rankrat.services.onboarding_guide import OnboardingGuideRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisRequest,
@@ -639,6 +660,70 @@ class _PageSpeedAnalysisBody(BaseModel):
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
         le=MAX_PROVIDER_TIMEOUT_SECONDS,
     )
+
+
+class _LighthouseAuditBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    site_url: str = Field(min_length=1, max_length=2_048)
+    page_url: str = Field(min_length=1, max_length=2_048)
+    timeout_seconds: float = Field(
+        default=DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS,
+        ge=MIN_LIGHTHOUSE_TIMEOUT_SECONDS,
+        le=MAX_LIGHTHOUSE_TIMEOUT_SECONDS,
+    )
+
+
+class LighthouseCategoryScore(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    category: LighthouseCategory
+    score: float | None = Field(ge=0, le=1)
+
+
+class LighthouseFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    id: str = Field(min_length=1, max_length=MAX_LIGHTHOUSE_ID_CHARS)
+    categories: tuple[LighthouseCategory, ...] = Field(
+        min_length=1,
+        max_length=MAX_LIGHTHOUSE_CATEGORIES,
+        json_schema_extra={"uniqueItems": True},
+    )
+    score: float | None = Field(ge=0, le=1)
+    score_display_mode: str = Field(min_length=1, max_length=MAX_LIGHTHOUSE_ID_CHARS)
+    title: str = Field(min_length=1, max_length=MAX_LIGHTHOUSE_TITLE_CHARS)
+    description: str = Field(max_length=MAX_LIGHTHOUSE_TEXT_CHARS)
+    display_value: str | None = Field(
+        max_length=MAX_LIGHTHOUSE_DISPLAY_VALUE_CHARS,
+    )
+    numeric_value: float | None
+    numeric_unit: str | None = Field(max_length=MAX_LIGHTHOUSE_ID_CHARS)
+
+
+class LighthouseAuditReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    requested_url: str = Field(
+        max_length=MAX_LIGHTHOUSE_URL_CHARS,
+        json_schema_extra={"format": "uri"},
+    )
+    final_url: str = Field(
+        max_length=MAX_LIGHTHOUSE_URL_CHARS,
+        json_schema_extra={"format": "uri"},
+    )
+    fetch_time: str = Field(
+        max_length=MAX_LIGHTHOUSE_ID_CHARS,
+        json_schema_extra={"format": "date-time"},
+    )
+    lighthouse_version: str = Field(min_length=1, max_length=MAX_LIGHTHOUSE_ID_CHARS)
+    categories: tuple[LighthouseCategoryScore, ...] = Field(
+        min_length=1,
+        max_length=MAX_LIGHTHOUSE_CATEGORIES,
+        json_schema_extra={"uniqueItems": True},
+    )
+    findings: tuple[LighthouseFinding, ...] = Field(max_length=MAX_LIGHTHOUSE_FINDINGS)
 
 
 class _Ga4PageSpeedCorrelationBody(BaseModel):
@@ -1397,6 +1482,66 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
         )
 
     @router.post(
+        LIGHTHOUSE_AUDIT_PATH,
+        response_model=LighthouseAuditReport,
+        operation_id=LIGHTHOUSE_AUDIT_OPERATION,
+    )
+    async def lighthouse_audit(body: _LighthouseAuditBody) -> JsonValue:
+        return to_json_value(await services.lighthouse.audit(_lighthouse_request(body)))
+
+    @router.post(
+        LIGHTHOUSE_SEO_FINDINGS_PATH,
+        response_model=LighthouseAuditReport,
+        operation_id=LIGHTHOUSE_SEO_FINDINGS_OPERATION,
+    )
+    async def lighthouse_seo_findings(body: _LighthouseAuditBody) -> JsonValue:
+        return to_json_value(
+            await services.lighthouse.findings(
+                _lighthouse_request(body),
+                LighthouseCategory.SEO,
+            )
+        )
+
+    @router.post(
+        LIGHTHOUSE_ACCESSIBILITY_FINDINGS_PATH,
+        response_model=LighthouseAuditReport,
+        operation_id=LIGHTHOUSE_ACCESSIBILITY_FINDINGS_OPERATION,
+    )
+    async def lighthouse_accessibility_findings(body: _LighthouseAuditBody) -> JsonValue:
+        return to_json_value(
+            await services.lighthouse.findings(
+                _lighthouse_request(body),
+                LighthouseCategory.ACCESSIBILITY,
+            )
+        )
+
+    @router.post(
+        LIGHTHOUSE_PERFORMANCE_FINDINGS_PATH,
+        response_model=LighthouseAuditReport,
+        operation_id=LIGHTHOUSE_PERFORMANCE_FINDINGS_OPERATION,
+    )
+    async def lighthouse_performance_findings(body: _LighthouseAuditBody) -> JsonValue:
+        return to_json_value(
+            await services.lighthouse.findings(
+                _lighthouse_request(body),
+                LighthouseCategory.PERFORMANCE,
+            )
+        )
+
+    @router.post(
+        LIGHTHOUSE_BEST_PRACTICES_FINDINGS_PATH,
+        response_model=LighthouseAuditReport,
+        operation_id=LIGHTHOUSE_BEST_PRACTICES_FINDINGS_OPERATION,
+    )
+    async def lighthouse_best_practices_findings(body: _LighthouseAuditBody) -> JsonValue:
+        return to_json_value(
+            await services.lighthouse.findings(
+                _lighthouse_request(body),
+                LighthouseCategory.BEST_PRACTICES,
+            )
+        )
+
+    @router.post(
         GA4_PAGESPEED_CORRELATION_PATH,
         response_model=None,
         operation_id=GA4_PAGESPEED_CORRELATION_OPERATION,
@@ -2117,3 +2262,12 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
             )
 
     return router
+
+
+def _lighthouse_request(body: _LighthouseAuditBody) -> LighthouseAuditRequest:
+    return LighthouseAuditRequest(
+        account_id=body.account_id,
+        site_url=body.site_url,
+        page_url=body.page_url,
+        timeout_seconds=body.timeout_seconds,
+    )

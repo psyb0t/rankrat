@@ -16,11 +16,17 @@ def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
 
     assert "RANKRAT_READ_ONLY ?= true" in source
     assert "RANKRAT_UNBOUNDED ?= false" in source
+    assert "RANKRAT_ALLOW_AGENT_ONBOARDING ?= false" in source
     assert "RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY)" in source
     assert "RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED)" in source
+    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=$(RANKRAT_ALLOW_AGENT_ONBOARDING)" in source
     assert "./rankrat.sh" in source
     assert "$(WRAPPER) stdio" in _target(source, "run")
     assert "$(WRAPPER) http" in _target(source, "run-http")
+    assert "RANKRAT_WRAPPERS := rankrat.sh .agents/skills/rankrat/references/rankrat.sh" in source
+    assert "$(SHELLCHECK_IMAGE) $(RANKRAT_WRAPPERS) scripts/*.sh" in source
+    assert "$(SHFMT_IMAGE) -d $(RANKRAT_WRAPPERS) scripts" in source
+    assert "$(SHFMT_IMAGE) -w $(RANKRAT_WRAPPERS) scripts" in source
 
 
 def test_local_dev_image_mode_is_an_explicit_checked_fallback() -> None:
@@ -39,7 +45,10 @@ def test_wrapper_allows_only_explicit_unbounded_persistence() -> None:
 
     assert 'read_only="${RANKRAT_READ_ONLY:-true}"' in source
     assert 'unbounded="${RANKRAT_UNBOUNDED:-false}"' in source
+    assert 'allow_agent_onboarding="${RANKRAT_ALLOW_AGENT_ONBOARDING:-false}"' in source
     assert "RANKRAT_UNBOUNDED=true requires RANKRAT_READ_ONLY=false" in source
+    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=true requires RANKRAT_READ_ONLY=false" in source
+    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=$allow_agent_onboarding" in source
     assert _READ_ONLY_MOUNT_ASSIGNMENT in source
     assert _WRITABLE_MOUNT_ASSIGNMENT in source
     assert 'serve_boundary_mount="$readonly_boundary_mount"' in source
@@ -118,6 +127,139 @@ def test_live_target_runs_every_provider_and_transport_target() -> None:
     for expected_target in expected_targets:
         invocation = f"$(MAKE) --no-print-directory {expected_target}"
         assert target.count(invocation) == 1
+
+
+def test_lighthouse_image_target_drives_the_production_transport() -> None:
+    makefile = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    script = Path("scripts/test_lighthouse_image.sh").read_text(encoding="utf-8")
+
+    assert "scripts/test_lighthouse_image.sh" in _target(makefile, "test-image")
+    assert "scripts/test_lighthouse_image.sh" in _target(makefile, "test-lighthouse-image")
+    expected_operations = (
+        "lighthouse_audit",
+        "lighthouse_seo_findings",
+        "lighthouse_accessibility_findings",
+        "lighthouse_performance_findings",
+        "lighthouse_best_practices_findings",
+    )
+    expected_routes = (
+        "audits",
+        "seo-findings",
+        "accessibility-findings",
+        "performance-findings",
+        "best-practices-findings",
+    )
+
+    for operation in expected_operations:
+        assert f'"{operation}"' in script
+    for route in expected_routes:
+        assert f'"{route}"' in script
+    assert '"page_url":"https://example.com/"' in script
+    assert "/v1/lighthouse" in script
+    assert "Streamable HTTP MCP" in script
+    assert "--network none" in script
+    assert 'docker run -d --init --name "$worker_container_name"' in script
+    assert 'LIGHTHOUSE_RUNNER_TIMEOUT_MS="$WORKER_AUDIT_TIMEOUT_MILLISECONDS"' in script
+    assert '--retry "$LIVE_AUDIT_RETRY_COUNT" --retry-all-errors' in script
+    assert "RANKRAT_LIGHTHOUSE_WORKER_SOCKET=/run/lighthouse/lighthouse.sock" in script
+    assert 'docker rm -f "$worker_container_name"' in script
+    assert 'docker volume create "$runtime_volume_name"' in script
+    assert 'docker volume rm "$runtime_volume_name"' in script
+    assert script.count('--user "$HOST_USER_ID:$HOST_GROUP_ID"') == 5
+
+
+def test_reusable_workflows_are_pinned_to_one_reviewed_commit() -> None:
+    workflow_paths = tuple(Path(".github/workflows").glob("*.yml"))
+    reusable_prefix = "psyb0t/reusable-github-workflows/"
+    expected_revision = "9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e"
+    references: list[str] = []
+
+    for workflow_path in workflow_paths:
+        for line in workflow_path.read_text(encoding="utf-8").splitlines():
+            if reusable_prefix in line:
+                references.append(line.rsplit("@", maxsplit=1)[-1].strip())
+
+    assert references
+    assert set(references) == {expected_revision}
+
+
+def test_public_docs_describe_the_initializer_as_a_one_shot_service() -> None:
+    readme = Path("README.md").read_text(encoding="utf-8")
+
+    assert "two\nlong-lived services plus a one-shot volume initializer" in readme
+    assert "two-service Compose" not in readme
+    assert "two-service deployment" not in readme
+
+
+def test_lighthouse_format_rebuilds_the_baked_development_source() -> None:
+    makefile = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+
+    assert "$(MAKE) --no-print-directory lighthouse-dev-image" in _target(
+        makefile, "lighthouse-format"
+    )
+
+
+def test_supply_chain_targets_cover_both_production_images() -> None:
+    makefile = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    sbom_target = _target(makefile, "sbom")
+
+    assert "mirror.gcr.io/koalaman/shellcheck:v0.11.0@sha256:61862eba" in makefile
+    assert "mirror.gcr.io/mvdan/shfmt:v3.13.1@sha256:f22f3936" in makefile
+    assert "ghcr.io/anchore/syft:v1.49.0@sha256:9a9f8531" in makefile
+    assert "ghcr.io/anchore/grype:v0.116.0@sha256:fd4ab4d" in makefile
+    assert "anchore/grype:v0.115.0" not in makefile
+    assert "src=$(VULNERABILITY_DB_DIR),dst=/cache,readonly" not in makefile
+    assert _target(makefile, "audit-image").count("src=$(VULNERABILITY_DB_DIR),dst=/cache") == 3
+    assert "rankrat-lighthouse-image.tar" in sbom_target
+    assert "rankrat-lighthouse.syft.json" in sbom_target
+    assert 'mkdir -p "$(SBOM_DIR)" "$(SBOM_TMP_DIR)"' in sbom_target
+    assert sbom_target.count("trap 'find \"$(SBOM_TMP_DIR)\" -mindepth 1 -delete' EXIT") == 2
+    assert sbom_target.count("-e TMPDIR=/work/tmp") == 2
+    assert sbom_target.count("--memory 2g") == 2
+    assert "size=256m" not in sbom_target
+    assert "sbom:/work/rankrat-lighthouse.syft.json" in _target(
+        makefile,
+        "audit-image",
+    )
+    assert "rankrat-lighthouse.grype.json" in _target(makefile, "audit-image")
+
+
+def test_lighthouse_dependency_lifecycle_is_sandboxed_and_age_gated() -> None:
+    makefile = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    workspace = Path("lighthouse-worker/pnpm-workspace.yaml").read_text(encoding="utf-8")
+    dockerfile = Path("Dockerfile.lighthouse").read_text(encoding="utf-8")
+
+    assert "FROM lock AS dependencies" in dockerfile
+    assert dockerfile.count("mcr.microsoft.com/playwright:v1.62.1-noble@sha256:") == 2
+    assert "mcr.microsoft.com/playwright:v1.62.0-noble" not in dockerfile
+    assert "ARG CHROME_FOR_TESTING_VERSION=151.0.7922.72" in dockerfile
+    assert "ARG CHROME_FOR_TESTING_SHA256=" in dockerfile
+    assert "sha256sum --check --strict" in dockerfile
+    assert "python3 -m zipfile -e" in dockerfile
+    assert "unzip" not in dockerfile
+    assert "chmod 0755 /opt/chrome/chrome /opt/chrome/chrome_crashpad_handler" in dockerfile
+    assert 'grep -Fq "${CHROME_FOR_TESTING_VERSION}"' in dockerfile
+    assert "rm --recursive --force /ms-playwright /usr/lib/node_modules" in dockerfile
+    assert "pnpm@10.34.5" in dockerfile
+    assert "LIGHTHOUSE_LOCK_IMAGE :=" in makefile
+    assert "$(LIGHTHOUSE_LOCK_IMAGE)" in makefile
+    assert "audit: lighthouse-lock-image dev-image ##" in makefile
+    assert "$(BUMP_LIGHTHOUSE_RELEASE_AGE)" in _target(
+        makefile,
+        "lighthouse-pkg-update",
+    )
+    assert "minimumReleaseAge: 10080" in workspace
+    assert "- brace-expansion@5.0.9" in workspace
+    assert "brace-expansion: 5.0.9" in workspace
+    tooling_target = _target(makefile, "test-tooling")
+    assert "bump_lighthouse_minimum_release_age.sh" in tooling_target
+    assert "minimumReleaseAge: 10080" in tooling_target
+
+
+def test_coverage_target_also_runs_the_lighthouse_worker_suite() -> None:
+    makefile = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+
+    assert "test-coverage: lighthouse-test dev-image ##" in makefile
 
 
 def _target(source: str, name: str) -> str:

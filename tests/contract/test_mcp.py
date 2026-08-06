@@ -348,6 +348,11 @@ async def test_mcp_tool_catalog_annotations_and_calls(
             "google_analytics_conversion_funnel",
             "pagespeed_analyze",
             "pagespeed_core_web_vitals",
+            "lighthouse_audit",
+            "lighthouse_seo_findings",
+            "lighthouse_accessibility_findings",
+            "lighthouse_performance_findings",
+            "lighthouse_best_practices_findings",
             "ga4_pagespeed_correlation",
             "ga4_search_console_comparison",
             "search_engine_comparison",
@@ -378,7 +383,7 @@ async def test_mcp_tool_catalog_annotations_and_calls(
             assert tool.annotations is not None
             assert tool.annotations.readOnlyHint is True
             assert tool.annotations.destructiveHint is False
-            assert tool.annotations.openWorldHint is False
+            assert tool.annotations.openWorldHint is tool.name.startswith("lighthouse_")
 
         accounts = await client.call_tool("accounts_list", {"provider": "google"})
         accounts_payload = json.loads(accounts.content[0].text)  # type: ignore[union-attr]

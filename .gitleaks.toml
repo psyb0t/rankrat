@@ -6,6 +6,7 @@ useDefault = true
 [[allowlists]]
 description = "Ignored local credentials, runtime configuration, and agent scratch"
 paths = [
+  '''(^|/)\.env$''',
   '''(^|/)\.agent_notes(?:/|$)''',
   '''(^|/)\.anustimes(?:/|$)''',
   '''(^|/)\.brutal_reviews(?:/|$)''',
@@ -23,5 +24,8 @@ paths = [
   '''(^|/)__pycache__(?:/|$)''',
   '''(^|/)\.coverage$''',
   '''(^|/)config/boundaries(?:\.live)?\.json$''',
+  '''(^|/)lighthouse-worker/\.pnpm-store(?:/|$)''',
+  '''(^|/)lighthouse-worker/node_modules(?:/|$)''',
+  '''(^|/)oauth(?:/|$)''',
   '''(^|/)secrets(?:/|$)''',
 ]

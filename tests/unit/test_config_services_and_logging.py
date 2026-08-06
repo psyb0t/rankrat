@@ -61,6 +61,7 @@ def test_settings_validate_exposure_paths_levels_and_write_mode(tmp_path: Path) 
         {"log_level": "TRACE"},
         {"boundary_file": Path("relative")},
         {"oauth_token_root": Path("relative")},
+        {"lighthouse_worker_socket": Path("relative")},
         {"enable_writes": True},
         {"admin_bearer_secret_file": secret},
     ]
@@ -69,6 +70,9 @@ def test_settings_validate_exposure_paths_levels_and_write_mode(tmp_path: Path) 
             Settings.model_validate(values)
     write_settings = Settings(read_only=False)
     assert write_settings.writes_enabled is True
+    assert (
+        Settings.model_validate({"lighthouse_worker_socket": ""}).lighthouse_worker_socket is None
+    )
     unbounded_settings = Settings(read_only=False, unbounded=True)
     assert unbounded_settings.unbounded is True
     with pytest.raises(ValidationError, match="unbounded mode requires"):

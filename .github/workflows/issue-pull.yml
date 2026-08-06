@@ -12,7 +12,8 @@ jobs:
   issue-pull:
     permissions:
       issues: write
-    uses: psyb0t/reusable-github-workflows/.github/workflows/issue-pull.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/issue-pull.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
     with:
       # Only the cron needs spreading out. A manual run is one repo, triggered by
       # one person who is waiting for it.

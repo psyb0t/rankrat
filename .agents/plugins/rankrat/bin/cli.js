@@ -11,7 +11,12 @@ const TRANSPORT_STDIO = "stdio";
 const CONTAINER_CONFIG = "/run/config";
 const CONTAINER_SECRETS = "/run/secrets";
 const CONTAINER_OAUTH = "/run/oauth";
-const FORWARDED_SETTINGS = ["RANKRAT_READ_ONLY", "RANKRAT_UNBOUNDED", "RANKRAT_LOG_LEVEL"];
+const FORWARDED_SETTINGS = [
+  "RANKRAT_READ_ONLY",
+  "RANKRAT_UNBOUNDED",
+  "RANKRAT_ALLOW_AGENT_ONBOARDING",
+  "RANKRAT_LOG_LEVEL",
+];
 
 function requiredConfigDir(environment) {
   const configDir = environment.RANKRAT_CONFIG_DIR;

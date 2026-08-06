@@ -18,9 +18,11 @@ the ones in the settings model, not example values.
 | `RANKRAT_OAUTH_TOKEN_ROOT` | `/run/oauth` | Directory holding stored Google OAuth tokens. |
 | `RANKRAT_LOG_FILE` | `/tmp/rankrat/rankrat.log` | Log destination. |
 | `RANKRAT_LOG_LEVEL` | `INFO` | Standard Python log levels. |
+| `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` | `/run/lighthouse/lighthouse.sock` | Optional Unix socket for the isolated local Lighthouse worker. Empty disables it. |
 | `RANKRAT_ENABLE_OPENAPI` | `false` | Serve the OpenAPI document. |
 | `RANKRAT_READ_ONLY` | `true` | See "Write access" below. |
 | `RANKRAT_UNBOUNDED` | `false` | Reusable trusted-onboarding mode; see "Unbounded mode". Requires `RANKRAT_READ_ONLY=false`. |
+| `RANKRAT_ALLOW_AGENT_ONBOARDING` | `false` | Expose agent-reachable onboarding when writes are enabled; see "Onboarding" below. |
 | `RANKRAT_HTTP_BEARER_SECRET_FILE` | unset | File holding the bearer token required on HTTP requests. Unset means no auth, so only do that on loopback. |
 
 The supported names and safe defaults are in `.env.example`. Invalid values for
@@ -90,9 +92,11 @@ it that way.
 
 ## Provider credentials
 
-Each provider is optional; rankrat exposes tools for whichever ones are
-configured. Ask the `provider_readiness` tool which are live rather than
-inferring it from an empty result.
+Each provider is optional. Read tools stay discoverable regardless of local
+credential state and return a finite unavailable/configuration error when their
+provider cannot run. Ask `provider_readiness` which providers are live rather
+than inferring it from discovery or an empty result. Write tools are the
+exception: they are absent unless writable mode enables them.
 
 - **Google Search Console / Google Analytics 4 / Google Indexing** — OAuth. The
   CLI runs one authorization flow and stores the resulting token under
@@ -105,6 +109,12 @@ inferring it from an empty result.
   that does not use OAuth: the key goes on the query string, so the Google
   consent flow grants it nothing. It is optional — with no key configured the
   call still goes out, unauthenticated, under a much tighter quota.
+- **Local Lighthouse** — no credential. The optional companion image receives
+  only a shared Unix socket and outbound browser network access. Rankrat accepts
+  only requested URLs beneath the account's `pagespeed_sites` and rejects a
+  report whose final URL escapes that boundary. A public cross-origin redirect
+  can be fetched before this post-navigation check, while private and special
+  destinations are blocked by the worker's enforced proxy.
 
 Credentials stay on the host running rankrat. They are used to call the provider
 APIs over HTTPS and are not sent anywhere else.
@@ -112,8 +122,11 @@ APIs over HTTPS and are not sent anywhere else.
 ## Running it
 
 An agent runs the published image directly. The boundary file, the credentials
-and the Google authorization are created by a human beforehand, using the
-repository's `rankrat.sh` wrapper around these same invocations.
+and the Google authorization are created by a human beforehand. This skill
+includes [`rankrat.sh`](rankrat.sh), a byte-identical copy of the repository
+wrapper around these same invocations. Run it from its installed skill path with
+`bash references/rankrat.sh` when the wrapper is more convenient than the plain
+Docker commands below; no system-wide installation is required.
 
 Both transports take the same three read-only mounts. Container-side paths are
 the server's defaults, so only the host side changes:
@@ -155,6 +168,68 @@ docker run --rm --init --read-only \
 `RANKRAT_HTTP_HOST=0.0.0.0` binds inside the container while `-p` keeps it on
 loopback. MCP is then at `http://127.0.0.1:8080/mcp`; send
 `Authorization: Bearer <token>` whenever a bearer secret is configured.
+
+Local Lighthouse audits require the separate published browser image. Start it
+once against a private named volume:
+
+```bash
+docker volume create rankrat-lighthouse-runtime
+docker run --rm --network none --user 0:0 --read-only \
+  --cap-drop=ALL --cap-add=CHOWN --cap-add=FOWNER \
+  --security-opt no-new-privileges:true \
+  --pids-limit 16 --memory 64m --cpus 0.25 \
+  --mount type=volume,src=rankrat-lighthouse-runtime,dst=/run/lighthouse \
+  --entrypoint /bin/sh psyb0t/rankrat-lighthouse \
+  -c 'chmod 1777 /run/lighthouse && touch /run/lighthouse/.initialized && chown -R 10001:10001 /run/lighthouse && chmod 0750 /run/lighthouse'
+docker run --rm -d --name rankrat-lighthouse-worker --init --read-only \
+  --user 10001:10001 --cap-drop=ALL --security-opt no-new-privileges:true \
+  --pids-limit 256 --memory 2g --cpus 2 --shm-size 1g \
+  --tmpfs /tmp:rw,noexec,nosuid,size=1g,mode=1777 \
+  --mount type=volume,src=rankrat-lighthouse-runtime,dst=/run/lighthouse \
+  psyb0t/rankrat-lighthouse
+```
+
+The self-removing initializer assigns the private volume root to the non-root
+UID shared by Rankrat and the worker. When using a different UID/GID, change the
+initializer's `chown` pair and the worker's `--user` pair to the same values.
+Run Rankrat under that pair as well if the primary image's built-in `10001:10001`
+user is overridden. The provided Compose file applies `RANKRAT_UID` and
+`RANKRAT_GID` consistently to both long-lived services after running this
+hardened initializer.
+
+Add this read-only volume mount to either published Rankrat invocation above:
+
+```bash
+--mount type=volume,src=rankrat-lighthouse-runtime,dst=/run/lighthouse,readonly
+```
+
+The normal `psyb0t/rankrat stdio` command then exposes the five Lighthouse tools
+over stdio. The normal `psyb0t/rankrat http` command exposes the same tools over
+Streamable HTTP at `/mcp` and REST under `/v1/lighthouse/`. Leave
+`RANKRAT_LIGHTHOUSE_WORKER_SOCKET` empty to disable the worker explicitly. Stop
+and remove only the worker and volume you created when they are no longer
+needed.
+
+The worker is for pages you control and trust. Chromium runs with
+`--no-sandbox` because its built-in namespace/setuid sandbox cannot coexist with
+the documented non-root, capability-free, `no-new-privileges` container. The
+credential-free, read-only worker and public-address-only proxy reduce blast
+radius but do not replace the renderer sandbox after a browser exploit. Use an
+outer sandbox such as gVisor or Kata Containers before auditing hostile content.
+
+| MCP tool | REST route |
+|---|---|
+| `lighthouse_audit` | `POST /v1/lighthouse/audits` |
+| `lighthouse_seo_findings` | `POST /v1/lighthouse/seo-findings` |
+| `lighthouse_accessibility_findings` | `POST /v1/lighthouse/accessibility-findings` |
+| `lighthouse_performance_findings` | `POST /v1/lighthouse/performance-findings` |
+| `lighthouse_best_practices_findings` | `POST /v1/lighthouse/best-practices-findings` |
+
+Every operation accepts the same strict body: `account_id`, a configured
+`site_url`, a child `page_url`, and optional `timeout_seconds` in the inclusive
+5–300 second range. The aggregate audit returns all four category scores and
+failed findings; the other four operations return only that category's failed
+findings.
 
 ## Onboarding
 

@@ -1,17 +1,17 @@
 ---
 name: rankrat
-description: Query Google Search Console, Bing Webmaster Tools, Google Analytics 4 (GA4), and PageSpeed Insights through one self-hosted MCP server. Search analytics queries, summaries, trends, anomalies, comparisons and drop attribution; query and page performance, ranking buckets, cannibalization and opportunity reports; URL inspection, sitemaps, crawl issues, crawl stats, link counts and feeds; GA4 reports covering realtime, content, landing pages, organic search, traffic sources, ecommerce, audience segments, user behavior and conversion funnels; PageSpeed Insights and schema fetching. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect SEO, indexing, ranking or search-traffic data for sites they already own.
+description: Query Google Search Console, Bing Webmaster Tools, Google Analytics 4 (GA4), and PageSpeed Insights, or run local Lighthouse browser audits, through one self-hosted MCP server. Search analytics queries, summaries, trends, anomalies, comparisons and drop attribution; query and page performance, ranking buckets, cannibalization and opportunity reports; URL inspection, sitemaps, crawl issues, crawl stats, link counts and feeds; GA4 reports covering realtime, content, landing pages, organic search, traffic sources, ecommerce, audience segments, user behavior and conversion funnels; PageSpeed, Lighthouse, and schema checks. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect SEO, indexing, ranking, browser-audit, or search-traffic data for sites they already own.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
   openclaw:
     emoji: "🐀"
-    primaryEnv: RANKRAT_URL
+    primaryEnv: RANKRAT_CONFIG_DIR
     requires:
       bins: [docker]
 permissions:
-  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights, and IndexNow provider endpoints; inbound only on the port you bind. Traffic goes to those provider APIs, never to a third party."
-  shell: "docker run invocations for the published image, as shown below; no other host access is required."
+  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights, and IndexNow provider endpoints; optional Lighthouse browser traffic to explicitly requested public pages beneath configured sites; inbound only on the port you bind."
+  shell: "docker run invocations for the published image, or bash execution of the bundled references/rankrat.sh wrapper; no other host access is required."
   filesystem: "reads the boundary config and provider credentials. Local initialization creates an HTTP bearer secret; Google authorization writes its token record; IndexNow initialization creates or retains its local key and updates .env plus the boundary file; writable unbounded onboarding updates the one configured boundary file with exact created-resource IDs."
 ---
 
@@ -47,10 +47,11 @@ session. Treat any unbounded server as a trusted-caller setup, not a public
 service.
 
 Your provider credentials stay on the host running rankrat. Requests go to the
-provider APIs over HTTPS; nothing is relayed to a third party, and credentials,
-OAuth records and raw provider bodies are never returned or logged. Bind it to
-loopback or a private network, and use the bearer token if anything else can
-reach it.
+provider APIs over HTTPS. The optional Lighthouse companion opens only an
+explicitly requested page beneath a configured PageSpeed site and receives no
+provider credentials. Credentials, OAuth records and raw provider bodies are
+never returned or logged. Bind Rankrat to loopback or a private network, and use
+the bearer token if anything else can reach it.
 
 ## When to use
 
@@ -65,6 +66,8 @@ reach it.
   landing pages, traffic sources, ecommerce, audience segments, user behavior,
   conversion funnels.
 - PageSpeed Insights, and fetching a page's structured-data schema.
+- Local Lighthouse performance, accessibility, best-practices, and SEO scores
+  or category-specific failed findings when the companion worker is configured.
 - Checking which providers are actually wired up (`provider_readiness`,
   `diagnostics`) before trusting a report.
 
@@ -79,14 +82,16 @@ reach it.
   onboarded site.
 - **Realtime dashboards.** Provider APIs lag (Search Console notably so), and
   rankrat reports what they return.
-- **Crawling a site.** It reads provider APIs; it is not a crawler or an
-  auditor.
+- **Crawling a site.** Lighthouse audits one explicit bounded page per call; it
+  does not discover or walk a site.
 
 ## Usage
 
-Both MCP transports run from the published image. The tool list adapts to which
-providers are configured, so ask `provider_readiness` first if a call comes back
-empty.
+Both MCP transports run from the published image. Read tools have a stable
+discovery surface even when their provider is not configured; ask
+`provider_readiness` before interpreting an empty or unavailable result. Only
+write-tool discovery changes with `RANKRAT_READ_ONLY` and
+`RANKRAT_ALLOW_AGENT_ONBOARDING`.
 
 **stdio** is the default mode, so a client that spawns its own server just runs
 the image and talks to it — no port, no bridge:
@@ -122,7 +127,30 @@ loopback only. Send `Authorization: Bearer <token>` when a bearer secret is
 configured.
 
 The repo ships a `rankrat.sh` wrapper around exactly these invocations for
-humans; an agent does not need it.
+humans. The published skill bundles the same script at
+[`references/rankrat.sh`](references/rankrat.sh), so it remains available when
+the skill is installed without a repository checkout; agents can still invoke
+the image directly.
+
+The one-container stdio examples return `UNAVAILABLE` for Lighthouse because
+Chromium is deliberately isolated in `psyb0t/rankrat-lighthouse`. Use the
+published two-image commands in `references/setup.md` when local browser audits
+are required. They support both stdio and Streamable HTTP while sharing only a
+Unix socket; the worker receives no provider credential mounts.
+
+Use the browser worker only for operator-controlled sites. Its documented
+non-root, capability-free container needs Chromium's `--no-sandbox`; a hostile
+page therefore requires a stronger outer sandbox such as gVisor or Kata. The
+worker blocks private/special-address egress, while public cross-origin
+subresources—and a public redirect before Rankrat rejects its final URL—remain
+possible.
+
+The browser surface is exactly `lighthouse_audit`,
+`lighthouse_seo_findings`, `lighthouse_accessibility_findings`,
+`lighthouse_performance_findings`, and
+`lighthouse_best_practices_findings`. Every call takes `account_id`, a
+configured `site_url`, a child `page_url`, and an optional timeout from 5 to 300
+seconds. The REST equivalents live under `/v1/lighthouse/`.
 
 ### Finding where a site lives, and matching its tag
 

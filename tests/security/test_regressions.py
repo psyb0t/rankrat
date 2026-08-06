@@ -16,14 +16,61 @@ from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.tool_contracts import READ_ONLY_TOOL_CATALOG, tool_catalog
 
 _OWNER_ONLY_SECRET_FILE_MODE = 0o600
-_DOCKERFILE_PATHS = (Path("Dockerfile"), Path("Dockerfile.dev"), Path("Dockerfile.lock"))
+_DOCKERFILE_PATHS = (
+    Path("Dockerfile"),
+    Path("Dockerfile.dev"),
+    Path("Dockerfile.lighthouse"),
+    Path("Dockerfile.lock"),
+)
 _DOCKER_HUB_FRONTEND_DIRECTIVE = "# syntax=docker/dockerfile"
+_NODE_OFFICIAL_IMAGE = (
+    "public.ecr.aws/docker/library/node:22.17.1-bookworm-slim@"
+    "sha256:2fa754a9ba4d7adbd2a51d182eaabbe355c82b673624035a38c0d42b08724854"
+)
+_PYTHON_OFFICIAL_IMAGE = (
+    "public.ecr.aws/docker/library/python:3.14.6-slim-trixie@"
+    "sha256:d4fea6e20c09820028eea3f5c17f5b8ebd2ecb9c2bf28e561681a74a96090e4f"
+)
 
 
 def test_dockerfiles_do_not_require_a_docker_hub_frontend_image() -> None:
     for dockerfile_path in _DOCKERFILE_PATHS:
         contents = dockerfile_path.read_text(encoding="utf-8")
         assert _DOCKER_HUB_FRONTEND_DIRECTIVE not in contents
+
+
+def test_docker_official_bases_use_public_ecr_at_the_reviewed_digests() -> None:
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+    development_dockerfile = Path("Dockerfile.dev").read_text(encoding="utf-8")
+    lock_dockerfile = Path("Dockerfile.lock").read_text(encoding="utf-8")
+
+    for dockerfile_path in _DOCKERFILE_PATHS:
+        contents = dockerfile_path.read_text(encoding="utf-8")
+        assert "FROM node:" not in contents
+        assert "FROM python:" not in contents
+
+    assert dockerfile.count(f"FROM {_PYTHON_OFFICIAL_IMAGE}") == 2
+    assert development_dockerfile.count(f"FROM {_NODE_OFFICIAL_IMAGE}") == 1
+    assert development_dockerfile.count(f"FROM {_PYTHON_OFFICIAL_IMAGE}") == 1
+    assert lock_dockerfile.count(f"FROM {_PYTHON_OFFICIAL_IMAGE}") == 1
+
+
+def test_lighthouse_runtime_volume_supports_the_shared_configured_uid() -> None:
+    dockerfile = Path("Dockerfile.lighthouse").read_text(encoding="utf-8")
+    compose = Path("docker-compose.yml.example").read_text(encoding="utf-8")
+
+    assert "--mode=0750 /run/lighthouse" in dockerfile
+    assert "lighthouse_runtime:/run/lighthouse:ro" in compose
+    assert "lighthouse_runtime:/run/lighthouse\n" in compose
+    assert compose.count('user: "${RANKRAT_UID:-10001}:${RANKRAT_GID:-10001}"') == 2
+    assert "lighthouse-volume-init:" in compose
+    assert "chown -R ${RANKRAT_UID:-10001}:${RANKRAT_GID:-10001}" in compose
+    assert "chmod 0750 /run/lighthouse" in compose
+    assert "touch /run/lighthouse/.initialized" in compose
+    assert 'user: "0:0"' in compose
+    assert "- CHOWN" in compose
+    assert "- FOWNER" in compose
+    assert "condition: service_completed_successfully" in compose
 
 
 def test_normalized_duplicate_resources_and_cross_provider_resources_are_rejected(

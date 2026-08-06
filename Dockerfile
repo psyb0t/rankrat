@@ -1,6 +1,6 @@
 FROM ghcr.io/astral-sh/uv:0.11.31@sha256:ecd4de2f060c64bea0ff8ecb182ddf46ba3fcccdc8a60cfdbaf20d1a047d7437 AS uv
 
-FROM python:3.14.6-slim-trixie@sha256:d4fea6e20c09820028eea3f5c17f5b8ebd2ecb9c2bf28e561681a74a96090e4f AS builder
+FROM public.ecr.aws/docker/library/python:3.14.6-slim-trixie@sha256:d4fea6e20c09820028eea3f5c17f5b8ebd2ecb9c2bf28e561681a74a96090e4f AS builder
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
@@ -19,7 +19,7 @@ COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev --no-editable
 
-FROM python:3.14.6-slim-trixie@sha256:d4fea6e20c09820028eea3f5c17f5b8ebd2ecb9c2bf28e561681a74a96090e4f AS runtime
+FROM public.ecr.aws/docker/library/python:3.14.6-slim-trixie@sha256:d4fea6e20c09820028eea3f5c17f5b8ebd2ecb9c2bf28e561681a74a96090e4f AS runtime
 
 # The MCP registry verifies namespace ownership of an oci package by reading this
 # label off the pushed image and matching it against server.json's "name".
@@ -35,6 +35,7 @@ RUN groupadd --gid 10001 rankrat \
     && install --directory --owner=rankrat --group=rankrat --mode=0750 \
         /run/config \
         /run/oauth \
+        /run/lighthouse \
         /run/secrets/google \
         /run/secrets/bing \
         /run/secrets/indexnow \

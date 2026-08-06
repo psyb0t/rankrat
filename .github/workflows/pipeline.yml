@@ -22,7 +22,8 @@ jobs:
   checks:
     permissions:
       contents: read
-    uses: psyb0t/reusable-github-workflows/.github/workflows/make-checks.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/make-checks.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
     with:
       test_command: "make coverage-percent"
       coverage_file: coverage-percent.txt
@@ -35,7 +36,8 @@ jobs:
     if: github.ref_name == github.event.repository.default_branch || startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write # commit the SVGs to the badges branch
-    uses: psyb0t/reusable-github-workflows/.github/workflows/create-badges.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/create-badges.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
     with:
       coverage: true
 
@@ -46,7 +48,8 @@ jobs:
     permissions:
       contents: write # GitHub Release
       security-events: write # upload the Grype SARIF to the Security tab
-    uses: psyb0t/reusable-github-workflows/.github/workflows/docker-image-workflow.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/docker-image-workflow.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
 
     with:
       repository_name: psyb0t/rankrat
@@ -72,6 +75,24 @@ jobs:
       dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
       dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
 
+  call-lighthouse-image-workflow:
+    needs: [checks]
+    permissions:
+      contents: write # GitHub Release
+      security-events: write # upload the companion image Grype SARIF
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/docker-image-workflow.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
+    with:
+      repository_name: psyb0t/rankrat-lighthouse
+      target_platforms: linux/amd64
+      build_targets: '[{"file":"Dockerfile.lighthouse","tag_suffix":""}]'
+      scan_only_fixed: true
+      scan_severity: "high"
+      scan_fail_build: true
+    secrets:
+      dockerhub_username: ${{ secrets.DOCKERHUB_USERNAME }}
+      dockerhub_token: ${{ secrets.DOCKERHUB_TOKEN }}
+
   # Tag pushes only, and only once the image exists on Docker Hub -- the registry
   # verifies namespace ownership against the io.modelcontextprotocol.server.name
   # LABEL on the pushed image.
@@ -81,7 +102,8 @@ jobs:
     permissions:
       id-token: write # secretless OIDC auth to the MCP registry
       contents: read
-    uses: psyb0t/reusable-github-workflows/.github/workflows/mcp-registry-publish.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/mcp-registry-publish.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
 
   # Validates on every push, publishes only on a tag: the reusable workflow runs
   # a validate job whenever it is called and gates the publish job on a tag ref
@@ -91,6 +113,7 @@ jobs:
   publish-to-clawhub:
     needs: [call-docker-image-workflow]
     if: startsWith(github.ref, 'refs/tags/')
-    uses: psyb0t/reusable-github-workflows/.github/workflows/clawhub-publish.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/clawhub-publish.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}

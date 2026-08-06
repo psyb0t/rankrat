@@ -1,4 +1,27 @@
 services:
+  lighthouse-volume-init:
+    build:
+      context: .
+      dockerfile: Dockerfile.lighthouse
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chmod 1777 /run/lighthouse && touch /run/lighthouse/.initialized && chown -R ${RANKRAT_UID:-10001}:${RANKRAT_GID:-10001} /run/lighthouse && chmod 0750 /run/lighthouse"]
+    volumes:
+      - lighthouse_runtime:/run/lighthouse
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    user: "0:0"
+    pids_limit: 16
+    cpus: 0.25
+    mem_limit: 64m
+    restart: "no"
+    network_mode: none
+
   rankrat:
     build:
       context: .
@@ -11,6 +34,7 @@ services:
       RANKRAT_HTTP_BEARER_SECRET_FILE: /run/secrets/rankrat/http-bearer-token
       RANKRAT_HTTP_HOST: 0.0.0.0
       RANKRAT_HTTP_PORT: "8080"
+      RANKRAT_LIGHTHOUSE_WORKER_SOCKET: /run/lighthouse/lighthouse.sock
       RANKRAT_READ_ONLY: "true"
       RANKRAT_UNBOUNDED: "false"
     ports:
@@ -23,6 +47,7 @@ services:
       # replaces it and the read-only flag still covers the file inside.
       - ./config:/run/config:ro
       - ./oauth:/run/oauth:rw
+      - lighthouse_runtime:/run/lighthouse:ro
     secrets:
       - source: rankrat_http_bearer_token
         target: /run/secrets/rankrat/http-bearer-token
@@ -58,9 +83,51 @@ services:
       timeout: 3s
       retries: 5
       start_period: 15s
+    depends_on:
+      lighthouse:
+        condition: service_healthy
     # Some Docker hosts block analyticsadmin.googleapis.com from user-defined
     # bridges. The default bridge preserves the same container network namespace
     # and outbound provider access without exposing an additional service port.
+    network_mode: bridge
+
+  lighthouse:
+    build:
+      context: .
+      dockerfile: Dockerfile.lighthouse
+    environment:
+      LIGHTHOUSE_SOCKET_PATH: /run/lighthouse/lighthouse.sock
+      LIGHTHOUSE_RUNNER_TIMEOUT_MS: "120000"
+    volumes:
+      - lighthouse_runtime:/run/lighthouse
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=1g,mode=1777
+    shm_size: 1gb
+    init: true
+    user: "${RANKRAT_UID:-10001}:${RANKRAT_GID:-10001}"
+    pids_limit: 256
+    cpus: 2.0
+    mem_limit: 2g
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    healthcheck:
+      test: ["CMD", "node", "dist/health.js"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      lighthouse-volume-init:
+        condition: service_completed_successfully
     network_mode: bridge
 
 secrets:
@@ -74,3 +141,6 @@ secrets:
     file: ./secrets/bing/api-key
   indexnow_key:
     file: ./secrets/indexnow/key
+
+volumes:
+  lighthouse_runtime:

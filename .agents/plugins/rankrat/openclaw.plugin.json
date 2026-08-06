@@ -2,7 +2,7 @@
   "id": "@psyb0t/rankrat",
   "name": "rankrat",
   "version": "0.0.0",
-  "description": "Self-hosted, boundary-limited SEO and search-analytics MCP tools. The default server starts the published Rankrat image over stdio.",
+  "description": "Self-hosted, boundary-limited SEO, search-analytics, PageSpeed, and optional local Lighthouse MCP tools. The default server starts the published Rankrat image over stdio.",
   "mcpServers": {
     "rankrat": {
       "transport": "stdio",

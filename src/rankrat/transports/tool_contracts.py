@@ -10,6 +10,11 @@ from rankrat.constants import (
     GA4_PAGESPEED_CORRELATION_OPERATION,
     GA4_SEARCH_CONSOLE_COMPARISON_OPERATION,
     GOOGLE_ANALYTICS_ACCOUNT_INVENTORY_OPERATION,
+    LIGHTHOUSE_ACCESSIBILITY_FINDINGS_OPERATION,
+    LIGHTHOUSE_AUDIT_OPERATION,
+    LIGHTHOUSE_BEST_PRACTICES_FINDINGS_OPERATION,
+    LIGHTHOUSE_PERFORMANCE_FINDINGS_OPERATION,
+    LIGHTHOUSE_SEO_FINDINGS_OPERATION,
     PAGESPEED_CORE_WEB_VITALS_OPERATION,
     SEARCH_ENGINE_COMPARISON_OPERATION,
     SEARCH_ENGINE_TRAFFIC_HEALTH_OPERATION,
@@ -117,6 +122,7 @@ from rankrat.services.google_sitemaps import (
 )
 from rankrat.services.google_sites import GoogleSiteSubmissionRequest, GoogleSiteSubmissionResponse
 from rankrat.services.indexnow import IndexNowSubmissionRequest, IndexNowSubmissionResponse
+from rankrat.services.lighthouse import LighthouseAuditReport, LighthouseAuditRequest
 from rankrat.services.onboarding_guide import OnboardingGuide, OnboardingGuideRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisReport,
@@ -361,6 +367,19 @@ _PAGESPEED_ANALYZE_DESCRIPTION = "Analyze one configured child URL with PageSpee
 _PAGESPEED_CORE_WEB_VITALS_DESCRIPTION = (
     "Return selected Chrome UX Core Web Vitals for one configured child URL."
 )
+_LIGHTHOUSE_AUDIT_DESCRIPTION = (
+    "Run local Lighthouse performance, accessibility, best-practices, and SEO audits."
+)
+_LIGHTHOUSE_SEO_FINDINGS_DESCRIPTION = "Return failed SEO audits for one configured page."
+_LIGHTHOUSE_ACCESSIBILITY_FINDINGS_DESCRIPTION = (
+    "Return failed accessibility audits for one configured page."
+)
+_LIGHTHOUSE_PERFORMANCE_FINDINGS_DESCRIPTION = (
+    "Return failed performance audits for one configured page."
+)
+_LIGHTHOUSE_BEST_PRACTICES_FINDINGS_DESCRIPTION = (
+    "Return failed best-practices audits for one configured page."
+)
 _GA4_PAGESPEED_CORRELATION_DESCRIPTION = (
     "Pair one configured GA4 content row with one configured PageSpeed analysis."
 )
@@ -411,6 +430,7 @@ class ToolContract[InputT, OutputT]:
 
 
 _READ_ONLY_ANNOTATIONS = ToolAnnotations(True, False, True, False)
+_LIGHTHOUSE_ANNOTATIONS = ToolAnnotations(True, False, True, True)
 _INDEXNOW_WRITE_ANNOTATIONS = ToolAnnotations(False, True, False, False)
 
 READ_ONLY_TOOL_CATALOG: tuple[ToolContract[object, object], ...] = (
@@ -679,6 +699,41 @@ READ_ONLY_TOOL_CATALOG: tuple[ToolContract[object, object], ...] = (
         input_type=PageSpeedAnalysisRequest,
         output_type=PageSpeedCoreWebVitalsReport,
         annotations=_READ_ONLY_ANNOTATIONS,
+    ),
+    ToolContract(
+        name=LIGHTHOUSE_AUDIT_OPERATION,
+        description=_LIGHTHOUSE_AUDIT_DESCRIPTION,
+        input_type=LighthouseAuditRequest,
+        output_type=LighthouseAuditReport,
+        annotations=_LIGHTHOUSE_ANNOTATIONS,
+    ),
+    ToolContract(
+        name=LIGHTHOUSE_SEO_FINDINGS_OPERATION,
+        description=_LIGHTHOUSE_SEO_FINDINGS_DESCRIPTION,
+        input_type=LighthouseAuditRequest,
+        output_type=LighthouseAuditReport,
+        annotations=_LIGHTHOUSE_ANNOTATIONS,
+    ),
+    ToolContract(
+        name=LIGHTHOUSE_ACCESSIBILITY_FINDINGS_OPERATION,
+        description=_LIGHTHOUSE_ACCESSIBILITY_FINDINGS_DESCRIPTION,
+        input_type=LighthouseAuditRequest,
+        output_type=LighthouseAuditReport,
+        annotations=_LIGHTHOUSE_ANNOTATIONS,
+    ),
+    ToolContract(
+        name=LIGHTHOUSE_PERFORMANCE_FINDINGS_OPERATION,
+        description=_LIGHTHOUSE_PERFORMANCE_FINDINGS_DESCRIPTION,
+        input_type=LighthouseAuditRequest,
+        output_type=LighthouseAuditReport,
+        annotations=_LIGHTHOUSE_ANNOTATIONS,
+    ),
+    ToolContract(
+        name=LIGHTHOUSE_BEST_PRACTICES_FINDINGS_OPERATION,
+        description=_LIGHTHOUSE_BEST_PRACTICES_FINDINGS_DESCRIPTION,
+        input_type=LighthouseAuditRequest,
+        output_type=LighthouseAuditReport,
+        annotations=_LIGHTHOUSE_ANNOTATIONS,
     ),
     ToolContract(
         name=GA4_PAGESPEED_CORRELATION_OPERATION,

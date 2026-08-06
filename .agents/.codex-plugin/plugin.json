@@ -1,7 +1,7 @@
 {
   "name": "rankrat",
-  "version": "0.4.1",
-  "description": "Self-hosted MCP server over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed Insights and IndexNow — search analytics, indexing and crawl diagnostics, ranking and opportunity reports, GA4 reporting, plus optional boundary-limited submissions and site onboarding. Read-only by default, scoped to the properties you configure. MCP over stdio and Streamable HTTP, plus a REST API.",
+  "version": "0.5.0",
+  "description": "Self-hosted MCP server over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed Insights, IndexNow, and optional isolated local Lighthouse audits — search analytics, indexing and crawl diagnostics, ranking and opportunity reports, GA4 reporting, plus optional boundary-limited submissions and site onboarding. Read-only by default, scoped to the properties you configure. MCP over stdio and Streamable HTTP, plus a REST API.",
   "author": { "name": "psyb0t", "url": "https://github.com/psyb0t" },
   "homepage": "https://github.com/psyb0t/rankrat",
   "repository": "https://github.com/psyb0t/rankrat",
@@ -13,6 +13,7 @@
     "google-analytics",
     "ga4",
     "pagespeed",
+    "lighthouse",
     "indexnow",
     "indexing",
     "search-analytics",

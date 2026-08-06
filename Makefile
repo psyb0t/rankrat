@@ -2,13 +2,18 @@ IMAGE_NAME := psyb0t/rankrat
 VERSION ?= $(shell awk -F\" '/^version *= *"/ {print $$2; exit}' pyproject.toml)
 IMAGE_TAG := v$(VERSION)
 DEV_IMAGE := $(IMAGE_NAME):dev-$(IMAGE_TAG)
+LIGHTHOUSE_IMAGE_NAME := psyb0t/rankrat-lighthouse
+LIGHTHOUSE_IMAGE := $(LIGHTHOUSE_IMAGE_NAME):$(IMAGE_TAG)
+LIGHTHOUSE_LATEST_IMAGE := $(LIGHTHOUSE_IMAGE_NAME):latest
+LIGHTHOUSE_DEV_IMAGE := $(LIGHTHOUSE_IMAGE_NAME):dev-$(IMAGE_TAG)
+LIGHTHOUSE_LOCK_IMAGE := $(LIGHTHOUSE_IMAGE_NAME):lock-$(IMAGE_TAG)
 RANKRAT_DEV_IMAGE_SOURCE ?= build
 LOCK_IMAGE := $(IMAGE_NAME):lock-$(IMAGE_TAG)
-SHELLCHECK_IMAGE := koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
-SHFMT_IMAGE := mvdan/shfmt:v3.13.1@sha256:f22f3936140be1ba02d493b5d2b91d0e8b4af93fd903e7f46c477822bca4a3be
+SHELLCHECK_IMAGE := mirror.gcr.io/koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d
+SHFMT_IMAGE := mirror.gcr.io/mvdan/shfmt:v3.13.1@sha256:f22f3936140be1ba02d493b5d2b91d0e8b4af93fd903e7f46c477822bca4a3be
 GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
-SYFT_IMAGE := anchore/syft:v1.49.0@sha256:9a9f85314017f1ea798fb012edfa7fe9259923910f82c8d4bc983ab5c765e60b
-GRYPE_IMAGE := anchore/grype:v0.115.0@sha256:8755370228a7c6dd0f2148696bcb8334ca307d9e358301ca2f8fb29704c73c4e
+SYFT_IMAGE := ghcr.io/anchore/syft:v1.49.0@sha256:9a9f85314017f1ea798fb012edfa7fe9259923910f82c8d4bc983ab5c765e60b
+GRYPE_IMAGE := ghcr.io/anchore/grype:v0.116.0@sha256:fd4ab4d1042b522c896e73bdf09ab8bf384fa417df99d6dd0d6e1008c7e7c821
 BOUNDARIES ?= $(PWD)/config/boundaries.json
 ENV_FILE ?= $(PWD)/.env
 SECRETS ?= $(PWD)/secrets
@@ -19,6 +24,7 @@ HTTP_PORT ?= 8080
 HTTP_BEARER_SECRET_FILE ?= $(SECRETS)/rankrat/http-bearer-token
 RANKRAT_READ_ONLY ?= true
 RANKRAT_UNBOUNDED ?= false
+RANKRAT_ALLOW_AGENT_ONBOARDING ?= false
 ONBOARD_GOOGLE_ACCOUNT_ID ?= google
 ONBOARD_BING_ACCOUNT_ID ?= bing
 ONBOARD_SITE_URL ?=
@@ -31,16 +37,24 @@ INDEXNOW_KEY_FILE ?= $(SECRETS)/indexnow/key
 INDEXNOW_VERIFY_BOUNDARY_FILE := /tmp/rankrat-boundaries.json
 INDEXNOW_VERIFY_KEY_FILE := /tmp/rankrat-indexnow-key
 SBOM_DIR := $(PWD)/.sbom
+SBOM_TMP_DIR := $(SBOM_DIR)/tmp
 SBOM_ARCHIVE := $(SBOM_DIR)/rankrat-image.tar
 SBOM_SYFT_JSON := $(SBOM_DIR)/rankrat.syft.json
 SBOM_CYCLONEDX_JSON := $(SBOM_DIR)/rankrat.cyclonedx.json
+LIGHTHOUSE_SBOM_ARCHIVE := $(SBOM_DIR)/rankrat-lighthouse-image.tar
+LIGHTHOUSE_SBOM_SYFT_JSON := $(SBOM_DIR)/rankrat-lighthouse.syft.json
+LIGHTHOUSE_SBOM_CYCLONEDX_JSON := $(SBOM_DIR)/rankrat-lighthouse.cyclonedx.json
 VULNERABILITY_DB_DIR := $(PWD)/.grype-db
 VULNERABILITY_REPORT := $(SBOM_DIR)/rankrat.grype.json
+LIGHTHOUSE_VULNERABILITY_REPORT := $(SBOM_DIR)/rankrat-lighthouse.grype.json
 CPYTHON_STDLIB_VEX := $(PWD)/security/rankrat-cpython.openvex.json
 COVERAGE_LOG := $(PWD)/.coverage-report.log
 COVERAGE_PERCENT_FILE := $(PWD)/coverage-percent.txt
 BUMP_EXCLUDE_NEWER := bash scripts/bump-exclude-newer.sh
+BUMP_LIGHTHOUSE_RELEASE_AGE := bash scripts/bump_lighthouse_minimum_release_age.sh
 PKG_GROUP ?=
+LIGHTHOUSE_PKG ?=
+RANKRAT_WRAPPERS := rankrat.sh .agents/skills/rankrat/references/rankrat.sh
 
 UID := $(shell id -u)
 GID := $(shell id -g)
@@ -57,6 +71,7 @@ WRAPPER := RANKRAT_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG) \
 	RANKRAT_OAUTH_CALLBACK_PORT=$(OAUTH_CALLBACK_PORT) \
 	RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY) \
 	RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED) \
+	RANKRAT_ALLOW_AGENT_ONBOARDING=$(RANKRAT_ALLOW_AGENT_ONBOARDING) \
 	./rankrat.sh
 
 DEV_RUN := docker run --rm --init \
@@ -106,10 +121,33 @@ LOCK_RUN := docker run --rm --init \
 	-w /work \
 	$(LOCK_IMAGE)
 
-.PHONY: help version dev-image lock-image init-config setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove \
-	lint lint-fix format test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow test-live-http test-image \
+LIGHTHOUSE_DEV_RUN := docker run --rm --init \
+	--user $(UID):$(GID) \
+	--network none \
+	--cap-drop=ALL \
+	--security-opt no-new-privileges:true \
+	--pids-limit 256 \
+	--tmpfs /tmp:rw,noexec,nosuid,size=256m \
+	-e HOME=/tmp \
+	-w /app \
+	$(LIGHTHOUSE_DEV_IMAGE)
+
+LIGHTHOUSE_MUTATE_RUN := docker run --rm --init \
+	--user $(UID):$(GID) \
+	--network bridge \
+	--cap-drop=ALL \
+	--security-opt no-new-privileges:true \
+	--pids-limit 256 \
+	--tmpfs /tmp:rw,noexec,nosuid,size=256m \
+	-e HOME=/tmp \
+	-v $(PWD)/lighthouse-worker:/work \
+	-w /work \
+	$(LIGHTHOUSE_LOCK_IMAGE)
+
+.PHONY: help version dev-image lighthouse-dev-image lighthouse-lock-image lighthouse-image lock-image init-config setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove lighthouse-pkg-lock lighthouse-pkg-add lighthouse-pkg-update lighthouse-pkg-upgrade lighthouse-pkg-remove \
+	lint lighthouse-lint lint-fix format lighthouse-format test lighthouse-test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow test-live-http test-image test-lighthouse-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
-	 auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
+	run-http-lighthouse auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
 
 help: ## Show supported Rankrat commands
 	@awk 'BEGIN {FS = ":.*##"}; /^[a-zA-Z0-9_.-]+:.*##/ {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -123,6 +161,15 @@ dev-image: ## Build the sandboxed development image
 		local) docker image inspect "$(DEV_IMAGE)" >/dev/null 2>&1 || { echo "local Rankrat development image is missing: $(DEV_IMAGE)" >&2; exit 1; }; echo "using existing local Rankrat development image: $(DEV_IMAGE)" ;; \
 		*) echo "RANKRAT_DEV_IMAGE_SOURCE must be build or local, got: $(RANKRAT_DEV_IMAGE_SOURCE)" >&2; exit 1 ;; \
 	esac
+
+lighthouse-dev-image: ## Build the pinned Playwright/Lighthouse development stage
+	docker build --target development -f Dockerfile.lighthouse -t $(LIGHTHOUSE_DEV_IMAGE) .
+
+lighthouse-lock-image: ## Build the sandboxed Lighthouse lockfile mutation image
+	docker build --target lock -f Dockerfile.lighthouse -t $(LIGHTHOUSE_LOCK_IMAGE) .
+
+lighthouse-image: ## Build the hardened Lighthouse companion image
+	docker build -f Dockerfile.lighthouse -t $(LIGHTHOUSE_IMAGE) -t $(LIGHTHOUSE_LATEST_IMAGE) .
 
 lock-image: ## Build the minimal, sandboxed Python-version-transition lock image
 	docker build -f Dockerfile.lock -t $(LOCK_IMAGE) .
@@ -180,7 +227,29 @@ pkg-remove: lock-image ## Remove a package (usage: make pkg-remove PKG=name [PKG
 	$(BUMP_EXCLUDE_NEWER)
 	$(LOCK_RUN) uv remove --no-sync $(if $(PKG_GROUP),--group "$(PKG_GROUP)") "$(PKG)"
 
-lint: dev-image ## Run format, lint, and type checks in the dev container
+lighthouse-pkg-lock: lighthouse-lock-image ## Refresh the frozen Lighthouse pnpm lockfile
+	$(LIGHTHOUSE_MUTATE_RUN) pnpm install --lockfile-only --ignore-scripts
+
+lighthouse-pkg-add: lighthouse-lock-image ## Add an exact Lighthouse dependency (LIGHTHOUSE_PKG=name@version)
+	@test -n "$(LIGHTHOUSE_PKG)" || (echo "usage: make lighthouse-pkg-add LIGHTHOUSE_PKG=name@version" >&2; exit 1)
+	$(BUMP_LIGHTHOUSE_RELEASE_AGE)
+	$(LIGHTHOUSE_MUTATE_RUN) pnpm add --save-exact --ignore-scripts "$(LIGHTHOUSE_PKG)"
+
+lighthouse-pkg-update: lighthouse-lock-image ## Update one Lighthouse dependency (LIGHTHOUSE_PKG=name@version)
+	@test -n "$(LIGHTHOUSE_PKG)" || (echo "usage: make lighthouse-pkg-update LIGHTHOUSE_PKG=name@version" >&2; exit 1)
+	$(BUMP_LIGHTHOUSE_RELEASE_AGE)
+	$(LIGHTHOUSE_MUTATE_RUN) pnpm update --save-exact --ignore-scripts "$(LIGHTHOUSE_PKG)"
+
+lighthouse-pkg-upgrade: lighthouse-lock-image ## Update all Lighthouse dependencies under the age gate
+	$(BUMP_LIGHTHOUSE_RELEASE_AGE)
+	$(LIGHTHOUSE_MUTATE_RUN) pnpm update --latest --save-exact --ignore-scripts
+
+lighthouse-pkg-remove: lighthouse-lock-image ## Remove one Lighthouse dependency (LIGHTHOUSE_PKG=name)
+	@test -n "$(LIGHTHOUSE_PKG)" || (echo "usage: make lighthouse-pkg-remove LIGHTHOUSE_PKG=name" >&2; exit 1)
+	$(BUMP_LIGHTHOUSE_RELEASE_AGE)
+	$(LIGHTHOUSE_MUTATE_RUN) pnpm remove --ignore-scripts "$(LIGHTHOUSE_PKG)"
+
+lint: lighthouse-lint dev-image ## Run format, lint, and type checks in the dev containers
 	$(DEV_RUN) uv run --frozen --no-sync ruff format --check .
 	$(DEV_RUN) uv run --frozen --no-sync ruff check .
 	$(DEV_RUN) uv run --frozen --no-sync bandit -q -r src
@@ -188,22 +257,37 @@ lint: dev-image ## Run format, lint, and type checks in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync mypy --cache-dir /tmp/mypy src
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
 		--security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 \
-		-v $(PWD):/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) rankrat.sh scripts/*.sh
+		-v $(PWD):/mnt:ro -w /mnt $(SHELLCHECK_IMAGE) $(RANKRAT_WRAPPERS) scripts/*.sh
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
 		--security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 \
-		-v $(PWD):/mnt:ro -w /mnt $(SHFMT_IMAGE) -d rankrat.sh scripts
+		-v $(PWD):/mnt:ro -w /mnt $(SHFMT_IMAGE) -d $(RANKRAT_WRAPPERS) scripts
+
+lighthouse-lint: lighthouse-dev-image ## Run Lighthouse worker formatting, lint, and type checks
+	$(LIGHTHOUSE_DEV_RUN) pnpm format:check
+	$(LIGHTHOUSE_DEV_RUN) pnpm lint
 
 lint-fix: dev-image ## Apply safe lint and formatting fixes in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync ruff check --fix .
 	$(DEV_RUN) uv run --frozen --no-sync ruff format .
 
-format: dev-image ## Apply Ruff and shfmt formatting in sandboxed containers
+format: lighthouse-format dev-image ## Apply Python, TypeScript, and shell formatting
 	$(DEV_RUN) uv run --frozen --no-sync ruff format .
 	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
 		--security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 \
-		-v $(PWD):/mnt -w /mnt $(SHFMT_IMAGE) -w rankrat.sh scripts
+		-v $(PWD):/mnt -w /mnt $(SHFMT_IMAGE) -w $(RANKRAT_WRAPPERS) scripts
 
-test: test-unit test-contract test-integration test-security test-tooling ## Run all mocked tests
+lighthouse-format: lighthouse-dev-image ## Format Lighthouse worker source and tests
+	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
+		--security-opt no-new-privileges:true --pids-limit 128 \
+		--tmpfs /tmp:rw,noexec,nosuid,size=128m -e HOME=/tmp \
+		-v $(PWD)/lighthouse-worker:/work -w /app $(LIGHTHOUSE_DEV_IMAGE) \
+		pnpm prettier --write /work/src /work/tests /work/package.json /work/tsconfig.json /work/tsconfig.build.json /work/eslint.config.js
+	@$(MAKE) --no-print-directory lighthouse-dev-image
+
+test: lighthouse-test test-unit test-contract test-integration test-security test-tooling ## Run all mocked tests
+
+lighthouse-test: lighthouse-dev-image ## Run the Lighthouse worker unit suite
+	$(LIGHTHOUSE_DEV_RUN) pnpm test
 
 test-local: ## Run all mocked tests with the existing versioned development image
 	@$(MAKE) --no-print-directory RANKRAT_DEV_IMAGE_SOURCE=local test
@@ -222,6 +306,7 @@ test-security: dev-image ## Run security regression tests in the dev container
 
 test-tooling: dev-image ## Exercise dependency age-gate tooling in container-local scratch
 	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; test -s bump.log || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "ENV_FILE ?="; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat.sh "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat.sh "CONTAINER_HTTP_HOST=\"0.0.0.0\""; require_fragment rankrat.sh "CONTAINER_HTTP_BEARER_SECRET_FILE=\"/run/secrets/rankrat/http-bearer-token\""; grep -Fq "pagespeed_api_key_file" /work/config/boundaries.json.example; grep -Fq "/run/secrets/google/pagespeed-api-key" /work/config/boundaries.json.example; grep -Fq "target: /run/secrets/google/oauth-client.json" /work/docker-compose.yml.example'
+	$(DEV_RUN) sh -ec 'scratch=$$(mktemp -d); mkdir -p "$$scratch/lighthouse-worker"; cp scripts/bump_lighthouse_minimum_release_age.sh "$$scratch"; cp lighthouse-worker/pnpm-workspace.yaml "$$scratch/lighthouse-worker"; cd "$$scratch"; LOG_FILE="$$scratch/bump-lighthouse.log" bash bump_lighthouse_minimum_release_age.sh; test -s bump-lighthouse.log || { echo "Lighthouse dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^minimumReleaseAge: 10080$$" lighthouse-worker/pnpm-workspace.yaml)" -eq 1 || { echo "Lighthouse dependency age gate is not exact" >&2; exit 1; }; grep -Fq -- "- brace-expansion@5.0.9" lighthouse-worker/pnpm-workspace.yaml; grep -Fq "brace-expansion: 5.0.9" lighthouse-worker/pnpm-workspace.yaml'
 
 test-live: dev-image ## Run every configured provider and shipped transport check
 	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
@@ -274,10 +359,14 @@ test-live-one: dev-image ## Run one selected opt-in live-provider test group
 		-v $(PWD):/work -w /work $(DEV_IMAGE) \
 		uv run --frozen --no-sync pytest -p no:cacheprovider -m live -k "$(LIVE_SELECTOR)" tests/live
 
-test-image: build ## Smoke-test production stdio and loopback HTTP with no real credentials
+test-image: build ## Smoke-test both production images, stdio MCP, and loopback HTTP
 	bash scripts/test_final_image.sh $(IMAGE_NAME):$(IMAGE_TAG)
+	bash scripts/test_lighthouse_image.sh $(IMAGE_NAME):$(IMAGE_TAG) $(LIGHTHOUSE_IMAGE)
 
-test-coverage: dev-image ## Run tests with a container-local coverage report
+test-lighthouse-image: build ## Run real Lighthouse audits through production REST and both MCP transports
+	bash scripts/test_lighthouse_image.sh $(IMAGE_NAME):$(IMAGE_TAG) $(LIGHTHOUSE_IMAGE)
+
+test-coverage: lighthouse-test dev-image ## Run every test with Python coverage reporting
 	$(DEV_RUN) uv run --frozen --no-sync pytest -p no:cacheprovider --cov=rankrat --cov-report=term tests
 
 # create-badges.yml is a dumb reader: it renders whatever number is in
@@ -295,30 +384,39 @@ coverage-percent: ## Write the total coverage percentage to coverage-percent.txt
 		|| { echo "no TOTAL line in the coverage report" >&2; rm -f $(COVERAGE_PERCENT_FILE); exit 1; }
 	@echo "coverage: $$(cat $(COVERAGE_PERCENT_FILE))%"
 
-audit: dev-image ## Audit locked Python dependencies in the dev container
+audit: lighthouse-lock-image dev-image ## Audit locked Python and Lighthouse dependencies
 	$(DEV_RUN) uv run --frozen --no-sync pip-audit
+	$(LIGHTHOUSE_MUTATE_RUN) pnpm audit --audit-level high
 
 audit-secrets: ## Scan Rankrat-owned files for credentials with pinned Gitleaks
-	docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL \
-		--security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 \
-		-v $(PWD):/repo:ro $(GITLEAKS_IMAGE) dir --no-banner --no-color --redact \
-		--config=/repo/.gitleaks.toml /repo
+	@bash -euo pipefail -c 'scan_root=$$(mktemp -d "$(PWD)/.gitleaks-scan.XXXXXX"); trap '\''rm -rf "$$scan_root"'\'' EXIT; git ls-files -co --exclude-standard -z | tar --null --files-from=- --create | tar --extract --directory "$$scan_root"; docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL --security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 --mount type=bind,src="$$scan_root",dst=/repo,readonly $(GITLEAKS_IMAGE) dir --no-banner --no-color --redact --config=/repo/.gitleaks.toml /repo'
 
 audit-compose: dev-image ## Reject banned Docker Compose settings
 	docker compose -f docker-compose.yml.example config --quiet
 	$(DEV_RUN) sh -ec 'if grep -nE "privileged:[[:space:]]*true|pid:[[:space:]]*host|ipc:[[:space:]]*host|network:[[:space:]]*host|userns_mode:[[:space:]]*host|/var/run/docker\\.sock|[[:space:]]- ./secrets:/run/secrets" docker-compose.yml.example; then exit 1; fi; grep -q "^secrets:" docker-compose.yml.example'
 
-sbom: build ## Generate Syft and CycloneDX SBOMs from the production image without a Docker socket
-	mkdir -p "$(SBOM_DIR)"
+sbom: build ## Generate Syft and CycloneDX SBOMs from both production images
+	mkdir -p "$(SBOM_DIR)" "$(SBOM_TMP_DIR)"
 	docker image save --output "$(SBOM_ARCHIVE)" "$(IMAGE_NAME):$(IMAGE_TAG)"
+	docker image save --output "$(LIGHTHOUSE_SBOM_ARCHIVE)" "$(LIGHTHOUSE_IMAGE)"
+	@set -eu; trap 'find "$(SBOM_TMP_DIR)" -mindepth 1 -delete' EXIT; \
 	docker run --rm --init --user $(UID):$(GID) --network none --read-only --cap-drop=ALL \
-		--security-opt no-new-privileges:true --pids-limit 128 --memory 512m --cpus 1 \
-		--tmpfs /tmp:rw,noexec,nosuid,mode=1777,uid=$(UID),gid=$(GID),size=256m \
-		-e HOME=/tmp -e SYFT_CHECK_FOR_APP_UPDATE=false \
+		--security-opt no-new-privileges:true --pids-limit 128 --memory 2g --cpus 1 \
+		--tmpfs /tmp:rw,noexec,nosuid,mode=1777,uid=$(UID),gid=$(GID),size=64m \
+		-e HOME=/tmp -e TMPDIR=/work/tmp -e SYFT_CHECK_FOR_APP_UPDATE=false \
 		--mount type=bind,src=$(SBOM_DIR),dst=/work \
 		$(SYFT_IMAGE) scan "docker-archive:/work/rankrat-image.tar" \
 		-o "syft-json=/work/rankrat.syft.json" \
 		-o "cyclonedx-json=/work/rankrat.cyclonedx.json"
+	@set -eu; trap 'find "$(SBOM_TMP_DIR)" -mindepth 1 -delete' EXIT; \
+	docker run --rm --init --user $(UID):$(GID) --network none --read-only --cap-drop=ALL \
+		--security-opt no-new-privileges:true --pids-limit 128 --memory 2g --cpus 1 \
+		--tmpfs /tmp:rw,noexec,nosuid,mode=1777,uid=$(UID),gid=$(GID),size=64m \
+		-e HOME=/tmp -e TMPDIR=/work/tmp -e SYFT_CHECK_FOR_APP_UPDATE=false \
+		--mount type=bind,src=$(SBOM_DIR),dst=/work \
+		$(SYFT_IMAGE) scan "docker-archive:/work/rankrat-lighthouse-image.tar" \
+		-o "syft-json=/work/rankrat-lighthouse.syft.json" \
+		-o "cyclonedx-json=/work/rankrat-lighthouse.cyclonedx.json"
 
 audit-image: sbom ## Refresh Grype's vulnerability DB then fail for fixable high or critical image findings
 	mkdir -p "$(VULNERABILITY_DB_DIR)"
@@ -336,13 +434,23 @@ audit-image: sbom ## Refresh Grype's vulnerability DB then fail for fixable high
 		-e HOME=/tmp \
 		-e GRYPE_DB_CACHE_DIR=/cache -e GRYPE_DB_AUTO_UPDATE=false \
 		-e GRYPE_CHECK_FOR_APP_UPDATE=false -e GRYPE_EXTERNAL_SOURCES_ENABLE=false \
-		--mount type=bind,src=$(VULNERABILITY_DB_DIR),dst=/cache,readonly \
-	--mount type=bind,src=$(SBOM_DIR),dst=/work \
-	--mount type=bind,src=$(CPYTHON_STDLIB_VEX),dst=/work/rankrat-cpython.openvex.json,readonly \
-	$(GRYPE_IMAGE) "sbom:/work/rankrat.syft.json" --vex /work/rankrat-cpython.openvex.json --only-fixed --fail-on high \
-	-o "json=/work/rankrat.grype.json"
+		--mount type=bind,src=$(VULNERABILITY_DB_DIR),dst=/cache \
+		--mount type=bind,src=$(SBOM_DIR),dst=/work \
+		--mount type=bind,src=$(CPYTHON_STDLIB_VEX),dst=/work/rankrat-cpython.openvex.json,readonly \
+		$(GRYPE_IMAGE) "sbom:/work/rankrat.syft.json" --vex /work/rankrat-cpython.openvex.json --only-fixed --fail-on high \
+		-o "json=/work/rankrat.grype.json"
+	docker run --rm --init --user $(UID):$(GID) --network none --read-only --cap-drop=ALL \
+		--security-opt no-new-privileges:true --pids-limit 128 --memory 512m --cpus 1 \
+		--tmpfs /tmp:rw,noexec,nosuid,mode=1777,uid=$(UID),gid=$(GID),size=256m \
+		-e HOME=/tmp \
+		-e GRYPE_DB_CACHE_DIR=/cache -e GRYPE_DB_AUTO_UPDATE=false \
+		-e GRYPE_CHECK_FOR_APP_UPDATE=false -e GRYPE_EXTERNAL_SOURCES_ENABLE=false \
+		--mount type=bind,src=$(VULNERABILITY_DB_DIR),dst=/cache \
+		--mount type=bind,src=$(SBOM_DIR),dst=/work \
+		$(GRYPE_IMAGE) "sbom:/work/rankrat-lighthouse.syft.json" --only-fixed --fail-on high \
+		-o "json=/work/rankrat-lighthouse.grype.json"
 
-build: ## Build the production image with version and latest tags
+build: lighthouse-image ## Build Rankrat and its Lighthouse companion images
 	docker build -f Dockerfile -t $(IMAGE_NAME):$(IMAGE_TAG) -t $(IMAGE_NAME):latest .
 
 build-test: dev-image ## Build the development image used by tests and linting
@@ -352,6 +460,9 @@ run: build ## Run the production image as a stdio MCP server
 
 run-http: build ## Run REST and Streamable HTTP MCP on a loopback port
 	$(WRAPPER) http
+
+run-http-lighthouse: ## Build and run REST, Streamable HTTP MCP, and the Lighthouse worker
+	docker compose -f docker-compose.yml.example up --build
 
 auth-google: build ## Authorize every Rankrat Google OAuth scope through one host-loopback callback
 	$(WRAPPER) auth-google --account-id "$(OAUTH_ACCOUNT_ID)" --print-authorization-url
@@ -379,4 +490,6 @@ check-openapi: dev-image ## Fail if the JSON OpenAPI artifact is stale
 	$(DEV_RUN) uv run --frozen --no-sync python scripts/generate_openapi.py --check
 
 clean: ## Remove only Rankrat images built by these Make targets
-	-docker image rm $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):latest $(DEV_IMAGE)
+	-docker image rm $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):latest $(DEV_IMAGE) \
+		$(LIGHTHOUSE_IMAGE) $(LIGHTHOUSE_LATEST_IMAGE) $(LIGHTHOUSE_DEV_IMAGE) \
+		$(LIGHTHOUSE_LOCK_IMAGE)

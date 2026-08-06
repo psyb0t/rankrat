@@ -1564,6 +1564,121 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
           description: Validation Error
       summary: Pagespeed Core Web Vitals
+  /v1/lighthouse/audits:
+    post:
+      operationId: lighthouseAudit
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_LighthouseAuditBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LighthouseAuditReport'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Lighthouse Audit
+  /v1/lighthouse/seo-findings:
+    post:
+      operationId: lighthouseSeoFindings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_LighthouseAuditBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LighthouseAuditReport'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Lighthouse Seo Findings
+  /v1/lighthouse/accessibility-findings:
+    post:
+      operationId: lighthouseAccessibilityFindings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_LighthouseAuditBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LighthouseAuditReport'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Lighthouse Accessibility Findings
+  /v1/lighthouse/performance-findings:
+    post:
+      operationId: lighthousePerformanceFindings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_LighthouseAuditBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LighthouseAuditReport'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Lighthouse Performance Findings
+  /v1/lighthouse/best-practices-findings:
+    post:
+      operationId: lighthouseBestPracticesFindings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/_LighthouseAuditBody'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LighthouseAuditReport'
+          description: Successful Response
+        '422':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      summary: Lighthouse Best Practices Findings
   /v1/provider-readiness:
     get:
       operationId: providerReadiness
@@ -1773,6 +1888,143 @@ components:
       - delete
       title: GoogleSitemapOperation
       type: string
+    LighthouseAuditReport:
+      additionalProperties: false
+      properties:
+        requested_url:
+          format: uri
+          maxLength: 2048
+          title: Requested Url
+          type: string
+        final_url:
+          format: uri
+          maxLength: 2048
+          title: Final Url
+          type: string
+        fetch_time:
+          format: date-time
+          maxLength: 128
+          title: Fetch Time
+          type: string
+        lighthouse_version:
+          maxLength: 128
+          minLength: 1
+          title: Lighthouse Version
+          type: string
+        categories:
+          items:
+            $ref: '#/components/schemas/LighthouseCategoryScore'
+          maxItems: 4
+          minItems: 1
+          title: Categories
+          type: array
+          uniqueItems: true
+        findings:
+          items:
+            $ref: '#/components/schemas/LighthouseFinding'
+          maxItems: 500
+          title: Findings
+          type: array
+      required:
+      - requested_url
+      - final_url
+      - fetch_time
+      - lighthouse_version
+      - categories
+      - findings
+      title: LighthouseAuditReport
+      type: object
+    LighthouseCategory:
+      enum:
+      - performance
+      - accessibility
+      - best-practices
+      - seo
+      title: LighthouseCategory
+      type: string
+    LighthouseCategoryScore:
+      additionalProperties: false
+      properties:
+        category:
+          $ref: '#/components/schemas/LighthouseCategory'
+        score:
+          anyOf:
+          - maximum: 1
+            minimum: 0
+            type: number
+          - type: 'null'
+          title: Score
+      required:
+      - category
+      - score
+      title: LighthouseCategoryScore
+      type: object
+    LighthouseFinding:
+      additionalProperties: false
+      properties:
+        id:
+          maxLength: 128
+          minLength: 1
+          title: Id
+          type: string
+        categories:
+          items:
+            $ref: '#/components/schemas/LighthouseCategory'
+          maxItems: 4
+          minItems: 1
+          title: Categories
+          type: array
+          uniqueItems: true
+        score:
+          anyOf:
+          - maximum: 1
+            minimum: 0
+            type: number
+          - type: 'null'
+          title: Score
+        score_display_mode:
+          maxLength: 128
+          minLength: 1
+          title: Score Display Mode
+          type: string
+        title:
+          maxLength: 256
+          minLength: 1
+          title: Title
+          type: string
+        description:
+          maxLength: 4096
+          title: Description
+          type: string
+        display_value:
+          anyOf:
+          - maxLength: 1024
+            type: string
+          - type: 'null'
+          title: Display Value
+        numeric_value:
+          anyOf:
+          - type: number
+          - type: 'null'
+          title: Numeric Value
+        numeric_unit:
+          anyOf:
+          - maxLength: 128
+            type: string
+          - type: 'null'
+          title: Numeric Unit
+      required:
+      - id
+      - categories
+      - score
+      - score_display_mode
+      - title
+      - description
+      - display_value
+      - numeric_value
+      - numeric_unit
+      title: LighthouseFinding
+      type: object
     HTTPValidationError:
       properties:
         detail:
@@ -2939,6 +3191,35 @@ components:
       - site_url
       - page_url
       title: _PageSpeedAnalysisBody
+      type: object
+    _LighthouseAuditBody:
+      additionalProperties: false
+      properties:
+        account_id:
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+          type: string
+        page_url:
+          maxLength: 2048
+          minLength: 1
+          title: Page Url
+          type: string
+        site_url:
+          maxLength: 2048
+          minLength: 1
+          title: Site Url
+          type: string
+        timeout_seconds:
+          default: 120.0
+          maximum: 300.0
+          minimum: 5.0
+          title: Timeout Seconds
+          type: number
+      required:
+      - account_id
+      - site_url
+      - page_url
+      title: _LighthouseAuditBody
       type: object
     _PublicSchemaValidationBody:
       additionalProperties: false

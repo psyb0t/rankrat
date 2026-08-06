@@ -2,6 +2,43 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.5.0 — 2026-08-06
+
+Adds boundary-limited local Lighthouse audits through an isolated Chromium
+companion and keeps the complete feature available over every Rankrat transport.
+
+- Adds `lighthouse_audit`, `lighthouse_seo_findings`,
+  `lighthouse_accessibility_findings`, `lighthouse_performance_findings`, and
+  `lighthouse_best_practices_findings` over stdio MCP and Streamable HTTP MCP.
+  Matching REST operations are available at `POST /v1/lighthouse/audits`,
+  `/seo-findings`, `/accessibility-findings`, `/performance-findings`, and
+  `/best-practices-findings`.
+- Adds the separate `psyb0t/rankrat-lighthouse` image. It receives no provider
+  credentials, exposes only a private Unix socket, serializes expensive audits,
+  bounds subprocess time and output, and permits browser traffic only through a
+  public-address policy proxy. Requested and final document URLs must remain
+  inside an account's configured `pagespeed_sites` boundary.
+- Adds a hardened two-image Compose example, a real production-image smoke that
+  exercises all five operations over all three transports, and independent
+  worker tests for request validation, Chrome failure handling, HTTP and CONNECT
+  proxy policy, report projection, concurrency, cancellation, and cleanup.
+- Adds exact, age-gated pnpm locks for the TypeScript worker; digest-pinned
+  browser and scanner images; checksum-verified Chrome for Testing; separate
+  SBOM and fixable-high image gates; and a second tag-published Docker image.
+- Resolves Docker Official Node and Python bases through Amazon ECR Public,
+  shell tooling through Google's registry mirror, and the Anchore scanners
+  through GHCR while preserving their reviewed immutable digests, so stale
+  Docker Hub credentials cannot block Rankrat release gates.
+- Documents the local browser's trusted-site scope. Chromium runs without its
+  renderer sandbox inside the capability-free worker container, so untrusted
+  pages require a stronger outer runtime such as gVisor or Kata Containers.
+- Keeps the README, OpenAPI source and generated document, agent skill, embedded
+  `rankrat.sh`, Claude/Codex manifests, and OpenClaw bridge synchronized with the
+  new tools and both MCP transports.
+- Forwards `RANKRAT_ALLOW_AGENT_ONBOARDING` through the wrapper and OpenClaw
+  launcher, while keeping read-tool discovery stable and write tools hidden
+  unless their explicit runtime switches enable them.
+
 ## v0.4.1 — 2026-08-05
 
 Remediates the published image's transitive cryptography advisory and restores

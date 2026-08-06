@@ -2,10 +2,12 @@
 
 MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — boundary-limited
 SEO and search-analytics reads over Google Search Console, Bing Webmaster Tools,
-GA4, PageSpeed and IndexNow.
+GA4, PageSpeed and IndexNow, plus optional isolated local Lighthouse audits.
 
 rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin
-contributes a static OpenClaw MCP server; it does not execute plugin code.
+contributes a static OpenClaw MCP server; it does not execute plugin code. Local
+Lighthouse audits use an optional second image and therefore require the shared
+Streamable HTTP deployment described below.
 
 ## stdio (default)
 
@@ -41,13 +43,23 @@ runtime. If the Rankrat server has no bearer secret, omit the `headers` object.
 `openclaw mcp unset rankrat` removes the override and returns to the plugin's
 default stdio server.
 
+The skill's setup reference has direct published-image commands for the
+credential-free `psyb0t/rankrat-lighthouse` worker and both Rankrat transports,
+plus the exact five MCP tool names and REST routes. It also documents the
+worker's trusted-site scope, Chromium sandbox limitation, and stronger-runtime
+recommendation; read that security note before enabling browser audits.
+The static stdio plugin does not start that second image, so its five Lighthouse
+tools return `UNAVAILABLE` rather than silently falling back to PageSpeed
+Insights.
+
 ## Writes
 
 rankrat is read-only by default and its write tools are absent from `tools/list`
 entirely, so an agent cannot discover them. On the stdio transport,
-`RANKRAT_READ_ONLY` and `RANKRAT_UNBOUNDED` are forwarded to the server if you
-set them, which keeps that decision with whoever launched the client rather than
-with this plugin. On Streamable HTTP the running server already fixed it.
+`RANKRAT_READ_ONLY`, `RANKRAT_UNBOUNDED`, and
+`RANKRAT_ALLOW_AGENT_ONBOARDING` are forwarded to the server if you set them,
+which keeps that decision with whoever launched the client rather than with
+this plugin. On Streamable HTTP the running server already fixed it.
 
 ## License
 

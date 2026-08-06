@@ -23,6 +23,7 @@ from rankrat.providers.google_search_console import (
     GoogleConfiguredTokenProvider,
     GoogleSearchConsoleClient,
 )
+from rankrat.providers.lighthouse import LighthouseWorkerClient
 from rankrat.providers.pagespeed import PageSpeedClient
 from rankrat.providers.schema_fetch import PublicSchemaFetcher
 from rankrat.services.bing import BingWebmasterService
@@ -37,6 +38,7 @@ from rankrat.services.google_search_console import GoogleSearchConsoleService
 from rankrat.services.google_sitemaps import GoogleSitemapService
 from rankrat.services.google_sites import GoogleSiteService
 from rankrat.services.indexnow import IndexNowService
+from rankrat.services.lighthouse import LighthouseService
 from rankrat.services.onboarding_guide import OnboardingGuideService
 from rankrat.services.pagespeed import PageSpeedService
 from rankrat.services.provider_readiness import ProviderReadinessService
@@ -57,6 +59,7 @@ class ApplicationServices:
     google_indexing_metadata: GoogleIndexingMetadataService
     google_search_console: GoogleSearchConsoleService
     pagespeed: PageSpeedService
+    lighthouse: LighthouseService
     local_schema: LocalSchemaValidationService
     provider_readiness: ProviderReadinessService
     sites: SitesService
@@ -158,6 +161,10 @@ def build_services(settings: Settings) -> ApplicationServices:
     google_search_console = GoogleSearchConsoleService(policy, google_client)
     bing_webmaster = BingWebmasterService(policy, bing_client)
     pagespeed = PageSpeedService(policy, pagespeed_client)
+    lighthouse = LighthouseService(
+        policy,
+        LighthouseWorkerClient(settings.lighthouse_worker_socket),
+    )
     return ApplicationServices(
         capabilities=CapabilityService(settings, policy, __version__),
         cross_provider=CrossProviderService(
@@ -173,6 +180,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         google_indexing_metadata=google_indexing_metadata,
         google_search_console=google_search_console,
         pagespeed=pagespeed,
+        lighthouse=lighthouse,
         local_schema=LocalSchemaValidationService(PublicSchemaFetcher()),
         provider_readiness=ProviderReadinessService(
             policy,

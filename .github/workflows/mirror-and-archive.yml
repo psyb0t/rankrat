@@ -10,7 +10,8 @@ on:
 jobs:
   mirror:
     if: github.event_name == 'push'
-    uses: psyb0t/reusable-github-workflows/.github/workflows/git-mirror.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/git-mirror.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
     with:
       gitlab_enabled: true
       codeberg_enabled: true
@@ -27,7 +28,8 @@ jobs:
       github.event_name != 'push' ||
       github.ref_name == github.event.repository.default_branch ||
       startsWith(github.ref, 'refs/tags/')
-    uses: psyb0t/reusable-github-workflows/.github/workflows/archive.yml@master
+    # reusable-github-workflows master reviewed 2026-08-05
+    uses: psyb0t/reusable-github-workflows/.github/workflows/archive.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
     with:
       capture_outlinks: true
     secrets:

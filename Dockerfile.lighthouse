@@ -1,0 +1,68 @@
+ARG CHROME_FOR_TESTING_VERSION=151.0.7922.72
+ARG CHROME_FOR_TESTING_SHA256=08254455dc5154fefa0165dc1dea16e496c8298f98c14d89bf38463810d21649
+
+FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS lock
+
+WORKDIR /app
+ENV COREPACK_HOME=/opt/corepack
+RUN install --directory --mode=0755 "$COREPACK_HOME" \
+    && corepack enable \
+    && corepack prepare pnpm@10.34.5 --activate \
+    && chmod --recursive a+rX "$COREPACK_HOME"
+
+FROM lock AS chrome
+
+ARG CHROME_FOR_TESTING_VERSION
+ARG CHROME_FOR_TESTING_SHA256
+RUN curl --fail --location --proto '=https' --tlsv1.2 --retry 3 \
+        --output /tmp/chrome-linux64.zip \
+        "https://storage.googleapis.com/chrome-for-testing-public/${CHROME_FOR_TESTING_VERSION}/linux64/chrome-linux64.zip" \
+    && echo "${CHROME_FOR_TESTING_SHA256}  /tmp/chrome-linux64.zip" | sha256sum --check --strict \
+    && python3 -m zipfile -e /tmp/chrome-linux64.zip /opt \
+    && mv /opt/chrome-linux64 /opt/chrome \
+    && chmod 0755 /opt/chrome/chrome /opt/chrome/chrome_crashpad_handler \
+        /opt/chrome/chrome_sandbox \
+    && /opt/chrome/chrome --version | grep -Fq "${CHROME_FOR_TESTING_VERSION}" \
+    && rm /tmp/chrome-linux64.zip
+
+FROM lock AS dependencies
+
+COPY lighthouse-worker/package.json lighthouse-worker/pnpm-lock.yaml lighthouse-worker/.npmrc lighthouse-worker/pnpm-workspace.yaml ./
+RUN --mount=type=cache,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile --ignore-scripts
+
+FROM dependencies AS development
+
+COPY lighthouse-worker/tsconfig.json lighthouse-worker/tsconfig.build.json lighthouse-worker/eslint.config.js ./
+COPY lighthouse-worker/src ./src
+COPY lighthouse-worker/tests ./tests
+
+FROM development AS builder
+
+RUN pnpm build && pnpm prune --prod --ignore-scripts
+
+FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e
+
+ENV NODE_ENV=production \
+    CHROME_PATH=/opt/chrome/chrome \
+    LIGHTHOUSE_SOCKET_PATH=/run/lighthouse/lighthouse.sock \
+    HOME=/tmp/lighthouse
+
+RUN rm --recursive --force /ms-playwright /usr/lib/node_modules \
+    && rm --force /usr/bin/corepack /usr/bin/npm /usr/bin/npx /usr/bin/pnpm \
+        /usr/bin/pnpx /usr/bin/yarn /usr/bin/yarnpkg \
+    && groupadd --gid 10001 lighthouse \
+    && useradd --create-home --uid 10001 --gid lighthouse --shell /usr/sbin/nologin lighthouse \
+    && install --directory --owner=lighthouse --group=lighthouse --mode=0750 /run/lighthouse
+
+WORKDIR /app
+COPY --from=chrome /opt/chrome /opt/chrome
+COPY --from=builder --chown=lighthouse:lighthouse /app/node_modules ./node_modules
+COPY --from=builder --chown=lighthouse:lighthouse /app/dist ./dist
+COPY --from=builder --chown=lighthouse:lighthouse /app/package.json ./package.json
+
+USER lighthouse:lighthouse
+
+HEALTHCHECK --interval=10s --timeout=3s --retries=5 --start-period=15s \
+    CMD ["node", "dist/health.js"]
+ENTRYPOINT ["node", "dist/server.js"]
