@@ -135,8 +135,8 @@
           "score": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -215,8 +215,8 @@
           "score": {
             "anyOf": [
               {
-                "maximum": 1,
-                "minimum": 0,
+                "maximum": 1.0,
+                "minimum": 0.0,
                 "type": "number"
               },
               {
@@ -274,10 +274,11 @@
         "type": "string"
       },
       "Provider": {
-        "description": "Providers supported by the read-only foundation.",
+        "description": "Providers supported by Rankrat.",
         "enum": [
           "google",
-          "bing"
+          "bing",
+          "cloudflare"
         ],
         "title": "Provider",
         "type": "string"
@@ -379,6 +380,52 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "_BingBacklinkIntelligenceBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "max_pages_per_target": {
+            "default": 1,
+            "maximum": 1001.0,
+            "minimum": 1.0,
+            "title": "Max Pages Per Target",
+            "type": "integer"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "target_urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 20,
+            "minItems": 1,
+            "title": "Target Urls",
+            "type": "array"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url",
+          "target_urls"
+        ],
+        "title": "_BingBacklinkIntelligenceBody",
         "type": "object"
       },
       "_BingBrandAnalysisBody": {
@@ -2326,6 +2373,49 @@
         "title": "_SearchEngineTrafficHealthBody",
         "type": "object"
       },
+      "_SiteAuditBody": {
+        "additionalProperties": false,
+        "properties": {
+          "account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "max_depth": {
+            "default": 2,
+            "maximum": 4.0,
+            "minimum": 0.0,
+            "title": "Max Depth",
+            "type": "integer"
+          },
+          "max_pages": {
+            "default": 50,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Max Pages",
+            "type": "integer"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "account_id",
+          "site_url"
+        ],
+        "title": "_SiteAuditBody",
+        "type": "object"
+      },
       "_SiteOnboardingSubmissionBody": {
         "additionalProperties": false,
         "properties": {
@@ -2397,6 +2487,106 @@
           "site_url"
         ],
         "title": "_SiteOnboardingSubmissionBody",
+        "type": "object"
+      },
+      "_SiteOwnershipBody": {
+        "additionalProperties": false,
+        "properties": {
+          "bing_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Bing Account Id",
+            "type": "string"
+          },
+          "cloudflare_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Cloudflare Account Id",
+            "type": "string"
+          },
+          "google_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Account Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_account_id",
+          "bing_account_id",
+          "cloudflare_account_id",
+          "site_url"
+        ],
+        "title": "_SiteOwnershipBody",
+        "type": "object"
+      },
+      "_SiteRemediationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "bing_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Bing Account Id",
+            "type": "string"
+          },
+          "bing_site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Bing Site Url",
+            "type": "string"
+          },
+          "changed_urls": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Changed Urls",
+            "type": "array"
+          },
+          "google_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Account Id",
+            "type": "string"
+          },
+          "google_site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Google Site Url",
+            "type": "string"
+          },
+          "sitemap_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Sitemap Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_account_id",
+          "google_site_url",
+          "bing_account_id",
+          "bing_site_url",
+          "sitemap_url",
+          "changed_urls"
+        ],
+        "title": "_SiteRemediationBody",
         "type": "object"
       },
       "_UrlInspectionBatchBody": {
@@ -2678,6 +2868,42 @@
           }
         },
         "summary": "Bing Url Submission"
+      }
+    },
+    "/v1/bing/backlink-intelligence": {
+      "post": {
+        "operationId": "bingBacklinkIntelligence",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_BingBacklinkIntelligenceBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bing Backlink Intelligence"
       }
     },
     "/v1/bing/brand-analysis": {
@@ -5376,6 +5602,42 @@
         "summary": "Server Info"
       }
     },
+    "/v1/site-audits": {
+      "post": {
+        "operationId": "siteAuditCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SiteAuditBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Site Audit"
+      }
+    },
     "/v1/site-onboarding-submissions": {
       "post": {
         "operationId": "siteOnboardingSubmissionCreate",
@@ -5410,6 +5672,114 @@
           }
         },
         "summary": "Site Onboarding Submission"
+      }
+    },
+    "/v1/site-ownership-status-checks": {
+      "post": {
+        "operationId": "siteOwnershipStatusCheck",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SiteOwnershipBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Site Ownership Status"
+      }
+    },
+    "/v1/site-ownership-verifications": {
+      "post": {
+        "operationId": "siteOwnershipVerificationCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SiteOwnershipBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Site Ownership Verification"
+      }
+    },
+    "/v1/site-remediations": {
+      "post": {
+        "operationId": "siteRemediationCreate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/_SiteRemediationBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Site Remediation Apply"
       }
     },
     "/v1/sites": {

@@ -20,6 +20,8 @@ from rankrat.constants import (
     DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS,
     DEFAULT_PAGESPEED_TIMEOUT_SECONDS,
     DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    DEFAULT_SITE_AUDIT_DEPTH,
+    DEFAULT_SITE_AUDIT_PAGES,
     GA4_PAGESPEED_CORRELATION_OPERATION,
     GA4_SEARCH_CONSOLE_COMPARISON_OPERATION,
     GOOGLE_ANALYTICS_ACCOUNT_INVENTORY_OPERATION,
@@ -31,6 +33,7 @@ from rankrat.constants import (
     LIGHTHOUSE_SEO_FINDINGS_OPERATION,
     MAX_ANALYTICS_DIMENSIONS,
     MAX_ANALYTICS_FILTERS,
+    MAX_BING_BACKLINK_TARGETS,
     MAX_BING_BRAND_TERMS,
     MAX_BING_COUNTRY_CHARS,
     MAX_BING_LANGUAGE_CHARS,
@@ -51,6 +54,8 @@ from rankrat.constants import (
     MAX_SCHEMA_FETCH_URL_CHARS,
     MAX_SCHEMA_LOCAL_DOCUMENT_CHARS,
     MAX_SEARCH_ANALYTICS_DERIVED_ROWS,
+    MAX_SITE_AUDIT_DEPTH,
+    MAX_SITE_AUDIT_PAGES,
     MAX_SITE_ONBOARDING_DISPLAY_NAME_CHARS,
     MAX_SITE_ONBOARDING_TIME_ZONE_CHARS,
     MAX_URL_INSPECTION_BATCH,
@@ -67,6 +72,7 @@ from rankrat.models.boundaries import ACCOUNT_ID_PATTERN, Provider
 from rankrat.models.common import JsonValue, to_json_value
 from rankrat.providers.base import ProviderOperationError
 from rankrat.services.bing import (
+    BingBacklinkIntelligenceRequest,
     BingBrandAnalysisRequest,
     BingCrawlIssuesRequest,
     BingCrawlStatsRequest,
@@ -155,7 +161,10 @@ from rankrat.services.schema import (
     LocalSchemaValidationRequest,
     PublicSchemaValidationRequest,
 )
+from rankrat.services.site_audit import SiteAuditRequest
 from rankrat.services.site_onboarding import SiteOnboardingSubmissionRequest
+from rankrat.services.site_ownership import SiteOwnershipSubmissionRequest
+from rankrat.services.site_remediation import SiteRemediationRequest
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.tool_contracts import ToolAnnotations, tool_catalog
@@ -387,6 +396,50 @@ class _SiteOnboardingSubmissionArguments(BaseModel):
     currency_code: str = Field(
         default="USD", min_length=ISO_CURRENCY_CODE_CHARS, max_length=ISO_CURRENCY_CODE_CHARS
     )
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _SiteOwnershipArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    cloudflare_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    site_url: str = Field(min_length=1, max_length=2_048)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _SiteAuditArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    site_url: str = Field(min_length=1, max_length=2_048)
+    max_pages: int = Field(default=DEFAULT_SITE_AUDIT_PAGES, ge=1, le=MAX_SITE_AUDIT_PAGES)
+    max_depth: int = Field(default=DEFAULT_SITE_AUDIT_DEPTH, ge=0, le=MAX_SITE_AUDIT_DEPTH)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _SiteRemediationArguments(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    google_site_url: str = Field(min_length=1, max_length=2_048)
+    bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    bing_site_url: str = Field(min_length=1, max_length=2_048)
+    sitemap_url: str = Field(min_length=1, max_length=2_048)
+    changed_urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_BING_SUBMISSION_URLS)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
@@ -706,6 +759,11 @@ class _BingLinkCountsArguments(_BingPerformanceArguments):
     page: int = Field(default=0, ge=0, le=MAX_BING_LINK_PAGE)
 
 
+class _BingBacklinkIntelligenceArguments(_BingPerformanceArguments):
+    target_urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_BING_BACKLINK_TARGETS)
+    max_pages_per_target: int = Field(default=1, ge=1, le=MAX_BING_LINK_PAGE + 1)
+
+
 class _BingUrlSubmissionArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -945,6 +1003,10 @@ def _tool_input_schema(name: str) -> dict[str, object]:
         "google_site_submit": _GoogleSiteSubmissionArguments.model_json_schema(),
         "google_sitemap_submit": _GoogleSitemapSubmissionArguments.model_json_schema(),
         "site_onboarding_submit": _SiteOnboardingSubmissionArguments.model_json_schema(),
+        "site_ownership_status": _SiteOwnershipArguments.model_json_schema(),
+        "site_ownership_apply": _SiteOwnershipArguments.model_json_schema(),
+        "site_audit": _SiteAuditArguments.model_json_schema(),
+        "site_remediation_apply": _SiteRemediationArguments.model_json_schema(),
         "google_search_analytics_query": _SearchAnalyticsArguments.model_json_schema(),
         "google_search_analytics_summary": _SearchAnalyticsSummaryArguments.model_json_schema(),
         "google_search_analytics_comparison": (
@@ -1026,6 +1088,7 @@ def _tool_input_schema(name: str) -> dict[str, object]:
         "bing_crawl_stats": _BingPerformanceArguments.model_json_schema(),
         "bing_feeds": _BingPerformanceArguments.model_json_schema(),
         "bing_link_counts": _BingLinkCountsArguments.model_json_schema(),
+        "bing_backlink_intelligence": (_BingBacklinkIntelligenceArguments.model_json_schema()),
         "bing_url_information": _BingUrlInformationArguments.model_json_schema(),
         "bing_url_submit": _BingUrlSubmissionArguments.model_json_schema(),
         "bing_sitemap_submit": _BingSitemapSubmissionArguments.model_json_schema(),
@@ -1442,6 +1505,32 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                         ProviderReadinessRequest(
                             account_id=readiness_arguments.account_id,
                             timeout_seconds=readiness_arguments.timeout_seconds,
+                        )
+                    )
+                )
+            if name == "site_audit" and services.site_audit is not None:
+                site_audit_arguments = _SiteAuditArguments.model_validate(raw_arguments)
+                return _tool_success(
+                    await services.site_audit.audit(
+                        SiteAuditRequest(
+                            account_id=site_audit_arguments.account_id,
+                            site_url=site_audit_arguments.site_url,
+                            max_pages=site_audit_arguments.max_pages,
+                            max_depth=site_audit_arguments.max_depth,
+                            timeout_seconds=site_audit_arguments.timeout_seconds,
+                        )
+                    )
+                )
+            if name == "site_ownership_status" and services.site_ownership is not None:
+                ownership_arguments = _SiteOwnershipArguments.model_validate(raw_arguments)
+                return _tool_success(
+                    await services.site_ownership.status(
+                        SiteOwnershipSubmissionRequest(
+                            google_account_id=ownership_arguments.google_account_id,
+                            bing_account_id=ownership_arguments.bing_account_id,
+                            cloudflare_account_id=ownership_arguments.cloudflare_account_id,
+                            site_url=ownership_arguments.site_url,
+                            timeout_seconds=ownership_arguments.timeout_seconds,
                         )
                     )
                 )
@@ -1887,6 +1976,21 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                         )
                     )
                 )
+            if name == "bing_backlink_intelligence":
+                backlink_arguments = _BingBacklinkIntelligenceArguments.model_validate(
+                    raw_arguments
+                )
+                return _tool_success(
+                    await services.bing_webmaster.backlink_intelligence(
+                        BingBacklinkIntelligenceRequest(
+                            account_id=backlink_arguments.account_id,
+                            site_url=backlink_arguments.site_url,
+                            target_urls=backlink_arguments.target_urls,
+                            max_pages_per_target=backlink_arguments.max_pages_per_target,
+                            timeout_seconds=backlink_arguments.timeout_seconds,
+                        )
+                    )
+                )
             if name == "bing_url_information":
                 information_arguments = _BingUrlInformationArguments.model_validate(raw_arguments)
                 return _tool_success(
@@ -2067,6 +2171,42 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                             time_zone=site_onboarding_arguments.time_zone,
                             currency_code=site_onboarding_arguments.currency_code,
                             timeout_seconds=site_onboarding_arguments.timeout_seconds,
+                        )
+                    )
+                )
+            if (
+                name == "site_ownership_apply"
+                and services.writes_enabled
+                and services.site_ownership is not None
+            ):
+                ownership_arguments = _SiteOwnershipArguments.model_validate(raw_arguments)
+                return _tool_success(
+                    await services.site_ownership.apply(
+                        SiteOwnershipSubmissionRequest(
+                            google_account_id=ownership_arguments.google_account_id,
+                            bing_account_id=ownership_arguments.bing_account_id,
+                            cloudflare_account_id=ownership_arguments.cloudflare_account_id,
+                            site_url=ownership_arguments.site_url,
+                            timeout_seconds=ownership_arguments.timeout_seconds,
+                        )
+                    )
+                )
+            if (
+                name == "site_remediation_apply"
+                and services.writes_enabled
+                and services.site_remediation is not None
+            ):
+                remediation_arguments = _SiteRemediationArguments.model_validate(raw_arguments)
+                return _tool_success(
+                    await services.site_remediation.apply(
+                        SiteRemediationRequest(
+                            google_account_id=remediation_arguments.google_account_id,
+                            google_site_url=remediation_arguments.google_site_url,
+                            bing_account_id=remediation_arguments.bing_account_id,
+                            bing_site_url=remediation_arguments.bing_site_url,
+                            sitemap_url=remediation_arguments.sitemap_url,
+                            changed_urls=remediation_arguments.changed_urls,
+                            timeout_seconds=remediation_arguments.timeout_seconds,
                         )
                     )
                 )

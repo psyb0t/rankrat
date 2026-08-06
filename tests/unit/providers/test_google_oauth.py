@@ -88,6 +88,7 @@ def test_google_authorization_requests_every_google_account_data_scope() -> None
         oauth.GOOGLE_INDEXING_SCOPE,
         oauth.GOOGLE_ANALYTICS_READ_SCOPE,
         oauth.GOOGLE_ANALYTICS_EDIT_SCOPE,
+        oauth.GOOGLE_SITE_VERIFICATION_SCOPE,
     )
 
 

@@ -15,6 +15,8 @@ from rankrat.constants import (
     DEFAULT_LIGHTHOUSE_TIMEOUT_SECONDS,
     DEFAULT_PAGESPEED_TIMEOUT_SECONDS,
     DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    DEFAULT_SITE_AUDIT_DEPTH,
+    DEFAULT_SITE_AUDIT_PAGES,
     GA4_PAGESPEED_CORRELATION_OPERATION,
     GA4_PAGESPEED_CORRELATION_PATH,
     GA4_SEARCH_CONSOLE_COMPARISON_OPERATION,
@@ -40,6 +42,7 @@ from rankrat.constants import (
     LIGHTHOUSE_SEO_FINDINGS_PATH,
     MAX_ANALYTICS_DIMENSIONS,
     MAX_ANALYTICS_FILTERS,
+    MAX_BING_BACKLINK_TARGETS,
     MAX_BING_BRAND_TERMS,
     MAX_BING_COUNTRY_CHARS,
     MAX_BING_LANGUAGE_CHARS,
@@ -67,6 +70,8 @@ from rankrat.constants import (
     MAX_SCHEMA_FETCH_URL_CHARS,
     MAX_SCHEMA_LOCAL_DOCUMENT_CHARS,
     MAX_SEARCH_ANALYTICS_DERIVED_ROWS,
+    MAX_SITE_AUDIT_DEPTH,
+    MAX_SITE_AUDIT_PAGES,
     MAX_SITE_ONBOARDING_DISPLAY_NAME_CHARS,
     MAX_SITE_ONBOARDING_TIME_ZONE_CHARS,
     MAX_URL_INSPECTION_BATCH,
@@ -85,6 +90,7 @@ from rankrat.constants import (
 from rankrat.models.boundaries import ACCOUNT_ID_PATTERN, Provider
 from rankrat.models.common import JsonValue, to_json_value
 from rankrat.services.bing import (
+    BingBacklinkIntelligenceRequest,
     BingBrandAnalysisRequest,
     BingCrawlIssuesRequest,
     BingCrawlStatsRequest,
@@ -174,7 +180,10 @@ from rankrat.services.schema import (
     LocalSchemaValidationRequest,
     PublicSchemaValidationRequest,
 )
+from rankrat.services.site_audit import SiteAuditRequest
 from rankrat.services.site_onboarding import SiteOnboardingSubmissionRequest
+from rankrat.services.site_ownership import SiteOwnershipSubmissionRequest
+from rankrat.services.site_remediation import SiteRemediationRequest
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.runtime import ApplicationServices
 
@@ -797,6 +806,64 @@ class _PublicSchemaValidationBody(BaseModel):
     )
 
 
+class _SiteAuditBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    site_url: str = Field(min_length=1, max_length=2_048)
+    max_pages: int = Field(default=DEFAULT_SITE_AUDIT_PAGES, ge=1, le=MAX_SITE_AUDIT_PAGES)
+    max_depth: int = Field(default=DEFAULT_SITE_AUDIT_DEPTH, ge=0, le=MAX_SITE_AUDIT_DEPTH)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _SiteOwnershipBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    cloudflare_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    site_url: str = Field(min_length=1, max_length=2_048)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _SiteRemediationBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    google_site_url: str = Field(min_length=1, max_length=2_048)
+    bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    bing_site_url: str = Field(min_length=1, max_length=2_048)
+    sitemap_url: str = Field(min_length=1, max_length=2_048)
+    changed_urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_BING_SUBMISSION_URLS)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
+class _BingBacklinkIntelligenceBody(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    site_url: str = Field(min_length=1, max_length=2_048)
+    target_urls: tuple[str, ...] = Field(min_length=1, max_length=MAX_BING_BACKLINK_TARGETS)
+    max_pages_per_target: int = Field(default=1, ge=1, le=MAX_BING_LINK_PAGE + 1)
+    timeout_seconds: float = Field(
+        default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+        ge=MIN_PROVIDER_TIMEOUT_SECONDS,
+        le=MAX_PROVIDER_TIMEOUT_SECONDS,
+    )
+
+
 def build_api_router(services: ApplicationServices) -> APIRouter:
     """Create all versioned read-only REST endpoints."""
     router = APIRouter(prefix=API_PREFIX)
@@ -837,6 +904,64 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                 ProviderReadinessRequest(
                     account_id=account_id,
                     timeout_seconds=timeout_seconds,
+                )
+            )
+        )
+
+    @router.post(
+        "/site-audits",
+        response_model=None,
+        operation_id="site_audit_create",
+    )
+    async def site_audit(body: _SiteAuditBody) -> JsonValue:
+        if services.site_audit is None:
+            raise RuntimeError("site audit service is unavailable")
+        return to_json_value(
+            await services.site_audit.audit(
+                SiteAuditRequest(
+                    account_id=body.account_id,
+                    site_url=body.site_url,
+                    max_pages=body.max_pages,
+                    max_depth=body.max_depth,
+                    timeout_seconds=body.timeout_seconds,
+                )
+            )
+        )
+
+    @router.post(
+        "/site-ownership-status-checks",
+        response_model=None,
+        operation_id="site_ownership_status_check",
+    )
+    async def site_ownership_status(body: _SiteOwnershipBody) -> JsonValue:
+        if services.site_ownership is None:
+            raise RuntimeError("site ownership service is unavailable")
+        return to_json_value(
+            await services.site_ownership.status(
+                SiteOwnershipSubmissionRequest(
+                    google_account_id=body.google_account_id,
+                    bing_account_id=body.bing_account_id,
+                    cloudflare_account_id=body.cloudflare_account_id,
+                    site_url=body.site_url,
+                    timeout_seconds=body.timeout_seconds,
+                )
+            )
+        )
+
+    @router.post(
+        "/bing/backlink-intelligence",
+        response_model=None,
+        operation_id="bing_backlink_intelligence",
+    )
+    async def bing_backlink_intelligence(body: _BingBacklinkIntelligenceBody) -> JsonValue:
+        return to_json_value(
+            await services.bing_webmaster.backlink_intelligence(
+                BingBacklinkIntelligenceRequest(
+                    account_id=body.account_id,
+                    site_url=body.site_url,
+                    target_urls=body.target_urls,
+                    max_pages_per_target=body.max_pages_per_target,
+                    timeout_seconds=body.timeout_seconds,
                 )
             )
         )
@@ -2238,6 +2363,50 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                         display_name=body.display_name,
                         time_zone=body.time_zone,
                         currency_code=body.currency_code,
+                        timeout_seconds=body.timeout_seconds,
+                    )
+                )
+            )
+
+    site_ownership = services.site_ownership
+    if services.writes_enabled and site_ownership is not None:
+
+        @router.post(
+            "/site-ownership-verifications",
+            response_model=None,
+            operation_id="site_ownership_verification_create",
+        )
+        async def site_ownership_verification(body: _SiteOwnershipBody) -> JsonValue:
+            return to_json_value(
+                await site_ownership.apply(
+                    SiteOwnershipSubmissionRequest(
+                        google_account_id=body.google_account_id,
+                        bing_account_id=body.bing_account_id,
+                        cloudflare_account_id=body.cloudflare_account_id,
+                        site_url=body.site_url,
+                        timeout_seconds=body.timeout_seconds,
+                    )
+                )
+            )
+
+    site_remediation = services.site_remediation
+    if services.writes_enabled and site_remediation is not None:
+
+        @router.post(
+            "/site-remediations",
+            response_model=None,
+            operation_id="site_remediation_create",
+        )
+        async def site_remediation_apply(body: _SiteRemediationBody) -> JsonValue:
+            return to_json_value(
+                await site_remediation.apply(
+                    SiteRemediationRequest(
+                        google_account_id=body.google_account_id,
+                        google_site_url=body.google_site_url,
+                        bing_account_id=body.bing_account_id,
+                        bing_site_url=body.bing_site_url,
+                        sitemap_url=body.sitemap_url,
+                        changed_urls=body.changed_urls,
                         timeout_seconds=body.timeout_seconds,
                     )
                 )

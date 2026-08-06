@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date
 from enum import StrEnum
 from math import isfinite, sqrt
 from statistics import median
+from urllib.parse import urlparse
 
 from rankrat.constants import (
     BING_FIRST_PAGE_MAX_AVERAGE_CLICK_POSITION,
@@ -18,6 +20,7 @@ from rankrat.constants import (
     BING_TOP_THREE_MAX_AVERAGE_CLICK_POSITION,
     BING_TRAFFIC_ANOMALY_Z_SCORE,
     DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    MAX_BING_BACKLINK_TARGETS,
     MAX_BING_BRAND_TERM_CHARS,
     MAX_BING_BRAND_TERMS,
     MAX_BING_COUNTRY_CHARS,
@@ -45,6 +48,7 @@ from rankrat.providers.bing import (
     BingFeedRow,
     BingKeywordStatsRow,
     BingLinkCounts,
+    BingLinkDetail,
     BingQueryStatsRow,
     BingRelatedKeywordRow,
     BingTrafficRow,
@@ -432,6 +436,62 @@ class BingLinkCountsReport:
 
     links: tuple[BingLinkCount, ...]
     total_pages: int
+
+
+@dataclass(frozen=True, slots=True)
+class BingBacklinkIntelligenceRequest:
+    """Configured child URLs and bounded detail pages for backlink intelligence."""
+
+    account_id: str
+    site_url: str
+    target_urls: tuple[str, ...]
+    max_pages_per_target: int = 1
+    timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+    def __post_init__(self) -> None:
+        if not self.target_urls or len(self.target_urls) > MAX_BING_BACKLINK_TARGETS:
+            raise InputLimitError("Bing backlink target count is outside the allowed range")
+        if len(set(self.target_urls)) != len(self.target_urls):
+            raise InputLimitError("Bing backlink targets must not contain duplicates")
+        if self.max_pages_per_target < 1 or self.max_pages_per_target > MAX_BING_LINK_PAGE + 1:
+            raise InputLimitError("Bing backlink page count is outside the allowed range")
+
+
+@dataclass(frozen=True, slots=True)
+class BingBacklink:
+    """One typed external backlink and its Bing-reported anchor text."""
+
+    source_url: str
+    source_domain: str
+    anchor_text: str
+
+
+@dataclass(frozen=True, slots=True)
+class BingAnchorSummary:
+    """One anchor text and its deterministic observed count."""
+
+    anchor_text: str
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
+class BingBacklinkTargetReport:
+    """Observed backlinks and aggregate diversity for one configured child URL."""
+
+    target_url: str
+    backlinks: tuple[BingBacklink, ...]
+    referring_domains: tuple[str, ...]
+    anchors: tuple[BingAnchorSummary, ...]
+    provider_total_pages: int
+    pages_read: int
+    truncated: bool
+
+
+@dataclass(frozen=True, slots=True)
+class BingBacklinkIntelligenceReport:
+    """Bounded backlink intelligence for explicit configured-site targets."""
+
+    targets: tuple[BingBacklinkTargetReport, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -894,6 +954,49 @@ class BingWebmasterService:
         )
         return _bing_link_counts_report(link_counts)
 
+    async def backlink_intelligence(
+        self,
+        request: BingBacklinkIntelligenceRequest,
+    ) -> BingBacklinkIntelligenceReport:
+        """Read bounded backlink details and derive local anchor/domain summaries."""
+
+        self._require_site(request.account_id, request.site_url)
+        targets: list[BingBacklinkTargetReport] = []
+        provider_request = ProviderReadRequest(
+            AccountId(request.account_id),
+            request.timeout_seconds,
+        )
+        for target_url in request.target_urls:
+            normalized_target = self._policy.require_bing_site_url(
+                request.account_id,
+                request.site_url,
+                target_url,
+            )
+            details: list[BingLinkDetail] = []
+            total_pages = 0
+            pages_read = 0
+            for page in range(request.max_pages_per_target):
+                result = await self._client.read_url_links(
+                    provider_request,
+                    request.site_url,
+                    normalized_target,
+                    page,
+                )
+                total_pages = result.total_pages
+                details.extend(result.links)
+                pages_read += 1
+                if page + 1 >= result.total_pages:
+                    break
+            targets.append(
+                _bing_backlink_target_report(
+                    normalized_target,
+                    tuple(details),
+                    total_pages,
+                    pages_read,
+                )
+            )
+        return BingBacklinkIntelligenceReport(tuple(targets))
+
     async def url_information(
         self,
         request: BingUrlInformationRequest,
@@ -1325,6 +1428,50 @@ def _bing_link_counts_report(link_counts: BingLinkCounts) -> BingLinkCountsRepor
     return BingLinkCountsReport(
         links=tuple(sorted(links, key=lambda link: (-link.count, link.url))),
         total_pages=link_counts.total_pages,
+    )
+
+
+def _bing_backlink_target_report(
+    target_url: str,
+    details: tuple[BingLinkDetail, ...],
+    total_pages: int,
+    pages_read: int,
+) -> BingBacklinkTargetReport:
+    backlinks = tuple(
+        BingBacklink(
+            source_url=detail.url,
+            source_domain=urlparse(detail.url).hostname or "",
+            anchor_text=detail.anchor_text,
+        )
+        for detail in details
+    )
+    deduplicated = {(backlink.source_url, backlink.anchor_text): backlink for backlink in backlinks}
+    ordered_backlinks = tuple(
+        sorted(
+            deduplicated.values(),
+            key=lambda backlink: (
+                backlink.source_domain,
+                backlink.source_url,
+                backlink.anchor_text,
+            ),
+        )
+    )
+    anchor_counts = Counter(backlink.anchor_text for backlink in ordered_backlinks)
+    anchors = tuple(
+        BingAnchorSummary(anchor_text, count)
+        for anchor_text, count in sorted(
+            anchor_counts.items(),
+            key=lambda item: (-item[1], item[0]),
+        )
+    )
+    return BingBacklinkTargetReport(
+        target_url=target_url,
+        backlinks=ordered_backlinks,
+        referring_domains=tuple(sorted({backlink.source_domain for backlink in ordered_backlinks})),
+        anchors=anchors,
+        provider_total_pages=total_pages,
+        pages_read=pages_read,
+        truncated=pages_read < total_pages,
     )
 
 

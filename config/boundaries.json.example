@@ -21,6 +21,17 @@
       "sites": [
         "https://example.com/"
       ]
+    },
+    {
+      "id": "cloudflare",
+      "provider": "cloudflare",
+      "credential": "/run/secrets/cloudflare/api-token",
+      "cloudflare_zones": [
+        {
+          "id": "00000000000000000000000000000000",
+          "name": "example.com"
+        }
+      ]
     }
   ],
   "indexnow_targets": []

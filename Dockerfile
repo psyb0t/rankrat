@@ -38,6 +38,7 @@ RUN groupadd --gid 10001 rankrat \
         /run/lighthouse \
         /run/secrets/google \
         /run/secrets/bing \
+        /run/secrets/cloudflare \
         /run/secrets/indexnow \
         /run/secrets/rankrat
 

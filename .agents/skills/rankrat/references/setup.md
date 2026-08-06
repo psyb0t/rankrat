@@ -39,10 +39,13 @@ unused-provider selectors blank so those extra live suites skip. The image's
 ## The boundary file
 
 `boundaries.json` is what fixes the scope. It lists the accounts and the sites
-or properties within them that this server may read. In bounded mode an agent
-cannot add to it, and nothing in the tool surface enumerates properties outside
-it — a site that is not listed is not reachable, whatever the underlying account
-can see.
+or properties within them that this server may read. Ordinary bounded tools
+cannot add to it, and nothing in the normal tool surface enumerates properties
+outside it — a site that is not listed is not reachable, whatever the underlying
+account can see. The sole exception is separately gated agent onboarding, which
+can persist only the exact resources it creates when
+`RANKRAT_ALLOW_AGENT_ONBOARDING=true` and the config mount passes its ownership
+and mode checks.
 
 Keep it to the properties you actually want an agent reading.
 
@@ -57,8 +60,9 @@ Set it to `false` and they appear. There is no approval ID, admin API, or second
 bearer token — the trusted caller gets direct access, with writes still confined
 to the configured boundaries and to what the provider account itself permits.
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
-Indexing notifications, Search Console site/sitemap changes, and new-site
-onboarding, and are marked destructive and non-idempotent in MCP.
+Indexing notifications, Search Console site/sitemap changes, Cloudflare-backed
+ownership verification, discovery remediation, and new-site onboarding, and
+are marked as writes in MCP.
 
 ## Unbounded mode
 
@@ -69,7 +73,7 @@ setting it alone is a startup error.
 What it changes: authorization still resolves the credential **account** from
 the boundary file, so accounts stay fixed, but resource allow-list checks are
 skipped — including Google resource/account discovery and the GA4
-parent-account pin.
+  parent-account pin and Cloudflare zone allow-list.
 
 What it does *not* change is worth knowing, because it is narrower than "the
 boundary is off":
@@ -106,6 +110,9 @@ exception: they are absent unless writable mode enables them.
   what the account can do.
 - **Bing Webmaster Tools** — an API key from the Bing Webmaster dashboard,
   placed under `RANKRAT_SECRET_ROOT`.
+- **Cloudflare** — a scoped API token with Zone Read and DNS Edit only for the
+  selected zones, stored at the credential path in the Cloudflare boundary
+  account. Rankrat exposes only Google TXT and Bing CNAME verification records.
 - **PageSpeed Insights** — an API key, same location, and the one Google surface
   that does not use OAuth: the key goes on the query string, so the Google
   consent flow grants it nothing. It is optional — with no key configured the
@@ -265,11 +272,22 @@ The guidance is available either way, read-only, on every server:
 | `rankrat://onboarding/{site_url}` template | Same, narrowed to one percent-encoded site |
 | `onboarding_guide` tool | The identical document, for clients without resource support |
 
-Verification is not something Rankrat can do — the token comes from the
-provider's console. A `sc-domain:` property accepts only a DNS TXT record; a
-`https://` URL-prefix property also accepts the GA4 tag, an HTML file or a meta
-tag, and the GA4 tag is the cheapest because onboarding already returned its
-Measurement ID.
+With a configured Cloudflare account, `site_ownership_apply` requests the real
+Google TXT and Bing CNAME proofs, publishes only those records, checks public
+DNS, and redeems each provider. Poll `site_ownership_status` until it reports
+`complete`; DNS propagation is asynchronous. Without Cloudflare, a `sc-domain:`
+property accepts only DNS TXT, while a `https://` URL-prefix property also
+accepts the GA4 tag, an HTML file, or a meta tag.
+
+The SEO expansion has the same names over stdio and Streamable HTTP MCP:
+
+| MCP tool | REST route |
+|---|---|
+| `site_ownership_status` | `POST /v1/site-ownership-status-checks` |
+| `site_ownership_apply` | `POST /v1/site-ownership-verifications` |
+| `site_audit` | `POST /v1/site-audits` |
+| `site_remediation_apply` | `POST /v1/site-remediations` |
+| `bing_backlink_intelligence` | `POST /v1/bing/backlink-intelligence` |
 
 ## Checking it works
 

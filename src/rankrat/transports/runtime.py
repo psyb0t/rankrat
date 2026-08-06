@@ -6,9 +6,13 @@ from dataclasses import dataclass
 
 from rankrat import __version__
 from rankrat.config import Settings
+from rankrat.constants import GOOGLE_SITE_VERIFICATION_SCOPE
 from rankrat.operator.site_onboarding import SiteOnboardingOperator
+from rankrat.operator.site_ownership import SiteOwnershipOperator
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.bing import BingWebmasterClient
+from rankrat.providers.cloudflare import CloudflareDnsClient
+from rankrat.providers.dns import PublicDnsClient
 from rankrat.providers.google_analytics import (
     GOOGLE_ANALYTICS_READ_SCOPE,
     GoogleAnalyticsDataClient,
@@ -23,9 +27,11 @@ from rankrat.providers.google_search_console import (
     GoogleConfiguredTokenProvider,
     GoogleSearchConsoleClient,
 )
+from rankrat.providers.google_site_verification import GoogleSiteVerificationClient
 from rankrat.providers.lighthouse import LighthouseWorkerClient
 from rankrat.providers.pagespeed import PageSpeedClient
 from rankrat.providers.schema_fetch import PublicSchemaFetcher
+from rankrat.providers.site_fetch import PublicSiteFetcher
 from rankrat.services.bing import BingWebmasterService
 from rankrat.services.capabilities import CapabilityService
 from rankrat.services.cross_provider import CrossProviderService
@@ -43,7 +49,10 @@ from rankrat.services.onboarding_guide import OnboardingGuideService
 from rankrat.services.pagespeed import PageSpeedService
 from rankrat.services.provider_readiness import ProviderReadinessService
 from rankrat.services.schema import LocalSchemaValidationService
+from rankrat.services.site_audit import SiteAuditService
 from rankrat.services.site_onboarding import SiteOnboardingService
+from rankrat.services.site_ownership import SiteOwnershipService
+from rankrat.services.site_remediation import SiteRemediationService
 from rankrat.services.sites import SitesService
 
 
@@ -72,6 +81,9 @@ class ApplicationServices:
     google_sites: GoogleSiteService | None = None
     google_sitemaps: GoogleSitemapService | None = None
     site_onboarding: SiteOnboardingService | None = None
+    site_ownership: SiteOwnershipService | None = None
+    site_remediation: SiteRemediationService | None = None
+    site_audit: SiteAuditService | None = None
 
 
 def build_services(settings: Settings) -> ApplicationServices:
@@ -99,12 +111,26 @@ def build_services(settings: Settings) -> ApplicationServices:
         GoogleIndexingClient(google_indexing_read_client),
     )
     bing_client = BingWebmasterClient(policy)
+    cloudflare_client = CloudflareDnsClient(policy)
     pagespeed_client = PageSpeedClient(policy)
     indexnow = None
     google_indexing = None
     google_sites = None
     google_sitemaps = None
     site_onboarding = None
+    site_ownership = SiteOwnershipService(
+        SiteOwnershipOperator(
+            policy,
+            GoogleSiteVerificationClient(
+                policy,
+                GoogleConfiguredTokenProvider(policy, (GOOGLE_SITE_VERIFICATION_SCOPE,)),
+            ),
+            bing_client,
+            cloudflare_client,
+            PublicDnsClient(),
+        )
+    )
+    site_remediation = None
     if settings.writes_enabled:
         from rankrat.providers.indexnow import IndexNowClient
 
@@ -136,6 +162,11 @@ def build_services(settings: Settings) -> ApplicationServices:
         google_sitemaps = GoogleSitemapService(
             policy,
             sitemap_client,
+        )
+        site_remediation = SiteRemediationService(
+            policy,
+            sitemap_client,
+            bing_client,
         )
     # Its own switch rather than the writes_enabled block above: onboarding is
     # the only operation that rewrites the boundary file this server enforces, so
@@ -184,7 +215,11 @@ def build_services(settings: Settings) -> ApplicationServices:
         local_schema=LocalSchemaValidationService(PublicSchemaFetcher()),
         provider_readiness=ProviderReadinessService(
             policy,
-            {google_client.provider: google_client, bing_client.provider: bing_client},
+            {
+                google_client.provider: google_client,
+                bing_client.provider: bing_client,
+                cloudflare_client.provider: cloudflare_client,
+            },
         ),
         sites=SitesService(policy),
         onboarding_guide=OnboardingGuideService(policy),
@@ -204,4 +239,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         google_sites=google_sites,
         google_sitemaps=google_sitemaps,
         site_onboarding=site_onboarding,
+        site_ownership=site_ownership,
+        site_remediation=site_remediation,
+        site_audit=SiteAuditService(policy, PublicSiteFetcher()),
     )

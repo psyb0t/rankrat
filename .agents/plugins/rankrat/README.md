@@ -1,8 +1,9 @@
 # @psyb0t/rankrat
 
 MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — boundary-limited
-SEO and search-analytics reads over Google Search Console, Bing Webmaster Tools,
-GA4, PageSpeed and IndexNow, plus optional isolated local Lighthouse audits.
+SEO and search-analytics operations over Google Search Console, Bing Webmaster
+Tools, GA4, PageSpeed, Cloudflare ownership DNS, and IndexNow, plus bounded
+whole-site/backlink intelligence and optional isolated local Lighthouse audits.
 
 rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin has
 no OpenClaw runtime extension; its static MCP definition executes the bundled

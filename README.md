@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml/badge.svg?branch=main)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
 [![coverage](https://raw.githubusercontent.com/psyb0t/rankrat/badges/coverage.svg)](https://github.com/psyb0t/rankrat/actions/workflows/pipeline.yml)
-[![version](https://raw.githubusercontent.com/psyb0t/rankrat/badges/version.svg)](https://github.com/psyb0t/rankrat/tags)
+[![version](https://raw.githubusercontent.com/psyb0t/rankrat/badges/version.svg)](https://github.com/psyb0t/rankrat/releases)
 [![license](https://raw.githubusercontent.com/psyb0t/rankrat/badges/license.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
 
@@ -19,12 +19,15 @@ rankrat puts those APIs behind one MCP server so an agent does the joining. You
 ask; it goes and rats out whichever provider knows.
 
 It's a rat, not a burglar. It answers only for the accounts and properties you
-list in a boundary file, and no tool widens that from inside a bounded session.
-Read-only unless you deliberately turn writes on, at which point the write tools
-appear and stay inside the same boundaries. Provider tools read what those
-providers already hold about you. The optional local Lighthouse worker opens
-only an explicitly requested page beneath a configured PageSpeed site; it does
-not crawl a domain or accept an unbounded URL.
+list in a boundary file. Ordinary tools cannot widen that scope; the separately
+gated onboarding tool can add only the exact resources it creates when you
+explicitly enable agent onboarding and provide a validated writable config
+mount. Read-only unless you deliberately turn writes on, at which point the
+other write tools appear and stay inside the same boundaries. Provider tools
+read what those providers already hold about you. The optional local Lighthouse
+worker opens only an explicitly requested page beneath a configured PageSpeed
+site. The separate whole-site auditor walks a strictly bounded same-site graph
+with a DNS-pinned fetcher.
 
 Speaks MCP over stdio and Streamable HTTP, plus a REST API for callers that
 don't speak MCP.
@@ -37,6 +40,7 @@ tool surface is still free to move.
 - [Quick start](#quick-start)
 - [Running it](#running-it)
 - [Local Lighthouse audits](#local-lighthouse-audits)
+- [Ownership, whole-site audits, and backlinks](#ownership-whole-site-audits-and-backlinks)
 - [Agent integrations](#agent-integrations)
 - [Write capability](#write-capability)
 - [Finding and naming GA4 containers](#finding-and-naming-ga4-containers)
@@ -62,8 +66,8 @@ less rankrat.sh
 chmod +x rankrat.sh
 sudo mv rankrat.sh /usr/local/bin/rankrat.sh
 
-mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat
-chmod 700 config oauth secrets secrets/google secrets/bing secrets/indexnow secrets/rankrat
+mkdir -p config oauth secrets/google secrets/bing secrets/cloudflare secrets/indexnow secrets/rankrat
+chmod 700 config oauth secrets secrets/google secrets/bing secrets/cloudflare secrets/indexnow secrets/rankrat
 
 curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/config/boundaries.json.example \
   -o config/boundaries.json
@@ -210,6 +214,40 @@ redirect may be fetched before that post-navigation check rejects the report,
 just as an allowed page may fetch public third-party subresources; private and
 special-address destinations remain blocked at the worker proxy.
 
+## Ownership, whole-site audits, and backlinks
+
+These operations turn Rankrat from a reporting bridge into a bounded SEO work
+loop:
+
+| MCP tool | REST route | What it does |
+| --- | --- | --- |
+| `site_ownership_status` | `POST /v1/site-ownership-status-checks` | Reads public DNS and Google/Bing ownership status without changing anything |
+| `site_ownership_apply` | `POST /v1/site-ownership-verifications` | Creates only provider-issued Google TXT and Bing CNAME records in the configured Cloudflare zone, then redeems propagated proofs |
+| `site_audit` | `POST /v1/site-audits` | Crawls a bounded configured site and returns page evidence, findings, remediation text, and a normalized score |
+| `site_remediation_apply` | `POST /v1/site-remediations` | Resubmits one bounded sitemap to Google and Bing and a bounded changed-URL batch to Bing |
+| `bing_backlink_intelligence` | `POST /v1/bing/backlink-intelligence` | Walks bounded Bing backlink pages for explicit site URLs and aggregates referring domains and anchor text |
+
+Ownership application is idempotent. Exact existing DNS records are reused,
+conflicting CNAMEs are refused, arbitrary DNS CRUD is not exposed, and neither
+tokens nor provider bodies appear in the receipt. DNS propagation is
+asynchronous: call `site_ownership_apply`, then poll `site_ownership_status`
+until `complete` is true. Keep verification records in place afterward;
+providers can periodically recheck them.
+
+The site audit checks public HTTPS status, robots and sitemap discovery,
+titles, descriptions, canonicals, `noindex`, language, H1 count, image alt text,
+Open Graph metadata, duplicate titles, non-HTML sitemap entries, broken fetches,
+and restricted Google Indexing structured-data eligibility. It follows only
+normalized same-site URLs, rejects redirects, IP literals and private/mixed DNS
+answers, and reports when page or issue limits truncate the crawl. Its
+remediation text tells an agent what needs changing; Rankrat does not edit an
+arbitrary CMS or source repository.
+
+Backlink intelligence reports only what Bing exposes for sites the configured
+account owns. It does not scrape competitors, buy links, send outreach, or
+manufacture backlinks. Its useful output is the evidence needed to find weak
+anchor diversity, pages with few referring domains, and links worth reclaiming.
+
 ## Agent integrations
 
 The [skill](.agents/skills/rankrat) works in any agent that reads
@@ -278,8 +316,10 @@ permissions. The regular HTTP bearer token protects `/v1/` for non-loopback
 HTTP; stdio access is controlled by who can start the process.
 
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
-Indexing notifications, Search Console site/sitemap changes, and new-site
-onboarding. They are marked destructive/non-idempotent in MCP.
+Indexing notifications, Search Console site/sitemap changes, Cloudflare-backed
+ownership verification, discovery remediation, and new-site onboarding. They
+are marked write/destructive in MCP; callers should still treat provider
+acceptance and DNS propagation as asynchronous.
 
 ## Finding and naming GA4 containers
 
@@ -311,15 +351,15 @@ nothing and is the cheapest fix for a misfiled property.
 ## Onboarding a new site
 
 `onboard-site` creates a GA4 property, a Search Console property and a Bing site
-for one URL, then records their IDs in the boundary file. Two things are worth
-knowing before using it.
+for one URL, then records their IDs in the boundary file. Resource creation and
+ownership verification are separate because DNS may take time to propagate.
 
-**It cannot verify the site, and does not pretend to.** Verification proves to a
-provider that you own the domain; the token is issued by that provider's own
-console and Rankrat holds no credential that can read it. So onboarding returns
-success — meaning the three create calls were accepted — while the properties are
-still unverified and returning no data. What you do next depends on the property
-form:
+With a configured Cloudflare account, call `site_ownership_apply` after
+onboarding. Rankrat requests the real Google TXT token and Bing CNAME proof,
+creates only those exact records, checks public DNS, and redeems each provider
+when its proof is visible. Poll `site_ownership_status`; do not interpret empty
+provider reports until its `complete` field is true. Without Cloudflare, use one
+of the manual methods below:
 
 | Property | Methods it accepts |
 | --- | --- |
@@ -327,10 +367,9 @@ form:
 | `https://example.com/` | GA4 tag, HTML file, meta tag, DNS TXT |
 | Bing | Import from a verified Search Console property, XML file, meta tag, CNAME |
 
-Deploy the returned GA4 Measurement ID first. It is the one artifact Rankrat
-hands you directly, and on a URL-prefix property it also satisfies Search Console
-verification on its own — after which Bing can simply import that property. Least
-work, no extra APIs.
+Deploy the returned GA4 Measurement ID as a separate operator step so Analytics
+can collect data. On a URL-prefix Search Console property it can also be used as
+a manual verification method; a Domain property still requires DNS TXT.
 
 The procedure is served rather than left implied, so an agent can walk you through
 it instead of guessing: the `rankrat://onboarding` MCP resource, a
@@ -384,6 +423,7 @@ Never put a credential in source, YAML, Makefiles, or chat.
 | Google OAuth token record | `oauth/google.json` |
 | PageSpeed API key | `secrets/google/pagespeed-api-key` |
 | Bing Webmaster API key | `secrets/bing/api-key` |
+| Cloudflare scoped API token | `secrets/cloudflare/api-token` |
 | IndexNow key | `secrets/indexnow/key` |
 | HTTP bearer secret | `secrets/rankrat/http-bearer-token` |
 
@@ -394,6 +434,7 @@ Never put a credential in source, YAML, Makefiles, or chat.
    If External/Testing, add the signing-in user under
    [Audience](https://console.cloud.google.com/auth/audience).
 3. Enable [Search Console](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com),
+   [Site Verification](https://console.cloud.google.com/apis/library/siteverification.googleapis.com),
    [Analytics Data](https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com),
    [Analytics Admin](https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com),
    [Indexing](https://console.cloud.google.com/apis/library/indexing.googleapis.com), and
@@ -410,9 +451,10 @@ Never put a credential in source, YAML, Makefiles, or chat.
    to move it. Revoke the grant later with
    `rankrat.sh revoke-google --account-id google`.
 
-The one consent flow requests Search Console management, Indexing, and GA4
-read/edit scopes. It does not bypass provider-side ownership. Grant that Google
-user the required Search Console and GA4 roles first.
+The one consent flow requests Search Console management, Site Verification,
+Indexing, and GA4 read/edit scopes. Re-run `auth-google` after enabling the Site
+Verification API so the stored grant contains the new scope. OAuth supplies the
+proof and verification calls; Cloudflare supplies the DNS write.
 
 ### PageSpeed
 
@@ -478,6 +520,24 @@ Publish the generated `<key>.txt` on the public target host yourself. The
 verifier requires exact key content over direct HTTPS, with no redirect. Skip
 this section entirely if you are not submitting URLs to IndexNow.
 
+### Cloudflare ownership automation
+
+1. Open [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+   and choose **Create Token → Create Custom Token**.
+2. Grant only **Zone → DNS → Edit** and **Zone → Zone → Read**. Under Zone
+   Resources, include only the zones Rankrat should verify; do not use the
+   account-wide Global API Key.
+3. Save the token as one line in `secrets/cloudflare/api-token`, mode `0600`.
+4. In each zone's Cloudflare **Overview**, copy the 32-character Zone ID into
+   that account's `cloudflare_zones` entry in `config/boundaries.json`. Replace
+   both the all-zero ID and `example.com` from the example file.
+
+The token can list only the allowed zones and create/read verification records.
+Rankrat's API is narrower still: it exposes no generic DNS name, type, or value
+chosen by the caller. In `RANKRAT_UNBOUNDED=true` bootstrap mode it may discover
+the most-specific zone visible to that fixed Cloudflare account; bounded mode
+requires the exact zone in `cloudflare_zones`.
+
 ## Configuration
 
 Copy `config/boundaries.json.example` and list only resources Rankrat may touch.
@@ -510,9 +570,10 @@ trusted agent needs another discovery/onboarding session, then restart without
 them to return to normal bounded enforcement.
 
 This keeps credential **accounts** fixed by the boundary file, but bypasses the
-resource allow-lists for Google, Bing, and PageSpeed. It does not expose a
-credential path, arbitrary provider origin, or IndexNow key target. Non-loopback
-HTTP still requires the normal bearer secret.
+resource allow-lists for Google, Bing, PageSpeed, and Cloudflare zone discovery.
+It does not expose a credential path, arbitrary provider origin, arbitrary DNS
+operation, or IndexNow key target. Non-loopback HTTP still requires the normal
+bearer secret.
 
 The smallest bootstrap boundary still names the pre-mounted Google and Bing
 credential accounts. In unbounded mode, use discovery, then
@@ -618,6 +679,22 @@ and scan both production images.
   socket volume, exits, and is not part of the running service set.
 
 ## Known gaps
+
+**TODO — monitoring and regression detection.** Persisting audit baselines,
+scheduling rechecks, alerting on score/indexing/backlink regressions, and
+tracking issue lifecycle over time are not implemented yet. Current reports are
+point-in-time and the caller owns storage and scheduling.
+
+**TODO — broader Cloudflare performance controls.** Rankrat currently uses
+Cloudflare only for narrowly scoped ownership DNS proofs. Cache settings,
+redirect rules, compression, image optimization, firewall controls, and other
+zone performance/security mutations are intentionally not exposed yet.
+
+**Discovery remediation is sequential, not transactional.** Google sitemap
+submission, Bing sitemap submission, and Bing changed-URL submission are
+separate provider writes. If a later provider fails, earlier accepted writes
+remain accepted; inspect the returned error, check provider status, and retry
+the idempotent operation after fixing the failing provider.
 
 **Onboarding does not roll back a partial failure.** `onboard-site` creates the
 GA4 property, then the Search Console property, then the Bing site, and writes

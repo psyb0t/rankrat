@@ -2,6 +2,39 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.7.0 — 2026-08-06
+
+Adds a bounded SEO improvement loop: ownership automation, deterministic
+whole-site audits, discovery remediation, and backlink intelligence.
+
+- Adds Cloudflare-backed Google and Bing ownership automation. Rankrat requests
+  provider-issued proof material, creates only the exact Google TXT and Bing
+  CNAME records in an authorized zone, checks public DNS propagation, and
+  redeems ownership without exposing verification values or generic DNS CRUD.
+- Adds `site_ownership_status` at
+  `POST /v1/site-ownership-status-checks` and `site_ownership_apply` at
+  `POST /v1/site-ownership-verifications`. Ownership completion remains
+  asynchronous and explicitly pollable.
+- Adds `site_audit` at `POST /v1/site-audits`, with a DNS-pinned,
+  proxy-disabled, redirect-disabled crawler that stays beneath a configured
+  public HTTPS site and returns bounded evidence, scores, findings, and
+  deterministic remediation guidance.
+- Adds `site_remediation_apply` at `POST /v1/site-remediations` for bounded
+  Google and Bing sitemap resubmission plus Bing changed-URL submission.
+  Multi-provider writes are sequential and report failures without claiming
+  transactional rollback.
+- Adds `bing_backlink_intelligence` at
+  `POST /v1/bing/backlink-intelligence`, walking bounded Bing backlink pages
+  and aggregating referring domains and anchor text for owned sites.
+- Keeps read-only discovery free of mutation tools and exposes the same strict
+  contracts through REST, stdio MCP, and Streamable HTTP MCP. The YAML-first
+  OpenAPI source, generated JSON, setup configuration, README, and agent
+  integrations describe the complete surface.
+- Hardens provider responses, DNS parsing, crawl limits, SSRF defenses, secret
+  handling, and the production Cloudflare secret mount. The production images
+  pass stdio, authenticated REST, Streamable HTTP, and real Chromium
+  Lighthouse smokes.
+
 ## v0.6.0 — 2026-08-06
 
 Makes the published OpenClaw integration a self-contained, hardened Docker

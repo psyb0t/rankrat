@@ -55,6 +55,13 @@ def test_docker_official_bases_use_public_ecr_at_the_reviewed_digests() -> None:
     assert lock_dockerfile.count(f"FROM {_PYTHON_OFFICIAL_IMAGE}") == 1
 
 
+def test_runtime_image_precreates_every_documented_secret_mount_parent() -> None:
+    dockerfile = Path("Dockerfile").read_text(encoding="utf-8")
+
+    for provider in ("google", "bing", "cloudflare", "indexnow", "rankrat"):
+        assert f"/run/secrets/{provider}" in dockerfile
+
+
 def test_lighthouse_runtime_volume_supports_the_shared_configured_uid() -> None:
     dockerfile = Path("Dockerfile.lighthouse").read_text(encoding="utf-8")
     compose = Path("docker-compose.yml.example").read_text(encoding="utf-8")

@@ -27,5 +27,9 @@ class SchemaFetchError(RankratError):
     """Raised when a public schema URL is unsafe or cannot be safely fetched."""
 
 
+class SiteFetchError(RankratError):
+    """Raised when a public audit URL is unsafe or cannot be safely fetched."""
+
+
 class IndexNowRateLimitError(RankratError):
     """Raised when a configured IndexNow target has exhausted its request rate."""

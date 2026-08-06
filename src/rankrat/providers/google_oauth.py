@@ -30,6 +30,7 @@ from rankrat.constants import (
     GOOGLE_INDEXING_SCOPE,
     GOOGLE_SEARCH_CONSOLE_READ_SCOPE,
     GOOGLE_SEARCH_CONSOLE_WRITE_SCOPE,
+    GOOGLE_SITE_VERIFICATION_SCOPE,
     MAX_OAUTH_TOKEN_FILE_BYTES,
     MAX_PROVIDER_RESPONSE_BYTES,
     OAUTH_CONTAINER_LISTENER_HOST,
@@ -50,6 +51,7 @@ _GOOGLE_AUTHORIZATION_SCOPES = (
     GOOGLE_INDEXING_SCOPE,
     GOOGLE_ANALYTICS_READ_SCOPE,
     GOOGLE_ANALYTICS_EDIT_SCOPE,
+    GOOGLE_SITE_VERIFICATION_SCOPE,
 )
 _OAUTH_AUTHORIZATION_PROMPT = "consent"
 _OAUTH_CALLBACK_PATH = "/oauth2/callback"
@@ -770,6 +772,7 @@ def required_google_oauth_scopes(
         scopes.append(GOOGLE_INDEXING_SCOPE)
         if enable_writes:
             scopes.append(GOOGLE_SEARCH_CONSOLE_WRITE_SCOPE)
+            scopes.append(GOOGLE_SITE_VERIFICATION_SCOPE)
     if account.ga4_properties or account.google_account_discovery:
         scopes.append(GOOGLE_ANALYTICS_READ_SCOPE)
         if enable_writes:

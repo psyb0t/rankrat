@@ -11,12 +11,14 @@ from datetime import UTC, date, datetime, timedelta, timezone
 from enum import StrEnum
 from math import isfinite
 from pathlib import Path
+from urllib.parse import urlparse
 
 import httpx
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, field_validator
 
 from rankrat.constants import (
     BING_UNKNOWN_AVERAGE_POSITION,
+    MAX_BING_LINK_PAGE,
     MAX_BING_STATS_LABEL_CHARS,
     MAX_HTTP_STATUS_CODE,
     MAX_PROVIDER_ITEMS,
@@ -139,6 +141,31 @@ class BingLinkCounts:
 
 
 @dataclass(frozen=True, slots=True)
+class BingLinkDetail:
+    """One validated inbound link and its reported anchor text."""
+
+    url: str
+    anchor_text: str
+
+
+@dataclass(frozen=True, slots=True)
+class BingUrlLinks:
+    """One fixed page of inbound links for one configured target URL."""
+
+    links: tuple[BingLinkDetail, ...]
+    total_pages: int
+
+
+@dataclass(frozen=True, slots=True)
+class BingSiteVerification:
+    """Provider-issued verification material and current state for one site."""
+
+    site_url: str
+    dns_verification_code: str
+    verified: bool
+
+
+@dataclass(frozen=True, slots=True)
 class BingUrlInformation:
     """Validated indexing and crawl information for one configured Bing child URL."""
 
@@ -177,6 +204,8 @@ class _BingSiteResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True, strict=True)
 
     Url: str
+    DnsVerificationCode: str | None = Field(default=None, max_length=2_048)
+    IsVerified: bool | None = None
 
 
 class _BingTrafficResponseRow(BaseModel):
@@ -407,6 +436,27 @@ class _BingLinkCountsResponse(BaseModel):
         return value
 
 
+class _BingLinkDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    Url: str = Field(min_length=1, max_length=2_048)
+    AnchorText: str = Field(default="", max_length=2_048)
+
+
+class _BingUrlLinksResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    Details: list[_BingLinkDetailResponse]
+    TotalPages: int
+
+    @field_validator("TotalPages")
+    @classmethod
+    def validate_total_pages(cls, value: int) -> int:
+        if value < 0 or value > MAX_BING_LINK_PAGE:
+            raise ValueError("Bing URL links total pages is out of range")
+        return value
+
+
 class _BingUrlInformationResponse(BaseModel):
     """The documented constrained fields returned by Bing's URL-info operation."""
 
@@ -519,6 +569,7 @@ class BingReadOperation(StrEnum):
     FEEDS = "GetFeeds"
     URL_SUBMISSION_QUOTA = "GetUrlSubmissionQuota"
     LINK_COUNTS = "GetLinkCounts"
+    URL_LINKS = "GetUrlLinks"
     KEYWORD_STATS = "GetKeywordStats"
     RELATED_KEYWORDS = "GetRelatedKeywords"
     URL_INFO = "GetUrlInfo"
@@ -793,6 +844,105 @@ class BingWebmasterClient:
                 "Bing Webmaster returned duplicate link-count URLs",
             )
         return BingLinkCounts(links=links, total_pages=response.TotalPages)
+
+    async def read_url_links(
+        self,
+        request: ProviderReadRequest,
+        site_url: str,
+        target_url: str,
+        page: int,
+    ) -> BingUrlLinks:
+        """Read one typed page of inbound links for a configured child URL."""
+
+        if page < 0 or page > MAX_BING_LINK_PAGE:
+            raise ValueError("Bing URL links page is out of range")
+        authorized_target_url = self._boundary_policy.require_bing_site_url(
+            str(request.account_id),
+            site_url,
+            target_url,
+        )
+        payload = await self.read_site_data(
+            request,
+            site_url,
+            BingReadOperation.URL_LINKS,
+            {"link": authorized_target_url, "page": str(page)},
+        )
+        try:
+            response = _BingUrlLinksResponse.model_validate(payload)
+        except ValidationError as error:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Bing Webmaster returned an invalid URL links report",
+            ) from error
+        if len(response.Details) > MAX_PROVIDER_ITEMS:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Bing Webmaster returned an invalid URL links report",
+            )
+        links = tuple(_bing_link_detail(row) for row in response.Details)
+        if len({(link.url, link.anchor_text) for link in links}) != len(links):
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Bing Webmaster returned duplicate URL links",
+            )
+        return BingUrlLinks(links=links, total_pages=response.TotalPages)
+
+    async def site_verification_for_onboarding(
+        self,
+        request: ProviderReadRequest,
+        site_url: str,
+    ) -> BingSiteVerification | None:
+        """Read verification material for one site being added by the local operator."""
+
+        account = self._boundary_policy.require_bing_onboarding_account(str(request.account_id))
+        payload = await self._request_json(
+            "GetUserSites",
+            self._load_api_key(account.credential),
+            request.timeout_seconds,
+            {},
+        )
+        entries = _validated_bing_list(payload, "site list")
+        for entry in entries:
+            try:
+                site = _BingSiteResponse.model_validate(entry)
+            except ValidationError as error:
+                raise ProviderOperationError(
+                    ProviderFailureCode.INVALID_RESPONSE,
+                    "Bing Webmaster returned an invalid site entry",
+                ) from error
+            if site.Url != site_url:
+                continue
+            code = (site.DnsVerificationCode or "").strip()
+            if not code:
+                raise ProviderOperationError(
+                    ProviderFailureCode.INVALID_RESPONSE,
+                    "Bing Webmaster did not return DNS verification material",
+                )
+            return BingSiteVerification(site.Url, code, bool(site.IsVerified))
+        return None
+
+    async def verify_site_for_onboarding(
+        self,
+        request: ProviderReadRequest,
+        site_url: str,
+    ) -> bool:
+        """Ask Bing to verify one local-operator site after DNS materialization."""
+
+        account = self._boundary_policy.require_bing_onboarding_account(str(request.account_id))
+        response = await self._request_json(
+            "VerifySite",
+            self._load_api_key(account.credential),
+            request.timeout_seconds,
+            {},
+            http_method="POST",
+            request_payload={"siteUrl": site_url},
+        )
+        if not isinstance(response, bool):
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Bing Webmaster returned an invalid verification response",
+            )
+        return response
 
     async def read_url_information(
         self,
@@ -1298,6 +1448,21 @@ def _bing_feed_row(value: object) -> BingFeedRow:
 
 def _bing_link_count_row(value: _BingLinkCountResponseRow) -> BingLinkCountRow:
     return BingLinkCountRow(url=value.Url, count=value.Count)
+
+
+def _bing_link_detail(value: _BingLinkDetailResponse) -> BingLinkDetail:
+    parsed = urlparse(value.Url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ProviderOperationError(
+            ProviderFailureCode.INVALID_RESPONSE,
+            "Bing Webmaster returned an invalid backlink URL",
+        )
+    if parsed.username or parsed.password or len(value.Url) > MAX_BING_STATS_LABEL_CHARS:
+        raise ProviderOperationError(
+            ProviderFailureCode.INVALID_RESPONSE,
+            "Bing Webmaster returned an invalid backlink URL",
+        )
+    return BingLinkDetail(url=value.Url, anchor_text=value.AnchorText)
 
 
 def _bing_keyword_stats_row(value: object) -> BingKeywordStatsRow:

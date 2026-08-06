@@ -57,6 +57,8 @@ services:
         target: /run/secrets/google/pagespeed-api-key
       - source: bing_api_key
         target: /run/secrets/bing/api-key
+      - source: cloudflare_api_token
+        target: /run/secrets/cloudflare/api-token
       - source: indexnow_key
         target: /run/secrets/indexnow/key
     cap_drop:
@@ -139,6 +141,8 @@ secrets:
     file: ./secrets/google/pagespeed-api-key
   bing_api_key:
     file: ./secrets/bing/api-key
+  cloudflare_api_token:
+    file: ./secrets/cloudflare/api-token
   indexnow_key:
     file: ./secrets/indexnow/key
 

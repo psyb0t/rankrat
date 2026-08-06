@@ -1,6 +1,6 @@
 ---
 name: rankrat
-description: Query Google Search Console, Bing Webmaster Tools, Google Analytics 4 (GA4), and PageSpeed Insights, or run local Lighthouse browser audits, through one self-hosted MCP server. Search analytics queries, summaries, trends, anomalies, comparisons and drop attribution; query and page performance, ranking buckets, cannibalization and opportunity reports; URL inspection, sitemaps, crawl issues, crawl stats, link counts and feeds; GA4 reports covering realtime, content, landing pages, organic search, traffic sources, ecommerce, audience segments, user behavior and conversion funnels; PageSpeed, Lighthouse, and schema checks. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect SEO, indexing, ranking, browser-audit, or search-traffic data for sites they already own.
+description: Query Google Search Console, Bing Webmaster Tools, Google Analytics 4 (GA4), and PageSpeed Insights, run local Lighthouse and bounded whole-site audits, automate Google/Bing DNS ownership through Cloudflare, apply sitemap and URL discovery remediation, and aggregate Bing backlink evidence through one self-hosted MCP server. Includes search analytics, indexing, crawl, ranking, schema, performance, audience, conversion, referring-domain, and anchor-text reports. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, backlinks, browser scores, or search traffic for sites they control.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
@@ -9,7 +9,7 @@ metadata:
     requires:
       bins: [docker]
 permissions:
-  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights, and IndexNow provider endpoints; optional Lighthouse browser traffic to explicitly requested public pages beneath configured sites; inbound only on the port you bind."
+  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow provider endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
   shell: "docker run invocations for the published image, or bash execution of the bundled references/rankrat.sh wrapper; no other host access is required."
   filesystem: "reads the boundary config and provider credentials. Local initialization creates an HTTP bearer secret; Google authorization writes its token record; IndexNow initialization creates or retains its local key and updates .env plus the boundary file; agent onboarding and unbounded onboarding update the one configured boundary file with exact created-resource IDs."
 ---
@@ -27,8 +27,11 @@ Install, credentials and the full environment reference:
 ## Security & safety
 
 In normal bounded mode, the operator fixes the boundary at startup and rankrat
-serves only the accounts, sites and properties listed in it. A tool cannot widen
-that scope from inside a bounded session.
+serves only the accounts, sites and properties listed in it. Ordinary provider
+tools cannot widen that scope. The only exception is the separately gated
+`site_onboarding_submit` tool: it can add the exact resources it creates when
+`RANKRAT_ALLOW_AGENT_ONBOARDING=true` and the config mount passes the ownership
+and mode checks described below.
 
 It is **read-only by default** — `RANKRAT_READ_ONLY` defaults to `true`, and the
 write tools are not merely rejected but absent from `tools/list` entirely, so an
@@ -65,6 +68,10 @@ the bearer token if anything else can reach it.
   landing pages, traffic sources, ecommerce, audience segments, user behavior,
   conversion funnels.
 - PageSpeed Insights, and fetching a page's structured-data schema.
+- Whole-site crawling for deterministic metadata, canonical, robots, sitemap,
+  duplicate-title, link, and structured-data findings with remediation text.
+- Google/Bing ownership status and narrowly scoped Cloudflare DNS verification.
+- Bing backlink detail aggregated into referring domains and anchor summaries.
 - Local Lighthouse performance, accessibility, best-practices, and SEO scores
   or category-specific failed findings when the companion worker is configured.
 - Checking which providers are actually wired up (`provider_readiness`,
@@ -72,17 +79,17 @@ the bearer token if anything else can reach it.
 
 ## When NOT to use
 
-- **Sites you don't control.** Everything is scoped to properties already
-  verified in your own Search Console / Bing / GA4 accounts. It is not a rank
-  tracker or a competitor-research tool and cannot query arbitrary domains.
+- **Sites you don't control.** Everything is scoped to configured provider
+  accounts and site boundaries. It is not a competitor crawler or arbitrary
+  backlink scraper.
 - **Changing anything in the default configuration.** Read-only mode exposes no
   write tools. A trusted writable deployment can submit URLs/sitemaps and,
   during an unbounded session, create supported provider resources for a newly
   onboarded site.
 - **Realtime dashboards.** Provider APIs lag (Search Console notably so), and
   rankrat reports what they return.
-- **Crawling a site.** Lighthouse audits one explicit bounded page per call; it
-  does not discover or walk a site.
+- **Editing an arbitrary CMS or repository.** Audits return deterministic fixes;
+  provider remediation resubmits sitemaps and URLs but does not rewrite pages.
 
 ## Usage
 
@@ -194,13 +201,13 @@ guess the steps. No tool can create a GA4 account — the Admin API has no
 relay those, then ask the user for the numeric account ID, which
 `google_analytics_account_inventory` can also read back once it exists.
 
-The point of reading it: creating the three provider resources is the small part,
-and Rankrat cannot verify site ownership at all. Onboarding reports success while
-the properties are unverified and returning no data, so a run that "worked" still
-leaves the user with steps to perform. The guide names them, and says which ones
-the user has to do rather than you. `site_onboarding_submit` exists only when the
-operator has set `RANKRAT_ALLOW_AGENT_ONBOARDING=true`; when it is absent, guiding
-the user through `rankrat onboard-site` is the whole job.
+Creating provider resources and proving ownership are separate. When a
+Cloudflare account is configured, call `site_ownership_apply` after onboarding,
+then poll `site_ownership_status` until `complete` is true. Without Cloudflare,
+the guide lists the manual methods accepted by the property form. Rankrat still
+cannot deploy the GA4 tag or create a GA4 account. `site_onboarding_submit`
+exists only when the operator has set `RANKRAT_ALLOW_AGENT_ONBOARDING=true`;
+when it is absent, guide the user through `rankrat onboard-site`.
 
 Typical flow for "why did traffic drop":
 

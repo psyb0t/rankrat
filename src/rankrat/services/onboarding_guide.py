@@ -1,11 +1,4 @@
-"""Read-only guidance for the onboarding steps Rankrat cannot perform itself.
-
-Onboarding creates provider resources; it cannot prove to a provider that the
-operator owns the site. Verification is a human action taken in the provider's
-own console, and the token to deploy is issued by that console. Rankrat holds no
-credential that can read it, so nothing here invents one: each method names the
-artifact and says where the real value comes from.
-"""
+"""Read-only guidance for automated and manual site onboarding steps."""
 
 from __future__ import annotations
 
@@ -19,8 +12,9 @@ _SEARCH_CONSOLE_DOMAIN_PREFIX = "sc-domain:"
 
 _SUMMARY = (
     "Rankrat can create the GA4 property, the Search Console property and the Bing site. "
-    "It cannot verify site ownership or deploy a tag. Those are operator actions, and "
-    "until they are done the created properties return no data."
+    "With a configured Cloudflare account it can also obtain provider-issued DNS proofs, "
+    "publish them, check public propagation, and redeem Google and Bing ownership. It "
+    "cannot deploy the GA4 tag or modify a non-Cloudflare DNS provider."
 )
 
 _RANKRAT_PERFORMS = (
@@ -28,24 +22,24 @@ _RANKRAT_PERFORMS = (
     "Adds the site to Google Search Console as an unverified property.",
     "Adds the site to Bing Webmaster Tools as an unverified site.",
     "Records the created resource IDs in the boundary file so later reads are allowed.",
+    "With a configured Cloudflare account, creates only provider-issued Google TXT and "
+    "Bing CNAME ownership records and redeems them after public DNS propagation.",
 )
 
 _RANKRAT_CANNOT_PERFORM = (
-    "Prove site ownership to any provider. Verification tokens are issued by the "
-    "provider's own console and Rankrat holds no credential that can read them.",
-    "Deploy a tag, an HTML file, a meta tag or a DNS record to the site.",
-    "Report whether verification has since succeeded. An unverified Search Console "
-    "property answers reads with a siteUnverifiedUser permission level, not data.",
+    "Deploy a GA4 tag, HTML file, or meta tag to the site.",
+    "Modify DNS outside a configured Cloudflare account or create arbitrary DNS records.",
+    "Create a GA4 account; Google requires a human to accept its Terms of Service.",
 )
 
 _TELL_THE_USER = (
-    "Onboarding reporting success does not mean the site is verified. It means the "
-    "three create calls were accepted.",
+    "Onboarding and ownership verification are separate operations. After onboarding, "
+    "call site_ownership_apply, then poll site_ownership_status until complete.",
     "Deploy the GA4 Measurement ID first. It is the one artifact Rankrat hands over "
     "directly, and on a URL-prefix property it also satisfies Search Console "
     "verification through the Google Analytics method.",
-    "Search Console and Bing each show the exact token, filename or record value on "
-    "their own verification screen. Read it there; Rankrat cannot supply it.",
+    "Without a configured Cloudflare account, use one of the manual methods listed for "
+    "the Search Console property form and Bing site.",
     "A sc-domain: property accepts DNS TXT and nothing else. If DNS is not editable, "
     "onboard the https:// URL-prefix form instead.",
     "Provider data is not retroactive. Collection starts at verification, so the first "
@@ -335,20 +329,21 @@ def _recommended_order(agent_onboarding_enabled: bool) -> tuple[GuideStep, ...]:
         ),
         GuideStep(
             order=3,
-            actor=GuideActor.OPERATOR,
-            title="Verify the Search Console property",
+            actor=GuideActor.RANKRAT,
+            title="Verify Search Console and Bing ownership",
             detail=(
-                "Pick a method the property form allows and deploy its artifact. Until this "
-                "succeeds every Search Console read for the site returns no data."
+                "Call site_ownership_apply when a Cloudflare account is configured, then poll "
+                "site_ownership_status until complete. Otherwise deploy one of the listed "
+                "manual proof methods."
             ),
         ),
         GuideStep(
             order=4,
             actor=GuideActor.OPERATOR,
-            title="Verify the Bing site",
+            title="Confirm provider data access",
             detail=(
-                "Importing the now-verified Search Console property is the least work. The "
-                "file, meta tag and CNAME methods are equivalent alternatives."
+                "Verification can remain pending while DNS propagates. Confirm ownership is "
+                "complete before treating empty Search Console or Bing reports as real data."
             ),
         ),
         GuideStep(

@@ -10,11 +10,13 @@ from pydantic import ValidationError
 from rankrat.errors import BoundaryDeniedError, ConfigurationError
 from rankrat.models.boundaries import (
     BoundaryDocument,
+    CloudflareZone,
     ConfiguredAccount,
     IndexNowTarget,
     Provider,
     ResourceKind,
     configured_site_contains_url,
+    normalize_indexnow_host,
     normalize_public_https_url,
     search_console_property_contains_url,
 )
@@ -82,6 +84,12 @@ class BoundaryPolicy:
         """Return immutable accounts for safe read-only summaries."""
         return self._document.accounts
 
+    @property
+    def unbounded(self) -> bool:
+        """Return whether the operator deliberately disabled resource allowlists."""
+
+        return self._unbounded
+
     def resolve_account(
         self,
         account_id: str,
@@ -102,6 +110,20 @@ class BoundaryPolicy:
             if target.id == target_id:
                 return target
         raise BoundaryDeniedError("configured IndexNow target boundary not found")
+
+    def resolve_cloudflare_zone(self, account_id: str, hostname: str) -> CloudflareZone:
+        """Resolve the most-specific configured Cloudflare zone containing a hostname."""
+
+        account = self.resolve_account(account_id, Provider.CLOUDFLARE)
+        normalized_hostname = normalize_indexnow_host(hostname)
+        candidates = tuple(
+            zone
+            for zone in account.cloudflare_zones
+            if normalized_hostname == zone.name or normalized_hostname.endswith(f".{zone.name}")
+        )
+        if not candidates:
+            raise BoundaryDeniedError("Cloudflare zone is outside the configured boundary")
+        return max(candidates, key=lambda zone: len(zone.name))
 
     def resolve_google_oauth_account(self, credential_path: Path) -> ConfiguredAccount | None:
         """Resolve an internal OAuth client path without allowing a credential fallback."""
