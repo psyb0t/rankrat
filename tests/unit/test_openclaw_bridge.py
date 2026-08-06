@@ -54,6 +54,38 @@ def test_openclaw_manifest_declares_a_static_stdio_server() -> None:
     assert "Lighthouse" in manifest["description"]
 
 
+def test_bridge_uses_openclaw_safe_environment_and_standard_layout(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / ".config" / "rankrat"
+    root.mkdir(parents=True, mode=0o700)
+    config = _create_config(root)
+    secrets = root / "secrets"
+    oauth = root / "oauth"
+    secrets.mkdir(mode=0o700)
+    oauth.mkdir(mode=0o700)
+
+    result = _run_bridge_module_isolated(
+        """
+import { runStdio } from "./.agents/plugins/rankrat/bin/cli.js";
+
+const status = runStdio(process.env, [], (command, arguments_, options) => {
+  process.stdout.write(JSON.stringify({ command, arguments_, options }));
+  return { status: 0 };
+});
+process.exitCode = status;
+""",
+        {"HOME": str(tmp_path), "PATH": os.environ["PATH"]},
+    )
+
+    invocation = json.loads(result.stdout)
+    arguments = invocation["arguments_"]
+    assert result.returncode == 0
+    assert f"type=bind,src={config.resolve()},dst=/run/config,readonly" in arguments
+    assert f"type=bind,src={secrets.resolve()},dst=/run/secrets,readonly" in arguments
+    assert f"type=bind,src={oauth.resolve()},dst=/run/oauth" in arguments
+
+
 def test_bridge_package_has_no_runtime_extension_or_http_proxy_dependency() -> None:
     package = json.loads((_PLUGIN_ROOT / "package.json").read_text(encoding="utf-8"))
     source = _BRIDGE.read_text(encoding="utf-8")
@@ -75,20 +107,24 @@ def test_bridge_rejects_missing_boundary_directory_without_stdout() -> None:
     assert result.stdout == ""
 
 
-def test_bridge_reports_an_inaccessible_docker_executable_without_stdout() -> None:
-    result = _run_bridge({"RANKRAT_CONFIG_DIR": "/", "PATH": "/nonexistent"})
+def test_bridge_reports_an_inaccessible_docker_executable_without_stdout(
+    tmp_path: Path,
+) -> None:
+    config = _create_config(tmp_path)
+    result = _run_bridge({"RANKRAT_CONFIG_DIR": str(config), "PATH": "/nonexistent"})
 
     assert result.returncode == 1
     assert "Could not start Rankrat's stdio container" in result.stderr
     assert result.stdout == ""
 
 
-def test_bridge_runs_hardened_docker_stdio_command(tmp_path: Path) -> None:
+def test_bridge_runs_hardened_bounded_docker_stdio_command(tmp_path: Path) -> None:
     config = tmp_path / "config with spaces"
     secrets = tmp_path / "secrets"
     oauth = tmp_path / "oauth"
     for directory in (config, secrets, oauth):
         directory.mkdir()
+    (config / "boundaries.json").write_text("{}", encoding="utf-8")
 
     result = _run_bridge_module(
         """
@@ -104,9 +140,6 @@ process.exitCode = status;
             "RANKRAT_CONFIG_DIR": str(config),
             "RANKRAT_SECRETS_DIR": str(secrets),
             "RANKRAT_OAUTH_DIR": str(oauth),
-            "RANKRAT_READ_ONLY": "false",
-            "RANKRAT_UNBOUNDED": "true",
-            "RANKRAT_ALLOW_AGENT_ONBOARDING": "true",
             "RANKRAT_LOG_LEVEL": "debug",
             "RANKRAT_IMAGE": "registry.example/rankrat:test",
             "UNRELATED_RANKRAT_SETTING": "must-not-be-forwarded",
@@ -121,16 +154,160 @@ process.exitCode = status;
     assert "--read-only" in arguments
     assert "--cap-drop=ALL" in arguments
     assert "no-new-privileges:true" in arguments
+    assert arguments[arguments.index("--user") + 1] == f"{os.getuid()}:{os.getgid()}"
+    assert arguments[arguments.index("--pids-limit") + 1] == "128"
+    assert arguments[arguments.index("--memory") + 1] == "512m"
+    assert arguments[arguments.index("--cpus") + 1] == "1"
     assert f"/{Path('tmp')}:rw,noexec,nosuid,size=32m" in arguments
     assert f"type=bind,src={config.resolve()},dst=/run/config,readonly" in arguments
     assert f"type=bind,src={secrets.resolve()},dst=/run/secrets,readonly" in arguments
-    assert f"type=bind,src={oauth.resolve()},dst=/run/oauth,readonly" in arguments
-    assert "RANKRAT_READ_ONLY=false" in arguments
-    assert "RANKRAT_UNBOUNDED=true" in arguments
-    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=true" in arguments
+    assert f"type=bind,src={oauth.resolve()},dst=/run/oauth" in arguments
+    assert f"type=bind,src={oauth.resolve()},dst=/run/oauth,readonly" not in arguments
     assert "RANKRAT_LOG_LEVEL=debug" in arguments
     assert "UNRELATED_RANKRAT_SETTING=must-not-be-forwarded" not in arguments
     assert arguments[-2:] == ["registry.example/rankrat:test", "stdio"]
+
+
+def test_bridge_runs_unbounded_with_only_config_writable(tmp_path: Path) -> None:
+    config = _create_config(tmp_path)
+    secrets = tmp_path / "secrets"
+    oauth = tmp_path / "oauth"
+    secrets.mkdir(mode=0o700)
+    oauth.mkdir(mode=0o700)
+
+    result = _run_bridge_module(
+        """
+import { runStdio } from "./.agents/plugins/rankrat/bin/cli.js";
+
+const status = runStdio(process.env, [], (command, arguments_, options) => {
+  process.stdout.write(JSON.stringify({ command, arguments_, options }));
+  return { status: 0 };
+});
+process.exitCode = status;
+""",
+        {
+            "RANKRAT_CONFIG_DIR": str(config),
+            "RANKRAT_SECRETS_DIR": str(secrets),
+            "RANKRAT_OAUTH_DIR": str(oauth),
+            "RANKRAT_READ_ONLY": "false",
+            "RANKRAT_UNBOUNDED": "true",
+            "RANKRAT_ALLOW_AGENT_ONBOARDING": "true",
+        },
+    )
+
+    invocation = json.loads(result.stdout)
+    arguments = invocation["arguments_"]
+    assert result.returncode == 0
+    assert f"type=bind,src={config.resolve()},dst=/run/config" in arguments
+    assert f"type=bind,src={config.resolve()},dst=/run/config,readonly" not in arguments
+    assert f"type=bind,src={secrets.resolve()},dst=/run/secrets,readonly" in arguments
+    assert f"type=bind,src={oauth.resolve()},dst=/run/oauth" in arguments
+    assert "RANKRAT_READ_ONLY=false" in arguments
+    assert "RANKRAT_UNBOUNDED=true" in arguments
+    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=true" in arguments
+
+
+def test_bridge_makes_config_writable_for_bounded_agent_onboarding(
+    tmp_path: Path,
+) -> None:
+    config = _create_config(tmp_path)
+
+    result = _run_bridge_module(
+        """
+import { runStdio } from "./.agents/plugins/rankrat/bin/cli.js";
+
+const status = runStdio(process.env, [], (command, arguments_, options) => {
+  process.stdout.write(JSON.stringify({ command, arguments_, options }));
+  return { status: 0 };
+});
+process.exitCode = status;
+""",
+        {
+            "RANKRAT_CONFIG_DIR": str(config),
+            "RANKRAT_READ_ONLY": "false",
+            "RANKRAT_ALLOW_AGENT_ONBOARDING": "true",
+        },
+    )
+
+    arguments = json.loads(result.stdout)["arguments_"]
+    assert result.returncode == 0
+    assert f"type=bind,src={config.resolve()},dst=/run/config" in arguments
+    assert f"type=bind,src={config.resolve()},dst=/run/config,readonly" not in arguments
+    assert "RANKRAT_UNBOUNDED=true" not in arguments
+    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=true" in arguments
+
+
+def test_bridge_rejects_invalid_or_contradictory_write_settings(tmp_path: Path) -> None:
+    config = _create_config(tmp_path)
+
+    invalid = _run_bridge(
+        {
+            "RANKRAT_CONFIG_DIR": str(config),
+            "RANKRAT_UNBOUNDED": "yes",
+        }
+    )
+    contradictory = _run_bridge(
+        {
+            "RANKRAT_CONFIG_DIR": str(config),
+            "RANKRAT_UNBOUNDED": "true",
+        }
+    )
+
+    assert invalid.returncode == 1
+    assert "must be either true or false" in invalid.stderr
+    assert contradictory.returncode == 1
+    assert "requires RANKRAT_READ_ONLY=false" in contradictory.stderr
+    assert invalid.stdout == contradictory.stdout == ""
+
+
+def test_bridge_rejects_unsafe_or_symlinked_unbounded_boundary(tmp_path: Path) -> None:
+    config = _create_config(tmp_path)
+    config.chmod(0o755)
+
+    unsafe = _run_bridge(
+        {
+            "RANKRAT_CONFIG_DIR": str(config),
+            "RANKRAT_READ_ONLY": "false",
+            "RANKRAT_UNBOUNDED": "true",
+        }
+    )
+
+    config.chmod(0o700)
+    boundary = config / "boundaries.json"
+    target = tmp_path / "real-boundaries.json"
+    boundary.rename(target)
+    boundary.symlink_to(target)
+    symlinked = _run_bridge({"RANKRAT_CONFIG_DIR": str(config)})
+
+    assert unsafe.returncode == 1
+    assert "must be owner-only" in unsafe.stderr
+    assert symlinked.returncode == 1
+    assert "must not contain symbolic links" in symlinked.stderr
+    assert unsafe.stdout == symlinked.stdout == ""
+
+
+def test_bridge_rejects_symlinked_ancestor_directories(tmp_path: Path) -> None:
+    real_root = tmp_path / "real"
+    real_root.mkdir(mode=0o700)
+    config = _create_config(real_root)
+    secrets = real_root / "secrets"
+    secrets.mkdir(mode=0o700)
+    linked_root = tmp_path / "linked"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+
+    config_result = _run_bridge({"RANKRAT_CONFIG_DIR": str(linked_root / "config")})
+    secrets_result = _run_bridge(
+        {
+            "RANKRAT_CONFIG_DIR": str(config),
+            "RANKRAT_SECRETS_DIR": str(linked_root / "secrets"),
+        }
+    )
+
+    assert config_result.returncode == 1
+    assert secrets_result.returncode == 1
+    assert "must not contain symbolic links" in config_result.stderr
+    assert "must not contain symbolic links" in secrets_result.stderr
+    assert config_result.stdout == secrets_result.stdout == ""
 
 
 def test_streamable_http_recipe_keeps_the_bearer_in_openclaw_environment() -> None:
@@ -161,8 +338,7 @@ def test_agent_docs_match_stable_read_discovery_and_lighthouse_contract() -> Non
     setup = Path(".agents/skills/rankrat/references/setup.md").read_text(encoding="utf-8")
 
     assert "Read tools have a stable\ndiscovery surface" in skill
-    assert "primaryEnv: RANKRAT_CONFIG_DIR" in skill
-    assert "primaryEnv: RANKRAT_URL" not in skill
+    assert "primaryEnv:" not in skill
     assert "tool list adapts to which" not in skill
     assert "Read tools stay discoverable" in setup
     assert "Chromium runs with\n`--no-sandbox`" in setup
@@ -215,3 +391,26 @@ def _run_bridge_module(
         encoding="utf-8",
         env={**os.environ, **environment},
     )
+
+
+def _run_bridge_module_isolated(
+    script: str,
+    environment: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    # OpenClaw starts stdio MCP children with a restricted environment.
+    return subprocess.run(  # noqa: S603
+        [_NODE_EXECUTABLE, "--input-type=module", "--eval", script],
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+        env=environment,
+    )
+
+
+def _create_config(tmp_path: Path) -> Path:
+    config = tmp_path / "config"
+    config.mkdir(mode=0o700)
+    boundary = config / "boundaries.json"
+    boundary.write_text("{}", encoding="utf-8")
+    boundary.chmod(0o600)
+    return config

@@ -40,19 +40,19 @@ def test_local_dev_image_mode_is_an_explicit_checked_fallback() -> None:
     assert "RANKRAT_DEV_IMAGE_SOURCE=local test" in _target(source, "test-local")
 
 
-def test_wrapper_allows_only_explicit_unbounded_persistence() -> None:
+def test_wrapper_allows_only_explicit_boundary_persistence() -> None:
     source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
 
     assert 'read_only="${RANKRAT_READ_ONLY:-true}"' in source
     assert 'unbounded="${RANKRAT_UNBOUNDED:-false}"' in source
     assert 'allow_agent_onboarding="${RANKRAT_ALLOW_AGENT_ONBOARDING:-false}"' in source
-    assert "RANKRAT_UNBOUNDED=true requires RANKRAT_READ_ONLY=false" in source
-    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=true requires RANKRAT_READ_ONLY=false" in source
+    assert "Writable boundary persistence requires RANKRAT_READ_ONLY=false" in source
     assert "RANKRAT_ALLOW_AGENT_ONBOARDING=$allow_agent_onboarding" in source
     assert _READ_ONLY_MOUNT_ASSIGNMENT in source
     assert _WRITABLE_MOUNT_ASSIGNMENT in source
     assert 'serve_boundary_mount="$readonly_boundary_mount"' in source
     assert 'serve_boundary_mount="$writable_boundary_mount"' in source
+    assert '[[ "$unbounded" == "true" || "$allow_agent_onboarding" == "true" ]]' in source
     assert 'require_writable_boundary_is_safe "$boundary_file" "$boundary_directory"' in source
 
 

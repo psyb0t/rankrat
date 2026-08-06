@@ -30,10 +30,11 @@ supported settings fail startup instead of being silently accepted.
 `make run-http` always supplies a bearer-secret file, including for loopback
 use; a custom loopback launch may deliberately omit it.
 
-The `RANKRAT_LIVE_*` variables select exactly which configured provider
-resources `make setup` verifies. They are blank in `.env.example`: set them
-only for providers you configured and leave all unused-provider selectors blank
-so their opt-in live checks skip.
+The `RANKRAT_LIVE_*` variables select the deeper provider-specific live suites
+that `make setup` runs after the image's setup check. They are blank in
+`.env.example`: set them only for providers you configured and leave all
+unused-provider selectors blank so those extra live suites skip. The image's
+`setup` command itself checks every account represented in the boundary file.
 
 ## The boundary file
 
@@ -128,24 +129,26 @@ wrapper around these same invocations. Run it from its installed skill path with
 `bash references/rankrat.sh` when the wrapper is more convenient than the plain
 Docker commands below; no system-wide installation is required.
 
-Both transports take the same three read-only mounts. Container-side paths are
-the server's defaults, so only the host side changes:
+Both transports take the same three mounts. Container-side paths are the
+server's defaults, so only the host side changes:
 
-| Host | Container | Holds |
-|---|---|---|
-| `./config` | `/run/config` | `boundaries.json` |
-| `./secrets` | `/run/secrets` | provider credentials, HTTP bearer secret |
-| `./oauth` | `/run/oauth` | stored Google OAuth token |
+| Host | Container | Access | Holds |
+|---|---|---|---|
+| `./config` | `/run/config` | read-only normally; validated writable mount for unbounded mode or agent onboarding | `boundaries.json` |
+| `./secrets` | `/run/secrets` | read-only | provider credentials, HTTP bearer secret |
+| `./oauth` | `/run/oauth` | writable | stored Google OAuth token; refresh may rotate it |
 
 **stdio** — the default mode, for a client that owns the process:
 
 ```bash
 docker run -i --rm --init --read-only \
+  --user "$(id -u):$(id -g)" \
   --cap-drop=ALL --security-opt no-new-privileges:true \
+  --pids-limit 128 --memory 512m --cpus 1 \
   --tmpfs /tmp:rw,noexec,nosuid,size=32m \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$PWD/oauth",dst=/run/oauth,readonly \
+  --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
   psyb0t/rankrat stdio
 ```
 
@@ -154,20 +157,33 @@ shares the port:
 
 ```bash
 docker run --rm --init --read-only \
+  --user "$(id -u):$(id -g)" \
   --cap-drop=ALL --security-opt no-new-privileges:true \
+  --pids-limit 128 --memory 512m --cpus 1 \
   --tmpfs /tmp:rw,noexec,nosuid,size=32m \
   -p 127.0.0.1:8080:8080 \
   -e RANKRAT_HTTP_HOST=0.0.0.0 \
   -e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$PWD/oauth",dst=/run/oauth,readonly \
+  --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
   psyb0t/rankrat http
 ```
 
 `RANKRAT_HTTP_HOST=0.0.0.0` binds inside the container while `-p` keeps it on
 loopback. MCP is then at `http://127.0.0.1:8080/mcp`; send
 `Authorization: Bearer <token>` whenever a bearer secret is configured.
+
+The commands above are bounded and read-only. In unbounded mode, set
+`RANKRAT_READ_ONLY=false` and `RANKRAT_UNBOUNDED=true`; for agent onboarding,
+set `RANKRAT_READ_ONLY=false` and `RANKRAT_ALLOW_AGENT_ONBOARDING=true`. Either
+case needs `readonly` removed only from `/run/config`, after verifying that the
+resolved config directory is owner-only, that `boundaries.json` itself is not a
+symlink, that both are owned by the current UID, and that the file is not group-
+or world-writable. The bundled `rankrat.sh` resolves the directory path, checks
+that resulting target, and applies the mount change automatically. The OpenClaw
+launcher is stricter and rejects any symlinked path component. Do not make the
+secret mount writable.
 
 Local Lighthouse audits require the separate published browser image. Start it
 once against a private named volume:
@@ -237,7 +253,9 @@ findings.
 operation that rewrites the boundary file the server enforces, so it needs
 `RANKRAT_ALLOW_AGENT_ONBOARDING=true` as well; without that,
 `site_onboarding_submit` is absent from `tools/list` and its REST route is not
-mounted. The operator's own `rankrat onboard-site` command is unaffected.
+mounted. The config directory must be writable for the enabled operation; the
+bundled wrapper validates its ownership/mode and changes only that mount. The
+operator's own `rankrat onboard-site` command is unaffected.
 
 The guidance is available either way, read-only, on every server:
 

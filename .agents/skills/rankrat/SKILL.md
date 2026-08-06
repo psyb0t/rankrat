@@ -6,13 +6,12 @@ user-invocable: true
 metadata:
   openclaw:
     emoji: "🐀"
-    primaryEnv: RANKRAT_CONFIG_DIR
     requires:
       bins: [docker]
 permissions:
   network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights, and IndexNow provider endpoints; optional Lighthouse browser traffic to explicitly requested public pages beneath configured sites; inbound only on the port you bind."
   shell: "docker run invocations for the published image, or bash execution of the bundled references/rankrat.sh wrapper; no other host access is required."
-  filesystem: "reads the boundary config and provider credentials. Local initialization creates an HTTP bearer secret; Google authorization writes its token record; IndexNow initialization creates or retains its local key and updates .env plus the boundary file; writable unbounded onboarding updates the one configured boundary file with exact created-resource IDs."
+  filesystem: "reads the boundary config and provider credentials. Local initialization creates an HTTP bearer secret; Google authorization writes its token record; IndexNow initialization creates or retains its local key and updates .env plus the boundary file; agent onboarding and unbounded onboarding update the one configured boundary file with exact created-resource IDs."
 ---
 
 # rankrat
@@ -98,11 +97,13 @@ the image and talks to it — no port, no bridge:
 
 ```bash
 docker run -i --rm --init --read-only \
+  --user "$(id -u):$(id -g)" \
   --cap-drop=ALL --security-opt no-new-privileges:true \
+  --pids-limit 128 --memory 512m --cpus 1 \
   --tmpfs /tmp:rw,noexec,nosuid,size=32m \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$PWD/oauth",dst=/run/oauth,readonly \
+  --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
   psyb0t/rankrat stdio
 ```
 
@@ -111,20 +112,27 @@ and the REST API is on the same port:
 
 ```bash
 docker run --rm --init --read-only \
+  --user "$(id -u):$(id -g)" \
   --cap-drop=ALL --security-opt no-new-privileges:true \
+  --pids-limit 128 --memory 512m --cpus 1 \
   --tmpfs /tmp:rw,noexec,nosuid,size=32m \
   -p 127.0.0.1:8080:8080 \
   -e RANKRAT_HTTP_HOST=0.0.0.0 \
   -e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$PWD/oauth",dst=/run/oauth,readonly \
+  --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
   psyb0t/rankrat http
 ```
 
 `RANKRAT_HTTP_HOST=0.0.0.0` binds inside the container; the `-p` publishes it on
 loopback only. Send `Authorization: Bearer <token>` when a bearer secret is
 configured.
+
+These examples are bounded, so config stays read-only. Google OAuth storage is
+writable because token refresh may rotate and persist a refresh token; provider
+secrets stay read-only. For unbounded onboarding, use the bundled wrapper or the
+validated writable-config procedure in the setup reference.
 
 The repo ships a `rankrat.sh` wrapper around exactly these invocations for
 humans. The published skill bundles the same script at

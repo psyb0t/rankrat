@@ -2,6 +2,27 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.6.0 — 2026-08-06
+
+Makes the published OpenClaw integration a self-contained, hardened Docker
+stdio launcher while keeping shared deployments on native Streamable HTTP.
+
+- The static OpenClaw MCP definition now starts Rankrat from the standard
+  `$HOME/.config/rankrat` layout even under OpenClaw's restricted child
+  environment. Direct `rankrat-mcp` invocations retain explicit environment
+  overrides for custom config, credential, OAuth, and image paths.
+- The launcher passes every Docker option as an argument without a shell,
+  rejects symlinked path ancestry, and validates file type, owner, and mode
+  before making `/run/config` writable for unbounded operation or agent
+  onboarding. Provider secrets stay read-only and OAuth storage remains
+  writable for refresh-token rotation.
+- The static server deliberately stays bounded and read-only. The plugin and
+  skill now direct custom paths, writes, onboarding, and the optional isolated
+  Lighthouse worker through Rankrat's native Streamable HTTP transport.
+- The repository wrapper and the copy bundled with the agent skill remain
+  byte-identical, and the agent integration documents both MCP transports and
+  their credential, boundary, and browser-worker security constraints.
+
 ## v0.5.0 — 2026-08-06
 
 Adds boundary-limited local Lighthouse audits through an isolated Chromium

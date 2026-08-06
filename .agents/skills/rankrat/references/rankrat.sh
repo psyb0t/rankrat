@@ -183,15 +183,16 @@ boundary_directory="$(cd "$(dirname "$boundary_file")" && pwd)"
 # single-file bind mount leaves that directory in place -- so a container running
 # as the host user cannot traverse into it, and one running as `rankrat` cannot
 # read an owner-only host file. Mounting the directory replaces both, and it is
-# also what unbounded onboarding needs, since it replaces the file by rename.
+# also what unbounded or agent-reachable onboarding needs, since onboarding
+# replaces the file by rename after creating provider resources.
 runtime_boundary_file="$CONTAINER_CONFIG_DIRECTORY/$(basename "$boundary_file")"
 readonly_boundary_mount="type=bind,src=$boundary_directory,dst=$CONTAINER_CONFIG_DIRECTORY,readonly"
 writable_boundary_mount="type=bind,src=$boundary_directory,dst=$CONTAINER_CONFIG_DIRECTORY"
 
 serve_boundary_mount="$readonly_boundary_mount"
-if [[ "$unbounded" == "true" ]]; then
+if [[ "$unbounded" == "true" || "$allow_agent_onboarding" == "true" ]]; then
 	[[ "$read_only" == "false" ]] ||
-		fail "RANKRAT_UNBOUNDED=true requires RANKRAT_READ_ONLY=false"
+		fail "Writable boundary persistence requires RANKRAT_READ_ONLY=false"
 	require_writable_boundary_is_safe "$boundary_file" "$boundary_directory"
 	serve_boundary_mount="$writable_boundary_mount"
 fi

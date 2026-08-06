@@ -4,27 +4,36 @@ MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — boundary-limited
 SEO and search-analytics reads over Google Search Console, Bing Webmaster Tools,
 GA4, PageSpeed and IndexNow, plus optional isolated local Lighthouse audits.
 
-rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin
-contributes a static OpenClaw MCP server; it does not execute plugin code. Local
+rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin has
+no OpenClaw runtime extension; its static MCP definition executes the bundled
+stdio launcher, which starts the published Rankrat image. Local
 Lighthouse audits use an optional second image and therefore require the shared
 Streamable HTTP deployment described below.
 
 ## stdio (default)
 
 Runs the published image and talks to it directly. Nothing needs to be running
-first.
+first. OpenClaw intentionally starts stdio MCP children with a restricted
+environment, so the static plugin does not depend on exported `RANKRAT_*`
+variables. It uses this standard layout:
 
 ```bash
-export RANKRAT_CONFIG_DIR=/path/to/config     # holds boundaries.json
-export RANKRAT_SECRETS_DIR=/path/to/secrets   # provider credentials
-export RANKRAT_OAUTH_DIR=/path/to/oauth       # stored Google OAuth token
+$HOME/.config/rankrat/config/boundaries.json
+$HOME/.config/rankrat/secrets/
+$HOME/.config/rankrat/oauth/
 ```
 
-Only `RANKRAT_CONFIG_DIR` is required — the other two can be omitted for a
-boundary that uses just the credential-free tools. Every mount is read-only, and
-the container runs with no capabilities and a read-only root.
+Run the repository's [Quick start](https://github.com/psyb0t/rankrat#quick-start)
+from `$HOME/.config/rankrat`, then install/enable the plugin. Only `config` is
+required — the other two directories can be omitted for a boundary that uses
+just credential-free tools. Config and provider secrets are read-only. OAuth
+storage is writable because Google may rotate the refresh token during refresh.
+The launcher runs as the current POSIX UID/GID with no capabilities, a read-only
+root, and CPU, memory, and process limits.
 
-`RANKRAT_IMAGE` overrides the image (default `psyb0t/rankrat`).
+The direct `rankrat-mcp` executable still accepts `RANKRAT_CONFIG_DIR`,
+`RANKRAT_SECRETS_DIR`, `RANKRAT_OAUTH_DIR`, and `RANKRAT_IMAGE`; those ambient
+overrides are for a direct shell launch, not OpenClaw's sanitized static server.
 
 ## Streamable HTTP
 
@@ -55,11 +64,17 @@ Insights.
 ## Writes
 
 rankrat is read-only by default and its write tools are absent from `tools/list`
-entirely, so an agent cannot discover them. On the stdio transport,
-`RANKRAT_READ_ONLY`, `RANKRAT_UNBOUNDED`, and
-`RANKRAT_ALLOW_AGENT_ONBOARDING` are forwarded to the server if you set them,
-which keeps that decision with whoever launched the client rather than with
-this plugin. On Streamable HTTP the running server already fixed it.
+entirely, so an agent cannot discover them. The static OpenClaw stdio server
+intentionally stays at that default. Use the Streamable HTTP form for writes:
+the already-running Rankrat server fixes read-only, unbounded, and onboarding
+settings at startup, while OpenClaw receives only the MCP URL and bearer header.
+
+When the launcher is invoked directly with unbounded mode or agent onboarding
+enabled, it verifies owner-only config-directory permissions, ownership,
+regular-file and ancestor-symlink constraints before making only `/run/config`
+writable. This lets onboarding persist exact provider IDs instead of mutating a
+provider and then failing the local boundary update. Provider secrets remain
+read-only.
 
 ## License
 

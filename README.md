@@ -19,7 +19,7 @@ rankrat puts those APIs behind one MCP server so an agent does the joining. You
 ask; it goes and rats out whichever provider knows.
 
 It's a rat, not a burglar. It answers only for the accounts and properties you
-list in a boundary file, and no tool widens that from inside a session.
+list in a boundary file, and no tool widens that from inside a bounded session.
 Read-only unless you deliberately turn writes on, at which point the write tools
 appear and stay inside the same boundaries. Provider tools read what those
 providers already hold about you. The optional local Lighthouse worker opens
@@ -50,9 +50,10 @@ tool surface is still free to move.
 
 ## Quick start
 
-Rankrat ships as a Docker image; Docker is the only requirement. Create the
-working layout in a directory of your choosing — Rankrat reads all three paths
-as mounts and never writes outside them:
+Rankrat ships as a Docker image; Docker is the only runtime requirement. The
+bootstrap commands below also use a POSIX shell, `curl`, `openssl`, and standard
+core utilities. Create the working layout in a directory of your choosing —
+Rankrat reads all three paths as mounts and never writes outside them:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/rankrat.sh \
@@ -62,11 +63,15 @@ chmod +x rankrat.sh
 sudo mv rankrat.sh /usr/local/bin/rankrat.sh
 
 mkdir -p config oauth secrets/google secrets/bing secrets/indexnow secrets/rankrat
-chmod 700 config oauth secrets secrets/rankrat
+chmod 700 config oauth secrets secrets/google secrets/bing secrets/indexnow secrets/rankrat
 
 curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/config/boundaries.json.example \
   -o config/boundaries.json
 chmod 600 config/boundaries.json
+
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/.env.example \
+  -o .env
+chmod 600 .env
 
 install -m 600 /dev/null secrets/rankrat/http-bearer-token
 openssl rand -base64 32 | tr -d '\n' > secrets/rankrat/http-bearer-token
@@ -84,18 +89,19 @@ rankrat.sh auth-google --account-id google --print-authorization-url
 rankrat.sh setup
 ```
 
-`setup` is a live, read-only verification gate. It checks configured provider
+`rankrat.sh setup` is a live, read-only verification gate. It checks every
+account represented in the boundary file and that account's configured provider
 access; it does not create a provider resource or submit an IndexNow URL. It
 reports the missing local file, OAuth grant, provider permission, or configured
-resource that needs attention. It is the one mode that reads `.env`, where the
-`RANKRAT_LIVE_*` selectors choose which providers it checks — leave the
-selectors for unused providers empty and their checks skip.
+resource that needs attention. It is the one wrapper mode that reads `.env`.
 
 From a checkout, `make setup` first refuses symlinked local config, OAuth, or
 secret paths and normalizes their permissions: directories become owner-only,
 credential and OAuth files become mode `0600`, and `.env` plus
-`config/boundaries.json` become mode `0600`. It then runs the same live provider
-checks and verifies the shipped HTTP and MCP transports.
+`config/boundaries.json` become mode `0600`. It runs `rankrat.sh setup`, then
+uses the `RANKRAT_LIVE_*` selectors from `.env` for the deeper provider-specific
+live suites and verifies the shipped HTTP and MCP transports. Leave selectors
+for unused providers blank so those extra suites skip.
 
 ## Running it
 
@@ -208,7 +214,10 @@ special-address destinations remain blocked at the worker proxy.
 
 The [skill](.agents/skills/rankrat) works in any agent that reads
 `.agents/skills/`, and installs natively in the clients below. An agent runs the
-published image directly and does not need the wrapper.
+published image directly and does not need the wrapper. Installing the skill
+adds operating instructions; it does not create credentials, authorize Google,
+or start a server. Prepare `config/`, `secrets/`, and `oauth/` as described in
+[Quick start](#quick-start) before asking an agent to use Rankrat.
 
 ### Claude Code
 
@@ -237,9 +246,14 @@ openclaw plugins install clawhub:@psyb0t/rankrat
 ```
 
 The [OpenClaw plugin](.agents/plugins/rankrat) contributes a static stdio MCP
-server that runs the published image directly — set `RANKRAT_CONFIG_DIR` (plus
-`RANKRAT_SECRETS_DIR` and `RANKRAT_OAUTH_DIR` when those are needed) and nothing
-has to be running first. For a shared server, replace that static definition with
+server that runs the published image directly in read-only mode and needs
+nothing else running. OpenClaw deliberately sanitizes a stdio child's ambient
+environment, so the launcher uses `$HOME/.config/rankrat/config` and, when
+present, sibling `secrets` and `oauth` directories. Run [Quick start](#quick-start)
+from `$HOME/.config/rankrat` before enabling the plugin. The launcher uses the
+current POSIX UID/GID, keeps provider secrets read-only, and permits Google to
+persist a rotated OAuth refresh token. For custom paths, writes, onboarding, or
+Lighthouse, replace that static definition with
 OpenClaw's native Streamable HTTP configuration; the plugin README provides the
 copy-paste command with an environment-backed bearer header. Use the shared
 companion deployment for Lighthouse because a static one-container stdio
@@ -347,6 +361,9 @@ RANKRAT_ALLOW_AGENT_ONBOARDING=true
 
 Without the second switch `site_onboarding_submit` is absent from `tools/list`
 and its REST route is never mounted, however writable the rest of the server is.
+The wrapper validates ownership and owner-only permissions before making the
+config-directory mount writable for this operation, even in bounded mode, so
+the final provider IDs can be atomically persisted.
 `rankrat onboard-site` ignores the switch — that is you at a terminal, not an
 agent in a session.
 
@@ -467,10 +484,11 @@ Copy `config/boundaries.json.example` and list only resources Rankrat may touch.
 Every account, site, GA4 property, child URL, and IndexNow host is validated at
 the boundary; callers cannot choose provider origins or resources outside it.
 `.env.example` leaves live-test selectors blank intentionally: set only the
-account and resource selectors for providers you configured, so `rankrat.sh
-setup` can verify those integrations without requiring credentials for the
-others. HTTP mode requires the bearer-secret file even on loopback, and mounts
-it only into the running container.
+account and resource selectors for providers you configured, so `make setup`
+can run those deeper live suites without requiring credentials for the others.
+`rankrat.sh setup` separately checks every account represented in the boundary
+file. HTTP mode requires the bearer-secret file even on loopback, and mounts it
+only into the running container.
 
 `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` is the only Lighthouse setting consumed by
 Rankrat. It defaults to `/run/lighthouse/lighthouse.sock`; set it to an empty
