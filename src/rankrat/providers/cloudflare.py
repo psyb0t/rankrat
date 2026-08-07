@@ -5,8 +5,6 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable
-from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import httpx
@@ -20,7 +18,7 @@ from rankrat.constants import (
     MAX_PROVIDER_RESPONSE_BYTES,
 )
 from rankrat.errors import BoundaryDeniedError, InputLimitError
-from rankrat.models.boundaries import CloudflareZone, Provider, normalize_indexnow_host
+from rankrat.models.boundaries import DnsZone, Provider, normalize_indexnow_host
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import (
     ProviderFailureCode,
@@ -28,6 +26,7 @@ from rankrat.providers.base import (
     ProviderReadiness,
     ProviderReadRequest,
 )
+from rankrat.providers.dns import DnsRecordReceipt, DnsRecordType
 
 _CLOUDFLARE_API_ROOT = "https://api.cloudflare.com/client/v4"
 _TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,512}$")
@@ -35,32 +34,16 @@ _DNS_RECORD_COMMENT = "Managed by Rankrat site ownership verification"
 _DNS_RECORD_TAG = "rankrat:site-verification"
 _AUTOMATIC_TTL = 1
 _MAX_IDENTIFIER_CHARS = 32
+_ZONE_ID_PATTERN_TEXT = r"^[0-9a-f]{32}$"
+_ZONE_ID_PATTERN = re.compile(_ZONE_ID_PATTERN_TEXT)
 
 HttpTransportFactory = Callable[[], httpx.AsyncBaseTransport | None]
-
-
-class CloudflareDnsRecordType(StrEnum):
-    """DNS record kinds allowed for provider-issued ownership tokens."""
-
-    TXT = "TXT"
-    CNAME = "CNAME"
-
-
-@dataclass(frozen=True, slots=True)
-class CloudflareDnsRecordReceipt:
-    """Secret-free receipt for an idempotently ensured verification record."""
-
-    zone_id: str
-    record_id: str
-    record_type: CloudflareDnsRecordType
-    name: str
-    created: bool
 
 
 class _CloudflareZoneResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    id: str = Field(min_length=1, max_length=_MAX_IDENTIFIER_CHARS)
+    id: str = Field(pattern=_ZONE_ID_PATTERN_TEXT)
     name: str = Field(min_length=1, max_length=MAX_CLOUDFLARE_DNS_RECORD_NAME_CHARS)
 
 
@@ -68,7 +51,7 @@ class _CloudflareDnsRecordResponse(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     id: str = Field(min_length=1, max_length=_MAX_IDENTIFIER_CHARS)
-    type: CloudflareDnsRecordType
+    type: DnsRecordType
     name: str = Field(min_length=1, max_length=MAX_CLOUDFLARE_DNS_RECORD_NAME_CHARS)
     content: str = Field(min_length=1, max_length=MAX_CLOUDFLARE_DNS_RECORD_CONTENT_CHARS)
 
@@ -121,13 +104,15 @@ class CloudflareDnsClient:
         self,
         request: ProviderReadRequest,
         hostname: str,
-    ) -> CloudflareZone:
+    ) -> DnsZone:
         normalized_hostname = normalize_indexnow_host(hostname)
         try:
-            return self._boundary_policy.resolve_cloudflare_zone(
+            zone = self._boundary_policy.resolve_dns_zone(
                 str(request.account_id),
                 normalized_hostname,
             )
+            self._validate_zone_id(zone.provider_zone_id)
+            return zone
         except BoundaryDeniedError:
             if not self._boundary_policy.unbounded:
                 raise
@@ -157,10 +142,10 @@ class CloudflareDnsClient:
         self,
         request: ProviderReadRequest,
         hostname: str,
-        record_type: CloudflareDnsRecordType,
+        record_type: DnsRecordType,
         name: str,
         content: str,
-    ) -> CloudflareDnsRecordReceipt:
+    ) -> DnsRecordReceipt:
         zone = await self.resolve_zone(request, hostname)
         normalized_name = self._validate_record_name(name, zone.name)
         normalized_content = self._validate_record_content(record_type, content)
@@ -170,32 +155,32 @@ class CloudflareDnsClient:
         )
         existing = await self._list_records(
             account.credential,
-            zone.id,
+            zone.provider_zone_id,
             request.timeout_seconds,
             record_type,
             normalized_name,
         )
         for record in existing:
             if record.content == normalized_content:
-                return CloudflareDnsRecordReceipt(
-                    zone_id=zone.id,
+                return DnsRecordReceipt(
+                    provider_zone_id=zone.provider_zone_id,
                     record_id=record.id,
                     record_type=record_type,
                     name=normalized_name,
                     created=False,
                 )
-        if record_type is CloudflareDnsRecordType.CNAME and existing:
+        if record_type is DnsRecordType.CNAME and existing:
             raise BoundaryDeniedError("Cloudflare CNAME verification name is already occupied")
         record = await self._create_record(
             account.credential,
-            zone.id,
+            zone.provider_zone_id,
             request.timeout_seconds,
             record_type,
             normalized_name,
             normalized_content,
         )
-        return CloudflareDnsRecordReceipt(
-            zone_id=zone.id,
+        return DnsRecordReceipt(
+            provider_zone_id=zone.provider_zone_id,
             record_id=record.id,
             record_type=record_type,
             name=normalized_name,
@@ -207,7 +192,7 @@ class CloudflareDnsClient:
         credential: Path,
         timeout_seconds: float,
         name: str | None,
-    ) -> tuple[CloudflareZone, ...]:
+    ) -> tuple[DnsZone, ...]:
         parameters: dict[str, str | int] = {"per_page": MAX_CLOUDFLARE_API_RESULTS}
         if name is not None:
             parameters["name"] = name
@@ -231,14 +216,14 @@ class CloudflareDnsClient:
                 ProviderFailureCode.INVALID_RESPONSE,
                 "Cloudflare returned an invalid zone response",
             )
-        return tuple(CloudflareZone(id=zone.id, name=zone.name) for zone in zones)
+        return tuple(DnsZone(provider_zone_id=zone.id, name=zone.name) for zone in zones)
 
     async def _list_records(
         self,
         credential: Path,
         zone_id: str,
         timeout_seconds: float,
-        record_type: CloudflareDnsRecordType,
+        record_type: DnsRecordType,
         name: str,
     ) -> tuple[_CloudflareDnsRecordResponse, ...]:
         payload = await self._request_json(
@@ -274,7 +259,7 @@ class CloudflareDnsClient:
         credential: Path,
         zone_id: str,
         timeout_seconds: float,
-        record_type: CloudflareDnsRecordType,
+        record_type: DnsRecordType,
         name: str,
         content: str,
     ) -> _CloudflareDnsRecordResponse:
@@ -364,7 +349,7 @@ class CloudflareDnsClient:
 
     @staticmethod
     def _validate_record_content(
-        record_type: CloudflareDnsRecordType,
+        record_type: DnsRecordType,
         content: str,
     ) -> str:
         normalized = content.strip()
@@ -372,9 +357,14 @@ class CloudflareDnsClient:
             raise InputLimitError("Cloudflare verification record content is invalid")
         if any(character in normalized for character in "\r\n\x00"):
             raise InputLimitError("Cloudflare verification record content is invalid")
-        if record_type is CloudflareDnsRecordType.CNAME:
+        if record_type is DnsRecordType.CNAME:
             return normalize_indexnow_host(normalized)
         return normalized
+
+    @staticmethod
+    def _validate_zone_id(zone_id: str) -> None:
+        if not _ZONE_ID_PATTERN.fullmatch(zone_id):
+            raise BoundaryDeniedError("Cloudflare zone identifier is invalid")
 
     @staticmethod
     def _load_token(path: Path) -> str:

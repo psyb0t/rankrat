@@ -143,7 +143,10 @@ from rankrat.services.site_audit import SiteAuditReport, SiteAuditRequest
 from rankrat.services.site_onboarding import (
     SiteOnboardingSubmissionRequest,
 )
-from rankrat.services.site_ownership import SiteOwnershipSubmissionRequest
+from rankrat.services.site_ownership import (
+    SiteOwnershipCheckRequest,
+    SiteOwnershipVerificationRequest,
+)
 from rankrat.services.site_remediation import SiteRemediationReceipt, SiteRemediationRequest
 from rankrat.services.sites import (
     AccountsListRequest,
@@ -219,8 +222,8 @@ _GOOGLE_SITE_SUBMIT_TOOL_NAME = "google_site_submit"
 _GOOGLE_SITEMAP_SUBMIT_TOOL_NAME = "google_sitemap_submit"
 _SITE_ONBOARDING_SUBMIT_TOOL_NAME = "site_onboarding_submit"
 _SITE_AUDIT_TOOL_NAME = "site_audit"
-_SITE_OWNERSHIP_STATUS_TOOL_NAME = "site_ownership_status"
-_SITE_OWNERSHIP_APPLY_TOOL_NAME = "site_ownership_apply"
+_SITE_OWNERSHIP_CHECK_TOOL_NAME = "site_ownership_check"
+_SITE_OWNERSHIP_VERIFY_TOOL_NAME = "site_ownership_verify"
 _SITE_REMEDIATION_APPLY_TOOL_NAME = "site_remediation_apply"
 _BING_BACKLINK_INTELLIGENCE_TOOL_NAME = "bing_backlink_intelligence"
 _ONBOARDING_GUIDE_TOOL_NAME = "onboarding_guide"
@@ -374,11 +377,11 @@ _SITE_ONBOARDING_SUBMIT_DESCRIPTION = (
     "Create one approved GA4 property, Search Console property, and Bing site."
 )
 _SITE_AUDIT_DESCRIPTION = "Crawl and score one configured site under strict public-fetch bounds."
-_SITE_OWNERSHIP_STATUS_DESCRIPTION = (
+_SITE_OWNERSHIP_CHECK_DESCRIPTION = (
     "Check Google and Bing DNS ownership without returning verification tokens."
 )
-_SITE_OWNERSHIP_APPLY_DESCRIPTION = (
-    "Create provider-issued Cloudflare DNS records and redeem propagated ownership proofs."
+_SITE_OWNERSHIP_VERIFY_DESCRIPTION = (
+    "Create provider-issued DNS records through the configured DNS adapter and redeem proofs."
 )
 _SITE_REMEDIATION_APPLY_DESCRIPTION = (
     "Resubmit a configured sitemap and changed URLs to Google and Bing."
@@ -466,9 +469,9 @@ READ_ONLY_TOOL_CATALOG: tuple[ToolContract[object, object], ...] = (
         annotations=_READ_ONLY_ANNOTATIONS,
     ),
     ToolContract(
-        name=_SITE_OWNERSHIP_STATUS_TOOL_NAME,
-        description=_SITE_OWNERSHIP_STATUS_DESCRIPTION,
-        input_type=SiteOwnershipSubmissionRequest,
+        name=_SITE_OWNERSHIP_CHECK_TOOL_NAME,
+        description=_SITE_OWNERSHIP_CHECK_DESCRIPTION,
+        input_type=SiteOwnershipCheckRequest,
         output_type=SiteOwnershipReceipt,
         annotations=_READ_ONLY_ANNOTATIONS,
     ),
@@ -1078,12 +1081,12 @@ SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT = cast(
     ),
 )
 
-SITE_OWNERSHIP_APPLY_TOOL_CONTRACT = cast(
+SITE_OWNERSHIP_VERIFY_TOOL_CONTRACT = cast(
     ToolContract[object, object],
     ToolContract(
-        name=_SITE_OWNERSHIP_APPLY_TOOL_NAME,
-        description=_SITE_OWNERSHIP_APPLY_DESCRIPTION,
-        input_type=SiteOwnershipSubmissionRequest,
+        name=_SITE_OWNERSHIP_VERIFY_TOOL_NAME,
+        description=_SITE_OWNERSHIP_VERIFY_DESCRIPTION,
+        input_type=SiteOwnershipVerificationRequest,
         output_type=SiteOwnershipReceipt,
         annotations=_INDEXNOW_WRITE_ANNOTATIONS,
     ),
@@ -1119,7 +1122,7 @@ def tool_catalog(
             GOOGLE_SITEMAP_SUBMIT_TOOL_CONTRACT,
             GOOGLE_ANALYTICS_ACCOUNT_RENAME_TOOL_CONTRACT,
             GOOGLE_ANALYTICS_PROPERTY_RENAME_TOOL_CONTRACT,
-            SITE_OWNERSHIP_APPLY_TOOL_CONTRACT,
+            SITE_OWNERSHIP_VERIFY_TOOL_CONTRACT,
             SITE_REMEDIATION_APPLY_TOOL_CONTRACT,
         )
         if agent_onboarding_enabled:

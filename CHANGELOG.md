@@ -2,6 +2,27 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.8.0 — 2026-08-07
+
+Makes site-ownership automation DNS-provider-neutral before additional DNS
+adapters are introduced.
+
+- Replaces the Cloudflare-shaped `cloudflare_zones[].id` boundary with
+  `dns_zones[].provider_zone_id`. The configured DNS account selects the
+  internal provider adapter.
+- Renames `site_ownership_status` to `site_ownership_check` and moves the REST
+  operation from `POST /v1/site-ownership-status-checks` to
+  `POST /v1/site-ownership-checks`.
+- Renames `site_ownership_apply` to `site_ownership_verify`, and replaces the
+  request field `cloudflare_account_id` with `dns_account_id`. Read-only
+  ownership checks no longer require a DNS account.
+- Keeps provider-specific credentials and record translation behind the DNS
+  provider protocol, while preserving the same strict authorization,
+  verification-value redaction, and bounded-write controls.
+- Synchronizes the YAML-first OpenAPI source, generated JSON, REST and MCP
+  contracts, setup guidance, README, and agent integrations. No compatibility
+  aliases are retained during the pre-1.0 API phase.
+
 ## v0.7.0 — 2026-08-06
 
 Adds a bounded SEO improvement loop: ownership automation, deterministic

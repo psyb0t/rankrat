@@ -39,6 +39,7 @@ tool surface is still free to move.
 
 - [Quick start](#quick-start)
 - [Running it](#running-it)
+- [Capabilities and discovery](#capabilities-and-discovery)
 - [Local Lighthouse audits](#local-lighthouse-audits)
 - [Ownership, whole-site audits, and backlinks](#ownership-whole-site-audits-and-backlinks)
 - [Agent integrations](#agent-integrations)
@@ -158,6 +159,36 @@ On a checkout, the Make targets call the same wrapper against the locally built
 image, so `make run` and `make run-http` exercise the path above rather than a
 second copy of it. See [Verification](#verification) and `make help`.
 
+## Capabilities and discovery
+
+Rankrat does not hide a second API behind the examples in this README. MCP
+clients get the exact enabled surface from `tools/list`: read-only mode omits
+every write tool, writable mode adds the boundary-limited writes, and agent
+onboarding adds its separately gated tool. HTTP callers get the matching
+runtime contract from `/openapi.json` when `RANKRAT_ENABLE_OPENAPI=true`; the
+source contract is [`src/rankrat/api/openapi.yaml`](src/rankrat/api/openapi.yaml).
+
+The full, grouped MCP catalog is in the
+[setup reference](.agents/skills/rankrat/references/setup.md#complete-mcp-tool-catalog).
+It covers:
+
+- Google Search Console reporting, inspection, sitemap status and writes;
+- GA4 discovery, data streams, historical/realtime reports and renames;
+- Bing performance, crawl, indexing, sitemap, backlink and opportunity data;
+- PageSpeed Insights, Core Web Vitals and isolated local Lighthouse audits;
+- local HTML/JSON-LD eligibility checks and bounded whole-site crawling;
+- cross-provider comparisons and traffic-health reports;
+- Google/Bing ownership checks and DNS-provider-backed verification;
+- URL discovery remediation, site onboarding, and IndexNow submission.
+
+IndexNow is not another dashboard or account that Rankrat reads. It is an open
+push protocol for notifying participating search engines that a URL was added,
+updated, or deleted. Rankrat's `indexnow_submit` write tool sends a bounded URL
+batch with the configured key and public key-file location. One participating
+endpoint shares accepted notifications with the other participating engines;
+each engine still decides independently whether and when to crawl or index a
+URL. See the [official IndexNow documentation](https://www.indexnow.org/documentation?hl=en).
+
 ## Local Lighthouse audits
 
 Rankrat can run Chromium locally and return Lighthouse scores plus failed audit
@@ -221,8 +252,8 @@ loop:
 
 | MCP tool | REST route | What it does |
 | --- | --- | --- |
-| `site_ownership_status` | `POST /v1/site-ownership-status-checks` | Reads public DNS and Google/Bing ownership status without changing anything |
-| `site_ownership_apply` | `POST /v1/site-ownership-verifications` | Creates only provider-issued Google TXT and Bing CNAME records in the configured Cloudflare zone, then redeems propagated proofs |
+| `site_ownership_check` | `POST /v1/site-ownership-checks` | Reads public DNS and Google/Bing ownership status without changing anything |
+| `site_ownership_verify` | `POST /v1/site-ownership-verifications` | Creates only provider-issued Google TXT and Bing CNAME records through the configured DNS provider, then redeems propagated proofs |
 | `site_audit` | `POST /v1/site-audits` | Crawls a bounded configured site and returns page evidence, findings, remediation text, and a normalized score |
 | `site_remediation_apply` | `POST /v1/site-remediations` | Resubmits one bounded sitemap to Google and Bing and a bounded changed-URL batch to Bing |
 | `bing_backlink_intelligence` | `POST /v1/bing/backlink-intelligence` | Walks bounded Bing backlink pages for explicit site URLs and aggregates referring domains and anchor text |
@@ -230,7 +261,7 @@ loop:
 Ownership application is idempotent. Exact existing DNS records are reused,
 conflicting CNAMEs are refused, arbitrary DNS CRUD is not exposed, and neither
 tokens nor provider bodies appear in the receipt. DNS propagation is
-asynchronous: call `site_ownership_apply`, then poll `site_ownership_status`
+asynchronous: call `site_ownership_verify`, then poll `site_ownership_check`
 until `complete` is true. Keep verification records in place afterward;
 providers can periodically recheck them.
 
@@ -316,7 +347,7 @@ permissions. The regular HTTP bearer token protects `/v1/` for non-loopback
 HTTP; stdio access is controlled by who can start the process.
 
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
-Indexing notifications, Search Console site/sitemap changes, Cloudflare-backed
+Indexing notifications, Search Console site/sitemap changes, DNS-provider-backed
 ownership verification, discovery remediation, and new-site onboarding. They
 are marked write/destructive in MCP; callers should still treat provider
 acceptance and DNS propagation as asynchronous.
@@ -354,12 +385,14 @@ nothing and is the cheapest fix for a misfiled property.
 for one URL, then records their IDs in the boundary file. Resource creation and
 ownership verification are separate because DNS may take time to propagate.
 
-With a configured Cloudflare account, call `site_ownership_apply` after
-onboarding. Rankrat requests the real Google TXT token and Bing CNAME proof,
-creates only those exact records, checks public DNS, and redeems each provider
-when its proof is visible. Poll `site_ownership_status`; do not interpret empty
-provider reports until its `complete` field is true. Without Cloudflare, use one
-of the manual methods below:
+With a configured DNS provider account, call `site_ownership_verify` after
+onboarding. Rankrat selects the adapter from that account's `provider`, requests
+the real Google TXT token and Bing CNAME proof, creates only those exact records,
+checks public DNS, and redeems each provider when its proof is visible. Poll
+`site_ownership_check`; do not interpret empty provider reports until its
+`complete` field is true. Cloudflare is the currently shipped DNS adapter. If
+the site's DNS provider has no Rankrat adapter, use one of the manual methods
+below:
 
 | Property | Methods it accepts |
 | --- | --- |
@@ -454,7 +487,8 @@ Never put a credential in source, YAML, Makefiles, or chat.
 The one consent flow requests Search Console management, Site Verification,
 Indexing, and GA4 read/edit scopes. Re-run `auth-google` after enabling the Site
 Verification API so the stored grant contains the new scope. OAuth supplies the
-proof and verification calls; Cloudflare supplies the DNS write.
+proof and verification calls; the configured DNS provider adapter supplies the
+DNS write.
 
 ### PageSpeed
 
@@ -495,6 +529,11 @@ Verify each site in [Bing Webmaster Tools](https://www.bing.com/webmasters/),
 then create an API key under **Settings → API Access** and save it as
 `secrets/bing/api-key`.
 
+IndexNow is a push protocol, not a reporting service. `indexnow_submit` tells
+participating search engines which bounded URLs changed; it does not return
+rankings, crawl status, or an indexing guarantee. A submission to one
+participating endpoint is shared with the other participating engines.
+
 IndexNow key generation and verification are the one part of setup that is not
 in the image — they run from a checkout, since neither is something a running
 server should be able to do:
@@ -520,7 +559,7 @@ Publish the generated `<key>.txt` on the public target host yourself. The
 verifier requires exact key content over direct HTTPS, with no redirect. Skip
 this section entirely if you are not submitting URLs to IndexNow.
 
-### Cloudflare ownership automation
+### DNS ownership automation (Cloudflare adapter)
 
 1. Open [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
    and choose **Create Token → Create Custom Token**.
@@ -529,14 +568,21 @@ this section entirely if you are not submitting URLs to IndexNow.
    account-wide Global API Key.
 3. Save the token as one line in `secrets/cloudflare/api-token`, mode `0600`.
 4. In each zone's Cloudflare **Overview**, copy the 32-character Zone ID into
-   that account's `cloudflare_zones` entry in `config/boundaries.json`. Replace
-   both the all-zero ID and `example.com` from the example file.
+   that account's `dns_zones` entry as `provider_zone_id` in
+   `config/boundaries.json`. Replace both the all-zero ID and `example.com` from
+   the example file.
 
 The token can list only the allowed zones and create/read verification records.
 Rankrat's API is narrower still: it exposes no generic DNS name, type, or value
 chosen by the caller. In `RANKRAT_UNBOUNDED=true` bootstrap mode it may discover
 the most-specific zone visible to that fixed Cloudflare account; bounded mode
-requires the exact zone in `cloudflare_zones`.
+requires the exact zone in `dns_zones`.
+
+The public REST and MCP contracts are provider-neutral: verification accepts a
+`dns_account_id`, and the boundary uses `dns_zones` plus `provider_zone_id`.
+Cloudflare details remain inside its adapter. A future Namecheap, GoDaddy, or
+other DNS adapter can therefore use the same `site_ownership_verify` operation
+without changing callers or adding provider-specific payload fields.
 
 ## Configuration
 
@@ -570,7 +616,7 @@ trusted agent needs another discovery/onboarding session, then restart without
 them to return to normal bounded enforcement.
 
 This keeps credential **accounts** fixed by the boundary file, but bypasses the
-resource allow-lists for Google, Bing, PageSpeed, and Cloudflare zone discovery.
+resource allow-lists for Google, Bing, PageSpeed, and DNS-provider zone discovery.
 It does not expose a credential path, arbitrary provider origin, arbitrary DNS
 operation, or IndexNow key target. Non-loopback HTTP still requires the normal
 bearer secret.

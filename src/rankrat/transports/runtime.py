@@ -126,7 +126,7 @@ def build_services(settings: Settings) -> ApplicationServices:
                 GoogleConfiguredTokenProvider(policy, (GOOGLE_SITE_VERIFICATION_SCOPE,)),
             ),
             bing_client,
-            cloudflare_client,
+            {cloudflare_client.provider: cloudflare_client},
             PublicDnsClient(),
         )
     )

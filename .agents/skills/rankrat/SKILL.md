@@ -1,6 +1,6 @@
 ---
 name: rankrat
-description: Query Google Search Console, Bing Webmaster Tools, Google Analytics 4 (GA4), and PageSpeed Insights, run local Lighthouse and bounded whole-site audits, automate Google/Bing DNS ownership through Cloudflare, apply sitemap and URL discovery remediation, and aggregate Bing backlink evidence through one self-hosted MCP server. Includes search analytics, indexing, crawl, ranking, schema, performance, audience, conversion, referring-domain, and anchor-text reports. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, backlinks, browser scores, or search traffic for sites they control.
+description: Query Google Search Console, Bing Webmaster Tools, Google Analytics 4 (GA4), and PageSpeed Insights, run local Lighthouse and bounded whole-site audits, automate Google/Bing DNS ownership through a configured DNS provider adapter, apply sitemap and URL discovery remediation, and aggregate Bing backlink evidence through one self-hosted MCP server. Includes search analytics, indexing, crawl, ranking, schema, performance, audience, conversion, referring-domain, and anchor-text reports. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, backlinks, browser scores, or search traffic for sites they control.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
@@ -70,7 +70,10 @@ the bearer token if anything else can reach it.
 - PageSpeed Insights, and fetching a page's structured-data schema.
 - Whole-site crawling for deterministic metadata, canonical, robots, sitemap,
   duplicate-title, link, and structured-data findings with remediation text.
-- Google/Bing ownership status and narrowly scoped Cloudflare DNS verification.
+- Google/Bing ownership checks and narrowly scoped verification through the
+  configured DNS adapter; Cloudflare is currently supported.
+- IndexNow change notifications for bounded URLs. This is a writable push
+  protocol, not a reporting dashboard or an indexing guarantee.
 - Bing backlink detail aggregated into referring domains and anchor summaries.
 - Local Lighthouse performance, accessibility, best-practices, and SEO scores
   or category-specific failed findings when the companion worker is configured.
@@ -201,11 +204,12 @@ guess the steps. No tool can create a GA4 account — the Admin API has no
 relay those, then ask the user for the numeric account ID, which
 `google_analytics_account_inventory` can also read back once it exists.
 
-Creating provider resources and proving ownership are separate. When a
-Cloudflare account is configured, call `site_ownership_apply` after onboarding,
-then poll `site_ownership_status` until `complete` is true. Without Cloudflare,
-the guide lists the manual methods accepted by the property form. Rankrat still
-cannot deploy the GA4 tag or create a GA4 account. `site_onboarding_submit`
+Creating provider resources and proving ownership are separate. When a DNS
+provider account is configured, call `site_ownership_verify` after onboarding,
+then poll `site_ownership_check` until `complete` is true. Cloudflare is the
+currently shipped DNS adapter; without a supported adapter, the guide lists the
+manual methods accepted by the property form. Rankrat still cannot deploy the
+GA4 tag or create a GA4 account. `site_onboarding_submit`
 exists only when the operator has set `RANKRAT_ALLOW_AGENT_ONBOARDING=true`;
 when it is absent, guide the user through `rankrat onboard-site`.
 
@@ -218,5 +222,5 @@ Typical flow for "why did traffic drop":
 
 Tool names are prefixed by provider (`google_*`, `bing_*`), with a handful of
 server-level ones (`server_info`, `accounts_list`, `sites_list`, `diagnostics`,
-`provider_readiness`). Full environment and credential setup lives in
-[`references/setup.md`](references/setup.md).
+`provider_readiness`). The complete grouped tool catalog, environment, and
+credential setup live in [`references/setup.md`](references/setup.md).

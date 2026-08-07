@@ -5,12 +5,13 @@ from typing import cast
 
 import pytest
 
-from rankrat.errors import InputLimitError, SiteFetchError
-from rankrat.models.boundaries import BoundaryDocument
+from rankrat.errors import BoundaryDeniedError, InputLimitError, SiteFetchError
+from rankrat.models.boundaries import BoundaryDocument, Provider
 from rankrat.operator.site_ownership import (
     SiteOwnershipOperator,
     SiteOwnershipReceipt,
     SiteOwnershipRequest,
+    SiteOwnershipWriteRequest,
 )
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import ProviderFailureCode, ProviderOperationError
@@ -20,12 +21,13 @@ from rankrat.providers.bing import (
     BingUrlLinks,
     BingWebmasterClient,
 )
-from rankrat.providers.cloudflare import (
-    CloudflareDnsClient,
-    CloudflareDnsRecordReceipt,
-    CloudflareDnsRecordType,
+from rankrat.providers.dns import (
+    DnsOwnershipClient,
+    DnsPropagationResult,
+    DnsRecordReceipt,
+    DnsRecordType,
+    PublicDnsClient,
 )
-from rankrat.providers.dns import DnsPropagationResult, PublicDnsClient
 from rankrat.providers.google_search_console import GoogleSearchConsoleClient
 from rankrat.providers.google_site_verification import (
     GoogleSiteVerificationClient,
@@ -36,7 +38,11 @@ from rankrat.providers.google_site_verification import (
 from rankrat.providers.site_fetch import PublicSiteFetcher, SiteFetchResult
 from rankrat.services.bing import BingBacklinkIntelligenceRequest, BingWebmasterService
 from rankrat.services.site_audit import SiteAuditRequest, SiteAuditService
-from rankrat.services.site_ownership import SiteOwnershipService, SiteOwnershipSubmissionRequest
+from rankrat.services.site_ownership import (
+    SiteOwnershipCheckRequest,
+    SiteOwnershipService,
+    SiteOwnershipVerificationRequest,
+)
 from rankrat.services.site_remediation import SiteRemediationRequest, SiteRemediationService
 
 
@@ -62,8 +68,8 @@ def _policy(tmp_path: Path) -> BoundaryPolicy:
                         "id": "cloudflare-main",
                         "provider": "cloudflare",
                         "credential": str(tmp_path / "cloudflare-token"),
-                        "cloudflare_zones": [
-                            {"id": "a" * 32, "name": "example.com"},
+                        "dns_zones": [
+                            {"provider_zone_id": "a" * 32, "name": "example.com"},
                         ],
                     },
                 ]
@@ -260,16 +266,18 @@ class _BingOwnershipClient:
         return True
 
 
-class _CloudflareOwnershipClient:
+class _DnsOwnershipClient:
+    provider = Provider.CLOUDFLARE
+
     async def ensure_verification_record(
         self,
         _: object,
         __: str,
-        record_type: CloudflareDnsRecordType,
+        record_type: DnsRecordType,
         name: str,
         ___: str,
-    ) -> CloudflareDnsRecordReceipt:
-        return CloudflareDnsRecordReceipt("a" * 32, "b" * 32, record_type, name, True)
+    ) -> DnsRecordReceipt:
+        return DnsRecordReceipt("a" * 32, "b" * 32, record_type, name, True)
 
 
 class _DnsClient:
@@ -278,19 +286,19 @@ class _DnsClient:
 
 
 @pytest.mark.asyncio
-async def test_site_ownership_applies_and_redeems_without_tokens(tmp_path: Path) -> None:
+async def test_site_ownership_verifies_and_redeems_without_tokens(tmp_path: Path) -> None:
     operator = SiteOwnershipOperator(
         _policy(tmp_path),
         cast(GoogleSiteVerificationClient, _GoogleOwnershipClient()),
         cast(BingWebmasterClient, _BingOwnershipClient()),
-        cast(CloudflareDnsClient, _CloudflareOwnershipClient()),
+        {Provider.CLOUDFLARE: cast(DnsOwnershipClient, _DnsOwnershipClient())},
         cast(PublicDnsClient, _DnsClient()),
     )
-    receipt = await operator.apply(
-        SiteOwnershipRequest(
+    receipt = await operator.verify(
+        SiteOwnershipWriteRequest(
             google_account_id="google-main",
             bing_account_id="bing-main",
-            cloudflare_account_id="cloudflare-main",
+            dns_account_id="cloudflare-main",
             site_url="https://example.com/",
             timeout_seconds=1.0,
         )
@@ -298,6 +306,32 @@ async def test_site_ownership_applies_and_redeems_without_tokens(tmp_path: Path)
 
     assert receipt.complete is True
     assert "verification" not in repr(receipt)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("dns_account_id", ("google-main", "missing"))
+async def test_site_ownership_rejects_invalid_dns_adapter_selection(
+    tmp_path: Path,
+    dns_account_id: str,
+) -> None:
+    operator = SiteOwnershipOperator(
+        _policy(tmp_path),
+        cast(GoogleSiteVerificationClient, _GoogleOwnershipClient()),
+        cast(BingWebmasterClient, _BingOwnershipClient()),
+        {},
+        cast(PublicDnsClient, _DnsClient()),
+    )
+
+    with pytest.raises(BoundaryDeniedError):
+        await operator.verify(
+            SiteOwnershipWriteRequest(
+                google_account_id="google-main",
+                bing_account_id="bing-main",
+                dns_account_id=dns_account_id,
+                site_url="https://example.com/",
+                timeout_seconds=1.0,
+            )
+        )
 
 
 @pytest.mark.asyncio
@@ -456,7 +490,7 @@ class _MissingBingOwnershipClient:
 
 
 @pytest.mark.asyncio
-async def test_site_ownership_status_handles_absent_bing_site_without_writes(
+async def test_site_ownership_check_handles_absent_bing_site_without_writes(
     tmp_path: Path,
 ) -> None:
     bing = _MissingBingOwnershipClient()
@@ -464,18 +498,17 @@ async def test_site_ownership_status_handles_absent_bing_site_without_writes(
         _policy(tmp_path),
         cast(GoogleSiteVerificationClient, _GoogleOwnershipClient()),
         cast(BingWebmasterClient, bing),
-        cast(CloudflareDnsClient, _CloudflareOwnershipClient()),
+        {Provider.CLOUDFLARE: cast(DnsOwnershipClient, _DnsOwnershipClient())},
         cast(PublicDnsClient, _DnsClient()),
     )
     request = SiteOwnershipRequest(
         google_account_id="google-main",
         bing_account_id="bing-main",
-        cloudflare_account_id="cloudflare-main",
         site_url="https://example.com/",
         timeout_seconds=1.0,
     )
 
-    receipt = await operator.status(request)
+    receipt = await operator.check(request)
 
     assert receipt.complete is False
     assert receipt.google.verified is False
@@ -483,7 +516,7 @@ async def test_site_ownership_status_handles_absent_bing_site_without_writes(
 
 
 @pytest.mark.asyncio
-async def test_site_ownership_apply_refuses_missing_bing_material_after_add(
+async def test_site_ownership_verify_refuses_missing_bing_material_after_add(
     tmp_path: Path,
 ) -> None:
     bing = _MissingBingOwnershipClient()
@@ -491,16 +524,16 @@ async def test_site_ownership_apply_refuses_missing_bing_material_after_add(
         _policy(tmp_path),
         cast(GoogleSiteVerificationClient, _GoogleOwnershipClient()),
         cast(BingWebmasterClient, bing),
-        cast(CloudflareDnsClient, _CloudflareOwnershipClient()),
+        {Provider.CLOUDFLARE: cast(DnsOwnershipClient, _DnsOwnershipClient())},
         cast(PublicDnsClient, _DnsClient()),
     )
 
     with pytest.raises(InputLimitError, match="verification material"):
-        await operator.apply(
-            SiteOwnershipRequest(
+        await operator.verify(
+            SiteOwnershipWriteRequest(
                 google_account_id="google-main",
                 bing_account_id="bing-main",
-                cloudflare_account_id="cloudflare-main",
+                dns_account_id="cloudflare-main",
                 site_url="https://example.com/",
                 timeout_seconds=1.0,
             )
@@ -515,29 +548,35 @@ async def test_site_ownership_service_exposes_status_and_successful_apply(tmp_pa
         _policy(tmp_path),
         cast(GoogleSiteVerificationClient, _GoogleOwnershipClient()),
         cast(BingWebmasterClient, _BingOwnershipClient()),
-        cast(CloudflareDnsClient, _CloudflareOwnershipClient()),
+        {Provider.CLOUDFLARE: cast(DnsOwnershipClient, _DnsOwnershipClient())},
         cast(PublicDnsClient, _DnsClient()),
     )
     service = SiteOwnershipService(operator)
-    request = SiteOwnershipSubmissionRequest(
+    check_request = SiteOwnershipCheckRequest(
         google_account_id="google-main",
         bing_account_id="bing-main",
-        cloudflare_account_id="cloudflare-main",
+        site_url="https://example.com/",
+        timeout_seconds=1.0,
+    )
+    verification_request = SiteOwnershipVerificationRequest(
+        google_account_id="google-main",
+        bing_account_id="bing-main",
+        dns_account_id="cloudflare-main",
         site_url="https://example.com/",
         timeout_seconds=1.0,
     )
 
-    status = await service.status(request)
-    applied = await service.apply(request)
+    checked = await service.check(check_request)
+    applied = await service.verify(verification_request)
 
-    assert status.complete is False
+    assert checked.complete is False
     assert applied.complete is True
 
 
 @pytest.mark.asyncio
 async def test_site_ownership_service_preserves_safe_provider_failures() -> None:
     class FailingOperator:
-        async def apply(self, _: SiteOwnershipRequest) -> SiteOwnershipReceipt:
+        async def verify(self, _: SiteOwnershipWriteRequest) -> SiteOwnershipReceipt:
             raise ProviderOperationError(
                 ProviderFailureCode.UNAVAILABLE,
                 "safe provider failure",
@@ -546,11 +585,11 @@ async def test_site_ownership_service_preserves_safe_provider_failures() -> None
     service = SiteOwnershipService(cast(SiteOwnershipOperator, FailingOperator()))
 
     with pytest.raises(ProviderOperationError, match="safe provider failure"):
-        await service.apply(
-            SiteOwnershipSubmissionRequest(
+        await service.verify(
+            SiteOwnershipVerificationRequest(
                 google_account_id="google-main",
                 bing_account_id="bing-main",
-                cloudflare_account_id="cloudflare-main",
+                dns_account_id="cloudflare-main",
                 site_url="https://example.com/",
                 timeout_seconds=1.0,
             )

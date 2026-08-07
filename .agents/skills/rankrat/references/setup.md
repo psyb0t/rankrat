@@ -60,7 +60,7 @@ Set it to `false` and they appear. There is no approval ID, admin API, or second
 bearer token — the trusted caller gets direct access, with writes still confined
 to the configured boundaries and to what the provider account itself permits.
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
-Indexing notifications, Search Console site/sitemap changes, Cloudflare-backed
+Indexing notifications, Search Console site/sitemap changes, DNS-provider-backed
 ownership verification, discovery remediation, and new-site onboarding, and
 are marked as writes in MCP.
 
@@ -73,7 +73,7 @@ setting it alone is a startup error.
 What it changes: authorization still resolves the credential **account** from
 the boundary file, so accounts stay fixed, but resource allow-list checks are
 skipped — including Google resource/account discovery and the GA4
-  parent-account pin and Cloudflare zone allow-list.
+  parent-account pin and DNS zone allow-list.
 
 What it does *not* change is worth knowing, because it is narrower than "the
 boundary is off":
@@ -112,7 +112,10 @@ exception: they are absent unless writable mode enables them.
   placed under `RANKRAT_SECRET_ROOT`.
 - **Cloudflare** — a scoped API token with Zone Read and DNS Edit only for the
   selected zones, stored at the credential path in the Cloudflare boundary
-  account. Rankrat exposes only Google TXT and Bing CNAME verification records.
+  account. Put each zone in the provider-neutral `dns_zones` array with its
+  Cloudflare Zone ID in `provider_zone_id`. Ownership calls accept
+  `dns_account_id`; they do not expose a Cloudflare-specific request field.
+  Rankrat exposes only Google TXT and Bing CNAME verification records.
 - **PageSpeed Insights** — an API key, same location, and the one Google surface
   that does not use OAuth: the key goes on the query string, so the Google
   consent flow grants it nothing. It is optional — with no key configured the
@@ -272,22 +275,96 @@ The guidance is available either way, read-only, on every server:
 | `rankrat://onboarding/{site_url}` template | Same, narrowed to one percent-encoded site |
 | `onboarding_guide` tool | The identical document, for clients without resource support |
 
-With a configured Cloudflare account, `site_ownership_apply` requests the real
-Google TXT and Bing CNAME proofs, publishes only those records, checks public
-DNS, and redeems each provider. Poll `site_ownership_status` until it reports
-`complete`; DNS propagation is asynchronous. Without Cloudflare, a `sc-domain:`
-property accepts only DNS TXT, while a `https://` URL-prefix property also
-accepts the GA4 tag, an HTML file, or a meta tag.
+With a configured DNS provider account, `site_ownership_verify` requests the
+real Google TXT and Bing CNAME proofs, publishes only those records through the
+adapter selected by the account's `provider`, checks public DNS, and redeems
+each provider. Poll `site_ownership_check` until it reports `complete`; DNS
+propagation is asynchronous. Cloudflare is the currently shipped DNS adapter.
+Without a supported adapter, a `sc-domain:` property accepts only DNS TXT,
+while a `https://` URL-prefix property also accepts the GA4 tag, an HTML file,
+or a meta tag.
 
 The SEO expansion has the same names over stdio and Streamable HTTP MCP:
 
 | MCP tool | REST route |
 |---|---|
-| `site_ownership_status` | `POST /v1/site-ownership-status-checks` |
-| `site_ownership_apply` | `POST /v1/site-ownership-verifications` |
+| `site_ownership_check` | `POST /v1/site-ownership-checks` |
+| `site_ownership_verify` | `POST /v1/site-ownership-verifications` |
 | `site_audit` | `POST /v1/site-audits` |
 | `site_remediation_apply` | `POST /v1/site-remediations` |
 | `bing_backlink_intelligence` | `POST /v1/bing/backlink-intelligence` |
+
+## Complete MCP tool catalog
+
+`tools/list` is authoritative for a running server because startup settings
+decide which tools exist. The grouped inventory below mirrors the tool catalog
+in the source. The exact REST paths and schemas live in the
+[OpenAPI source](https://github.com/psyb0t/rankrat/blob/main/src/rankrat/api/openapi.yaml);
+when enabled, `/openapi.json` removes write routes from a read-only server.
+
+### Read-only tools
+
+- **Server, boundaries, and guidance:** `server_info`, `accounts_list`,
+  `sites_list`, `diagnostics`, `provider_readiness`, `onboarding_guide`.
+- **Site, ownership, schema, and backlinks:** `site_audit`,
+  `site_ownership_check`, `schema_validate_url`, `schema_validate_html`,
+  `schema_validate_json_ld`, `bing_backlink_intelligence`.
+- **Google Search Console and Indexing metadata:**
+  `google_search_analytics_summary`, `google_search_analytics_comparison`,
+  `google_search_analytics_dimension_report`,
+  `google_search_analytics_drop_attribution`, `google_search_analytics_trend`,
+  `google_search_analytics_anomalies`,
+  `google_search_analytics_page_performance`,
+  `google_search_analytics_query`, `google_sites_list`, `google_site_get`,
+  `google_sitemaps_list`, `google_sitemap_get`, `google_url_inspection`,
+  `google_url_inspection_batch`, `google_indexing_metadata`.
+- **Google Analytics 4:** `google_analytics_account_inventory`,
+  `google_analytics_data_streams`, `google_analytics_report`,
+  `google_analytics_realtime_report`, `google_analytics_content_performance`,
+  `google_analytics_landing_page_performance`,
+  `google_analytics_organic_search_landing_pages`,
+  `google_analytics_traffic_source_performance`,
+  `google_analytics_ecommerce_performance`,
+  `google_analytics_audience_segments`, `google_analytics_user_behavior`,
+  `google_analytics_conversion_funnel`.
+- **PageSpeed and local Lighthouse:** `pagespeed_analyze`,
+  `pagespeed_core_web_vitals`, `lighthouse_audit`,
+  `lighthouse_seo_findings`, `lighthouse_accessibility_findings`,
+  `lighthouse_performance_findings`,
+  `lighthouse_best_practices_findings`.
+- **Cross-provider analysis:** `ga4_pagespeed_correlation`,
+  `ga4_search_console_comparison`, `search_engine_comparison`,
+  `search_engine_traffic_health`.
+- **Bing Webmaster Tools:** `bing_keyword_statistics`,
+  `bing_related_keywords`, `bing_traffic_trend`, `bing_traffic_anomalies`,
+  `bing_traffic_comparison`, `bing_query_performance`,
+  `bing_page_performance`, `bing_brand_analysis`, `bing_ranking_buckets`,
+  `bing_query_opportunities`, `bing_page_opportunities`,
+  `bing_opportunity_matrix`, `bing_query_page_performance`,
+  `bing_query_cannibalization`, `bing_page_query_performance`,
+  `bing_url_submission_quota`, `bing_crawl_issues`, `bing_crawl_stats`,
+  `bing_feeds`, `bing_link_counts`, `bing_url_information`.
+
+### Writable tools
+
+These appear only when `RANKRAT_READ_ONLY=false`:
+
+- **IndexNow:** `indexnow_submit`. IndexNow is an open change-notification
+  protocol, not a dashboard: one participating endpoint shares an accepted
+  notification with the other participating engines, while each engine makes
+  its own crawl and indexing decisions.
+- **Bing:** `bing_url_submit`, `bing_sitemap_submit`, `bing_site_submit`.
+- **Google Search Console and Indexing:** `google_indexing_submit`,
+  `google_indexing_batch_submit`, `google_site_submit`,
+  `google_sitemap_submit`.
+- **Google Analytics 4:** `google_analytics_account_rename`,
+  `google_analytics_property_rename`.
+- **Ownership and discovery remediation:** `site_ownership_verify`,
+  `site_remediation_apply`.
+
+`site_onboarding_submit` is the additional writable tool exposed only when
+`RANKRAT_ALLOW_AGENT_ONBOARDING=true`. It is kept separate because it persists
+the exact resources it creates into the boundary file.
 
 ## Checking it works
 

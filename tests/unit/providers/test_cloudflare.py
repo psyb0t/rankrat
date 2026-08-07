@@ -16,7 +16,8 @@ from rankrat.providers.base import (
     ProviderOperationError,
     ProviderReadRequest,
 )
-from rankrat.providers.cloudflare import CloudflareDnsClient, CloudflareDnsRecordType
+from rankrat.providers.cloudflare import CloudflareDnsClient
+from rankrat.providers.dns import DnsRecordType
 
 
 def _policy(token_file: Path) -> BoundaryPolicy:
@@ -28,8 +29,8 @@ def _policy(token_file: Path) -> BoundaryPolicy:
                         "id": "cloudflare-main",
                         "provider": "cloudflare",
                         "credential": str(token_file),
-                        "cloudflare_zones": [
-                            {"id": "a" * 32, "name": "example.com"},
+                        "dns_zones": [
+                            {"provider_zone_id": "a" * 32, "name": "example.com"},
                         ],
                     }
                 ]
@@ -68,7 +69,7 @@ async def test_cloudflare_creates_only_exact_verification_record(tmp_path: Path)
     receipt = await client.ensure_verification_record(
         ProviderReadRequest(AccountId("cloudflare-main"), 1.0),
         "example.com",
-        CloudflareDnsRecordType.TXT,
+        DnsRecordType.TXT,
         "example.com",
         "provider-issued-value",
     )
@@ -109,7 +110,7 @@ async def test_cloudflare_reuses_exact_record_and_rejects_zone_escape(tmp_path: 
     receipt = await client.ensure_verification_record(
         ProviderReadRequest(AccountId("cloudflare-main"), 1.0),
         "example.com",
-        CloudflareDnsRecordType.CNAME,
+        DnsRecordType.CNAME,
         "proof.example.com",
         "verify.bing.com",
     )
@@ -119,7 +120,7 @@ async def test_cloudflare_reuses_exact_record_and_rejects_zone_escape(tmp_path: 
         await client.ensure_verification_record(
             ProviderReadRequest(AccountId("cloudflare-main"), 1.0),
             "example.com",
-            CloudflareDnsRecordType.TXT,
+            DnsRecordType.TXT,
             "attacker.invalid",
             "value",
         )
@@ -154,7 +155,7 @@ async def test_cloudflare_refuses_to_overwrite_a_conflicting_cname(tmp_path: Pat
         await client.ensure_verification_record(
             ProviderReadRequest(AccountId("cloudflare-main"), 1.0),
             "example.com",
-            CloudflareDnsRecordType.CNAME,
+            DnsRecordType.CNAME,
             "proof.example.com",
             "verify.bing.com",
         )
@@ -341,7 +342,7 @@ async def test_cloudflare_rejects_invalid_token_and_record_material(tmp_path: Pa
         await client.ensure_verification_record(
             request,
             "example.com",
-            CloudflareDnsRecordType.TXT,
+            DnsRecordType.TXT,
             "example.com",
             "line one\nline two",
         )
@@ -407,7 +408,7 @@ async def test_cloudflare_rejects_invalid_record_creation_response(
         await client.ensure_verification_record(
             ProviderReadRequest(AccountId("cloudflare-main"), 1.0),
             "example.com",
-            CloudflareDnsRecordType.TXT,
+            DnsRecordType.TXT,
             "example.com",
             "provider-issued-value",
         )

@@ -18,6 +18,8 @@ from pydantic import (
     model_validator,
 )
 
+from rankrat.constants import MAX_DNS_PROVIDER_ZONE_ID_CHARS
+
 ACCOUNT_ID_PATTERN = r"^[a-z0-9][a-z0-9-]{0,62}$"
 _ROOT_URL_PATH = "/"
 _DOT_PATH_SEGMENTS = frozenset((".", ".."))
@@ -147,6 +149,9 @@ class Provider(StrEnum):
     CLOUDFLARE = "cloudflare"
 
 
+DNS_OWNERSHIP_PROVIDERS = frozenset((Provider.CLOUDFLARE,))
+
+
 class ResourceKind(StrEnum):
     """Kinds of configured provider resource."""
 
@@ -154,15 +159,15 @@ class ResourceKind(StrEnum):
     PAGESPEED_SITE = "pagespeed_site"
     GA4_PROPERTY = "ga4_property"
     BING_SITE = "bing_site"
-    CLOUDFLARE_ZONE = "cloudflare_zone"
+    DNS_ZONE = "dns_zone"
 
 
-class CloudflareZone(BaseModel):
-    """One exact Cloudflare DNS zone the operator permits Rankrat to modify."""
+class DnsZone(BaseModel):
+    """One exact provider DNS zone the operator permits Rankrat to modify."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    provider_zone_id: str = Field(min_length=1, max_length=MAX_DNS_PROVIDER_ZONE_ID_CHARS)
     name: str
 
     @field_validator("name")
@@ -185,7 +190,7 @@ class ConfiguredAccount(BaseModel):
     search_console_sites: tuple[str, ...] = ()
     ga4_properties: tuple[str, ...] = ()
     google_account_discovery: bool = Field(default=False, strict=True)
-    cloudflare_zones: tuple[CloudflareZone, ...] = ()
+    dns_zones: tuple[DnsZone, ...] = ()
     bing_sites: tuple[str, ...] = Field(
         default=(),
         validation_alias="sites",
@@ -266,12 +271,12 @@ class ConfiguredAccount(BaseModel):
             self.search_console_sites
             or self.pagespeed_sites
             or self.ga4_properties
-            or self.cloudflare_zones
+            or self.dns_zones
         ):
-            raise ValueError("Bing accounts cannot configure Google resources")
-        if self.provider == Provider.GOOGLE and self.cloudflare_zones:
-            raise ValueError("Google accounts cannot configure Cloudflare zones")
-        if self.provider == Provider.CLOUDFLARE and (
+            raise ValueError("Bing accounts cannot configure non-Bing resources")
+        if self.provider == Provider.GOOGLE and self.dns_zones:
+            raise ValueError("Google accounts cannot configure DNS zones")
+        if self.provider in DNS_OWNERSHIP_PROVIDERS and (
             self.search_console_sites
             or self.pagespeed_sites
             or self.ga4_properties
@@ -280,7 +285,9 @@ class ConfiguredAccount(BaseModel):
             or self.pagespeed_api_key_file is not None
             or self.google_account_discovery
         ):
-            raise ValueError("Cloudflare accounts can configure only Cloudflare zones")
+            raise ValueError("DNS provider accounts can configure only DNS zones")
+        if self.provider not in DNS_OWNERSHIP_PROVIDERS and self.dns_zones:
+            raise ValueError("only DNS provider accounts can configure dns_zones")
         if self.provider != Provider.GOOGLE and self.oauth_token_file is not None:
             raise ValueError("only Google accounts can configure oauth_token_file")
         if self.provider != Provider.GOOGLE and self.pagespeed_api_key_file is not None:
@@ -291,10 +298,10 @@ class ConfiguredAccount(BaseModel):
             raise ValueError("only Google accounts can enable google_account_discovery")
         if self.google_account_discovery and self.oauth_token_file is None:
             raise ValueError("Google account discovery requires oauth_token_file")
-        zone_ids = tuple(zone.id for zone in self.cloudflare_zones)
-        zone_names = tuple(zone.name for zone in self.cloudflare_zones)
+        zone_ids = tuple(zone.provider_zone_id for zone in self.dns_zones)
+        zone_names = tuple(zone.name for zone in self.dns_zones)
         if len(set(zone_ids)) != len(zone_ids) or len(set(zone_names)) != len(zone_names):
-            raise ValueError("Cloudflare zones must not contain duplicates")
+            raise ValueError("DNS zones must not contain duplicates")
         return self
 
     def allows_google_read_discovery(self, resource_kind: ResourceKind) -> bool:
@@ -396,7 +403,7 @@ class BoundaryDocument(BaseModel):
                 *((ResourceKind.PAGESPEED_SITE, item) for item in account.pagespeed_sites),
                 *((ResourceKind.GA4_PROPERTY, item) for item in account.ga4_properties),
                 *((ResourceKind.BING_SITE, item) for item in account.bing_sites),
-                *((ResourceKind.CLOUDFLARE_ZONE, item.id) for item in account.cloudflare_zones),
+                *((ResourceKind.DNS_ZONE, item.provider_zone_id) for item in account.dns_zones),
             )
             for kind, resource in resources:
                 key = (account.provider, kind, resource)

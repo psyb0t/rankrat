@@ -12,9 +12,9 @@ _SEARCH_CONSOLE_DOMAIN_PREFIX = "sc-domain:"
 
 _SUMMARY = (
     "Rankrat can create the GA4 property, the Search Console property and the Bing site. "
-    "With a configured Cloudflare account it can also obtain provider-issued DNS proofs, "
+    "With a configured DNS provider account it can also obtain provider-issued DNS proofs, "
     "publish them, check public propagation, and redeem Google and Bing ownership. It "
-    "cannot deploy the GA4 tag or modify a non-Cloudflare DNS provider."
+    "cannot deploy the GA4 tag or use a DNS provider without an installed adapter."
 )
 
 _RANKRAT_PERFORMS = (
@@ -22,23 +22,23 @@ _RANKRAT_PERFORMS = (
     "Adds the site to Google Search Console as an unverified property.",
     "Adds the site to Bing Webmaster Tools as an unverified site.",
     "Records the created resource IDs in the boundary file so later reads are allowed.",
-    "With a configured Cloudflare account, creates only provider-issued Google TXT and "
+    "With a configured DNS provider account, creates only provider-issued Google TXT and "
     "Bing CNAME ownership records and redeems them after public DNS propagation.",
 )
 
 _RANKRAT_CANNOT_PERFORM = (
     "Deploy a GA4 tag, HTML file, or meta tag to the site.",
-    "Modify DNS outside a configured Cloudflare account or create arbitrary DNS records.",
+    "Modify DNS outside a configured DNS provider account or create arbitrary DNS records.",
     "Create a GA4 account; Google requires a human to accept its Terms of Service.",
 )
 
 _TELL_THE_USER = (
     "Onboarding and ownership verification are separate operations. After onboarding, "
-    "call site_ownership_apply, then poll site_ownership_status until complete.",
+    "call site_ownership_verify, then poll site_ownership_check until complete.",
     "Deploy the GA4 Measurement ID first. It is the one artifact Rankrat hands over "
     "directly, and on a URL-prefix property it also satisfies Search Console "
     "verification through the Google Analytics method.",
-    "Without a configured Cloudflare account, use one of the manual methods listed for "
+    "Without a supported DNS provider account, use one of the manual methods listed for "
     "the Search Console property form and Bing site.",
     "A sc-domain: property accepts DNS TXT and nothing else. If DNS is not editable, "
     "onboard the https:// URL-prefix form instead.",
@@ -332,8 +332,8 @@ def _recommended_order(agent_onboarding_enabled: bool) -> tuple[GuideStep, ...]:
             actor=GuideActor.RANKRAT,
             title="Verify Search Console and Bing ownership",
             detail=(
-                "Call site_ownership_apply when a Cloudflare account is configured, then poll "
-                "site_ownership_status until complete. Otherwise deploy one of the listed "
+                "Call site_ownership_verify when a DNS provider account is configured, then "
+                "poll site_ownership_check until complete. Otherwise deploy one of the listed "
                 "manual proof methods."
             ),
         ),

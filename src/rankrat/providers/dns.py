@@ -5,14 +5,15 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from enum import StrEnum
+from typing import Protocol
 
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from rankrat.constants import MAX_PROVIDER_RESPONSE_BYTES
-from rankrat.models.boundaries import normalize_indexnow_host
-from rankrat.providers.base import ProviderFailureCode, ProviderOperationError
-from rankrat.providers.cloudflare import CloudflareDnsRecordType
+from rankrat.models.boundaries import Provider, normalize_indexnow_host
+from rankrat.providers.base import ProviderFailureCode, ProviderOperationError, ProviderReadRequest
 
 _DNS_OVER_HTTPS_URL = "https://cloudflare-dns.com/dns-query"
 _DNS_JSON_MEDIA_TYPE = "application/dns-json"
@@ -21,6 +22,39 @@ _MAX_DNS_ANSWERS = 100
 _MAX_DNS_DATA_CHARS = 4_096
 
 HttpTransportFactory = Callable[[], httpx.AsyncBaseTransport | None]
+
+
+class DnsRecordType(StrEnum):
+    """DNS record kinds permitted for provider-issued ownership proofs."""
+
+    TXT = "TXT"
+    CNAME = "CNAME"
+
+
+@dataclass(frozen=True, slots=True)
+class DnsRecordReceipt:
+    """Secret-free receipt for an idempotently ensured DNS record."""
+
+    provider_zone_id: str
+    record_id: str
+    record_type: DnsRecordType
+    name: str
+    created: bool
+
+
+class DnsOwnershipClient(Protocol):
+    """Provider adapter capable only of ensuring exact ownership records."""
+
+    provider: Provider
+
+    async def ensure_verification_record(
+        self,
+        request: ProviderReadRequest,
+        hostname: str,
+        record_type: DnsRecordType,
+        name: str,
+        content: str,
+    ) -> DnsRecordReceipt: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,7 +90,7 @@ class PublicDnsClient:
     async def has_record(
         self,
         name: str,
-        record_type: CloudflareDnsRecordType,
+        record_type: DnsRecordType,
         expected_content: str,
         timeout_seconds: float,
     ) -> DnsPropagationResult:
@@ -115,11 +149,11 @@ class PublicDnsClient:
 
     @staticmethod
     def _normalize_answer(
-        record_type: CloudflareDnsRecordType,
+        record_type: DnsRecordType,
         value: str,
     ) -> str:
         normalized = value.strip()
-        if record_type is CloudflareDnsRecordType.CNAME:
+        if record_type is DnsRecordType.CNAME:
             return normalized.removesuffix(".").lower()
         if normalized.startswith('"') and normalized.endswith('"'):
             normalized = normalized[1:-1]

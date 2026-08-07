@@ -9,9 +9,10 @@ from pydantic import ValidationError
 
 from rankrat.errors import BoundaryDeniedError, ConfigurationError
 from rankrat.models.boundaries import (
+    DNS_OWNERSHIP_PROVIDERS,
     BoundaryDocument,
-    CloudflareZone,
     ConfiguredAccount,
+    DnsZone,
     IndexNowTarget,
     Provider,
     ResourceKind,
@@ -111,18 +112,26 @@ class BoundaryPolicy:
                 return target
         raise BoundaryDeniedError("configured IndexNow target boundary not found")
 
-    def resolve_cloudflare_zone(self, account_id: str, hostname: str) -> CloudflareZone:
-        """Resolve the most-specific configured Cloudflare zone containing a hostname."""
+    def resolve_dns_account(self, account_id: str) -> ConfiguredAccount:
+        """Resolve an exact account backed by a supported DNS ownership provider."""
 
-        account = self.resolve_account(account_id, Provider.CLOUDFLARE)
+        account = self.resolve_account(account_id)
+        if account.provider not in DNS_OWNERSHIP_PROVIDERS:
+            raise BoundaryDeniedError("configured account is not a DNS provider")
+        return account
+
+    def resolve_dns_zone(self, account_id: str, hostname: str) -> DnsZone:
+        """Resolve the most-specific configured DNS zone containing a hostname."""
+
+        account = self.resolve_dns_account(account_id)
         normalized_hostname = normalize_indexnow_host(hostname)
         candidates = tuple(
             zone
-            for zone in account.cloudflare_zones
+            for zone in account.dns_zones
             if normalized_hostname == zone.name or normalized_hostname.endswith(f".{zone.name}")
         )
         if not candidates:
-            raise BoundaryDeniedError("Cloudflare zone is outside the configured boundary")
+            raise BoundaryDeniedError("DNS zone is outside the configured boundary")
         return max(candidates, key=lambda zone: len(zone.name))
 
     def resolve_google_oauth_account(self, credential_path: Path) -> ConfiguredAccount | None:

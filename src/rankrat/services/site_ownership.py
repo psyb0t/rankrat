@@ -12,6 +12,7 @@ from rankrat.operator.site_ownership import (
     SiteOwnershipOperator,
     SiteOwnershipReceipt,
     SiteOwnershipRequest,
+    SiteOwnershipWriteRequest,
 )
 from rankrat.providers.base import ProviderOperationError
 
@@ -19,12 +20,22 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
-class SiteOwnershipSubmissionRequest:
-    """One exact set of provider accounts and an HTTPS site root."""
+class SiteOwnershipCheckRequest:
+    """Search-provider accounts and one HTTPS site root to inspect."""
 
     google_account_id: str
     bing_account_id: str
-    cloudflare_account_id: str
+    site_url: str
+    timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+
+@dataclass(frozen=True, slots=True)
+class SiteOwnershipVerificationRequest:
+    """Search and DNS provider accounts used to establish site ownership."""
+
+    google_account_id: str
+    bing_account_id: str
+    dns_account_id: str
     site_url: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
@@ -35,18 +46,18 @@ class SiteOwnershipService:
     def __init__(self, operator: SiteOwnershipOperator) -> None:
         self._operator = operator
 
-    async def status(self, request: SiteOwnershipSubmissionRequest) -> SiteOwnershipReceipt:
+    async def check(self, request: SiteOwnershipCheckRequest) -> SiteOwnershipReceipt:
         """Read ownership status without changing provider state."""
 
-        operator_request = self._operator_request(request)
-        return await self._operator.status(operator_request)
+        operator_request = self._check_operator_request(request)
+        return await self._operator.check(operator_request)
 
-    async def apply(self, request: SiteOwnershipSubmissionRequest) -> SiteOwnershipReceipt:
+    async def verify(self, request: SiteOwnershipVerificationRequest) -> SiteOwnershipReceipt:
         """Materialize and redeem DNS verification records."""
 
-        operator_request = self._operator_request(request)
+        operator_request = self._verification_operator_request(request)
         try:
-            receipt = await self._operator.apply(operator_request)
+            receipt = await self._operator.verify(operator_request)
         except (ProviderOperationError, RankratError):
             log_event(
                 _LOGGER,
@@ -54,7 +65,7 @@ class SiteOwnershipService:
                 "Site ownership verification failed",
                 google_account_id=request.google_account_id,
                 bing_account_id=request.bing_account_id,
-                cloudflare_account_id=request.cloudflare_account_id,
+                dns_account_id=request.dns_account_id,
                 site_url=request.site_url,
             )
             raise
@@ -64,18 +75,29 @@ class SiteOwnershipService:
             "Site ownership verification checked",
             google_account_id=request.google_account_id,
             bing_account_id=request.bing_account_id,
-            cloudflare_account_id=request.cloudflare_account_id,
+            dns_account_id=request.dns_account_id,
             site_url=request.site_url,
             complete=receipt.complete,
         )
         return receipt
 
     @staticmethod
-    def _operator_request(request: SiteOwnershipSubmissionRequest) -> SiteOwnershipRequest:
+    def _check_operator_request(request: SiteOwnershipCheckRequest) -> SiteOwnershipRequest:
         return SiteOwnershipRequest(
             google_account_id=request.google_account_id,
             bing_account_id=request.bing_account_id,
-            cloudflare_account_id=request.cloudflare_account_id,
             site_url=request.site_url,
             timeout_seconds=request.timeout_seconds,
+        )
+
+    @staticmethod
+    def _verification_operator_request(
+        request: SiteOwnershipVerificationRequest,
+    ) -> SiteOwnershipWriteRequest:
+        return SiteOwnershipWriteRequest(
+            google_account_id=request.google_account_id,
+            bing_account_id=request.bing_account_id,
+            site_url=request.site_url,
+            timeout_seconds=request.timeout_seconds,
+            dns_account_id=request.dns_account_id,
         )

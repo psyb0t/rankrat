@@ -44,6 +44,34 @@ def test_shipped_boundary_example_configures_google_oauth() -> None:
     assert bing_account.credential == Path("/run/secrets/bing/api-key")
 
 
+def test_dns_boundaries_use_provider_neutral_zone_fields(tmp_path: Path) -> None:
+    account = _document(
+        {
+            "id": "dns-main",
+            "provider": "cloudflare",
+            "credential": str(tmp_path / "dns-token"),
+            "dns_zones": [
+                {
+                    "provider_zone_id": "a" * 32,
+                    "name": "Example.COM",
+                }
+            ],
+        }
+    ).accounts[0]
+
+    assert account.dns_zones[0].provider_zone_id == "a" * 32
+    assert account.dns_zones[0].name == "example.com"
+    with pytest.raises(ValidationError):
+        _document(
+            {
+                "id": "dns-main",
+                "provider": "cloudflare",
+                "credential": str(tmp_path / "dns-token"),
+                "cloudflare_zones": [{"id": "a" * 32, "name": "example.com"}],
+            }
+        )
+
+
 def test_boundary_models_normalize_sites_and_reject_invalid_shapes(tmp_path: Path) -> None:
     credential = tmp_path / "credential"
     document = _document(

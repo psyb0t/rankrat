@@ -5,8 +5,7 @@ import pytest
 
 from rankrat.constants import MAX_PROVIDER_RESPONSE_BYTES
 from rankrat.providers.base import ProviderFailureCode, ProviderOperationError
-from rankrat.providers.cloudflare import CloudflareDnsRecordType
-from rankrat.providers.dns import PublicDnsClient
+from rankrat.providers.dns import DnsRecordType, PublicDnsClient
 
 
 @pytest.mark.asyncio
@@ -25,13 +24,13 @@ async def test_public_dns_matches_txt_and_cname_wire_formats() -> None:
     )
     txt = await client.has_record(
         "example.com",
-        CloudflareDnsRecordType.TXT,
+        DnsRecordType.TXT,
         "txt-value",
         1.0,
     )
     cname = await client.has_record(
         "proof.example.com",
-        CloudflareDnsRecordType.CNAME,
+        DnsRecordType.CNAME,
         "verify.bing.com",
         1.0,
     )
@@ -56,13 +55,13 @@ async def test_public_dns_reports_absent_records_and_normalizes_split_txt() -> N
 
     absent = await client.has_record(
         "example.com",
-        CloudflareDnsRecordType.TXT,
+        DnsRecordType.TXT,
         "value",
         1.0,
     )
     split = await client.has_record(
         "example.com",
-        CloudflareDnsRecordType.TXT,
+        DnsRecordType.TXT,
         "splitvalue",
         1.0,
     )
@@ -91,7 +90,7 @@ async def test_public_dns_rejects_unavailable_or_invalid_responses(
     with pytest.raises(ProviderOperationError):
         await client.has_record(
             "example.com",
-            CloudflareDnsRecordType.TXT,
+            DnsRecordType.TXT,
             "value",
             1.0,
         )
@@ -117,7 +116,7 @@ async def test_public_dns_maps_transport_errors_safely(
     with pytest.raises(ProviderOperationError) as error:
         await client.has_record(
             "example.com",
-            CloudflareDnsRecordType.TXT,
+            DnsRecordType.TXT,
             "value",
             1.0,
         )

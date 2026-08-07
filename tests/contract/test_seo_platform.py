@@ -85,7 +85,7 @@ def _patch_read_services(
     assert services.site_audit is not None
     assert services.site_ownership is not None
     monkeypatch.setattr(services.site_audit, "audit", audit)
-    monkeypatch.setattr(services.site_ownership, "status", ownership)
+    monkeypatch.setattr(services.site_ownership, "check", ownership)
     monkeypatch.setattr(services.bing_webmaster, "backlink_intelligence", backlinks)
 
 
@@ -106,11 +106,10 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
             json={"account_id": "google-main", "site_url": "https://example.com/"},
         )
         ownership = await client.post(
-            "/v1/site-ownership-status-checks",
+            "/v1/site-ownership-checks",
             json={
                 "google_account_id": "google-main",
                 "bing_account_id": "bing-main",
-                "cloudflare_account_id": "cloudflare-main",
                 "site_url": "https://example.com/",
             },
         )
@@ -125,25 +124,35 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
         assert audit.json()["score"] == 100
         assert ownership.json()["complete"] is True
         assert backlinks.json()["targets"][0]["referring_domains"] == ["source.example"]
+        legacy_ownership = await client.post(
+            "/v1/site-ownership-checks",
+            json={
+                "google_account_id": "google-main",
+                "bing_account_id": "bing-main",
+                "cloudflare_account_id": "cloudflare-main",
+                "site_url": "https://example.com/",
+            },
+        )
+        assert legacy_ownership.status_code == 422
         assert (await client.post("/v1/site-ownership-verifications", json={})).status_code == 404
         assert (await client.post("/v1/site-remediations", json={})).status_code == 404
 
     server = build_mcp_server(services)
     async with create_connected_server_and_client_session(server) as client:
         catalog = {tool.name for tool in (await client.list_tools()).tools}
-        assert {"site_audit", "site_ownership_status", "bing_backlink_intelligence"} <= catalog
-        assert "site_ownership_apply" not in catalog
+        assert {"site_audit", "site_ownership_check", "bing_backlink_intelligence"} <= catalog
+        assert "site_ownership_verify" not in catalog
+        assert {"site_ownership_status", "site_ownership_apply"}.isdisjoint(catalog)
         assert "site_remediation_apply" not in catalog
         audit = await client.call_tool(
             "site_audit",
             {"account_id": "google-main", "site_url": "https://example.com/"},
         )
         ownership = await client.call_tool(
-            "site_ownership_status",
+            "site_ownership_check",
             {
                 "google_account_id": "google-main",
                 "bing_account_id": "bing-main",
-                "cloudflare_account_id": "cloudflare-main",
                 "site_url": "https://example.com/",
             },
         )
@@ -166,12 +175,12 @@ async def test_seo_write_operations_have_rest_and_stdio_mcp_parity(
     async def remediation(*_: object) -> SiteRemediationReceipt:
         return SiteRemediationReceipt(True, True, 1)
 
-    monkeypatch.setattr(services.site_ownership, "apply", ownership)
+    monkeypatch.setattr(services.site_ownership, "verify", ownership)
     monkeypatch.setattr(services.site_remediation, "apply", remediation)
     ownership_arguments = {
         "google_account_id": "google-main",
         "bing_account_id": "bing-main",
-        "cloudflare_account_id": "cloudflare-main",
+        "dns_account_id": "cloudflare-main",
         "site_url": "https://example.com/",
     }
     remediation_arguments = {
@@ -197,12 +206,23 @@ async def test_seo_write_operations_have_rest_and_stdio_mcp_parity(
         )
         assert ownership_response.json()["complete"] is True
         assert remediation_response.json()["bing_urls_submitted"] == 1
+        legacy_ownership = await client.post(
+            "/v1/site-ownership-verifications",
+            json={
+                "google_account_id": "google-main",
+                "bing_account_id": "bing-main",
+                "cloudflare_account_id": "cloudflare-main",
+                "site_url": "https://example.com/",
+            },
+        )
+        assert legacy_ownership.status_code == 422
 
     server = build_mcp_server(services)
     async with create_connected_server_and_client_session(server) as client:
         catalog = {tool.name for tool in (await client.list_tools()).tools}
-        assert {"site_ownership_apply", "site_remediation_apply"} <= catalog
-        ownership_result = await client.call_tool("site_ownership_apply", ownership_arguments)
+        assert {"site_ownership_verify", "site_remediation_apply"} <= catalog
+        assert {"site_ownership_status", "site_ownership_apply"}.isdisjoint(catalog)
+        ownership_result = await client.call_tool("site_ownership_verify", ownership_arguments)
         remediation_result = await client.call_tool(
             "site_remediation_apply",
             remediation_arguments,
@@ -246,6 +266,12 @@ async def test_site_audit_is_callable_over_streamable_http_mcp(
             },
         },
     }
+    catalog_request: dict[str, object] = {
+        "jsonrpc": "2.0",
+        "id": 3,
+        "method": "tools/list",
+        "params": {},
+    }
     async with (
         fastapi_app.router.lifespan_context(fastapi_app),
         httpx.AsyncClient(
@@ -255,11 +281,17 @@ async def test_site_audit_is_callable_over_streamable_http_mcp(
     ):
         initialized = await client.post("/mcp/", headers=headers, json=initialize_request)
         called = await client.post("/mcp/", headers=headers, json=tool_request)
+        catalog_response = await client.post("/mcp/", headers=headers, json=catalog_request)
 
     assert initialized.status_code == 200
     assert called.status_code == 200
+    assert catalog_response.status_code == 200
     content = called.json()["result"]["content"][0]
     assert json.loads(content["text"])["score"] == 100
+    catalog = {tool["name"] for tool in catalog_response.json()["result"]["tools"]}
+    assert "site_ownership_check" in catalog
+    assert "site_ownership_verify" not in catalog
+    assert {"site_ownership_status", "site_ownership_apply"}.isdisjoint(catalog)
 
 
 @pytest.mark.asyncio

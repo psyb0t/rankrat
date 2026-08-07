@@ -2489,17 +2489,12 @@
         "title": "_SiteOnboardingSubmissionBody",
         "type": "object"
       },
-      "_SiteOwnershipBody": {
+      "_SiteOwnershipCheckBody": {
         "additionalProperties": false,
         "properties": {
           "bing_account_id": {
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
             "title": "Bing Account Id",
-            "type": "string"
-          },
-          "cloudflare_account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Cloudflare Account Id",
             "type": "string"
           },
           "google_account_id": {
@@ -2524,10 +2519,50 @@
         "required": [
           "google_account_id",
           "bing_account_id",
-          "cloudflare_account_id",
           "site_url"
         ],
-        "title": "_SiteOwnershipBody",
+        "title": "_SiteOwnershipCheckBody",
+        "type": "object"
+      },
+      "_SiteOwnershipVerificationBody": {
+        "additionalProperties": false,
+        "properties": {
+          "bing_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Bing Account Id",
+            "type": "string"
+          },
+          "dns_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Dns Account Id",
+            "type": "string"
+          },
+          "google_account_id": {
+            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+            "title": "Google Account Id",
+            "type": "string"
+          },
+          "site_url": {
+            "maxLength": 2048,
+            "minLength": 1,
+            "title": "Site Url",
+            "type": "string"
+          },
+          "timeout_seconds": {
+            "default": 10.0,
+            "maximum": 30.0,
+            "minimum": 0.1,
+            "title": "Timeout Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "google_account_id",
+          "bing_account_id",
+          "site_url",
+          "dns_account_id"
+        ],
+        "title": "_SiteOwnershipVerificationBody",
         "type": "object"
       },
       "_SiteRemediationBody": {
@@ -5674,14 +5709,14 @@
         "summary": "Site Onboarding Submission"
       }
     },
-    "/v1/site-ownership-status-checks": {
+    "/v1/site-ownership-checks": {
       "post": {
-        "operationId": "siteOwnershipStatusCheck",
+        "operationId": "siteOwnershipCheck",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/_SiteOwnershipBody"
+                "$ref": "#/components/schemas/_SiteOwnershipCheckBody"
               }
             }
           },
@@ -5707,7 +5742,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Site Ownership Status"
+        "summary": "Site Ownership Check"
       }
     },
     "/v1/site-ownership-verifications": {
@@ -5717,7 +5752,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/_SiteOwnershipBody"
+                "$ref": "#/components/schemas/_SiteOwnershipVerificationBody"
               }
             }
           },

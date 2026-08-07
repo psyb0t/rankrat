@@ -380,7 +380,7 @@ async def test_mcp_tool_catalog_annotations_and_calls(
             "bing_backlink_intelligence",
             "bing_url_information",
             "site_audit",
-            "site_ownership_status",
+            "site_ownership_check",
         }
         for tool in tools.tools:
             assert tool.annotations is not None

@@ -1,11 +1,12 @@
-"""Idempotent DNS ownership verification across Google, Bing, and Cloudflare."""
+"""Idempotent DNS ownership verification across search and DNS providers."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-from rankrat.errors import InputLimitError
+from rankrat.errors import BoundaryDeniedError, InputLimitError
 from rankrat.models.boundaries import (
     Provider,
     normalize_indexnow_host,
@@ -14,8 +15,7 @@ from rankrat.models.boundaries import (
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import AccountId, ProviderReadRequest
 from rankrat.providers.bing import BingSiteVerification, BingWebmasterClient
-from rankrat.providers.cloudflare import CloudflareDnsClient, CloudflareDnsRecordType
-from rankrat.providers.dns import PublicDnsClient
+from rankrat.providers.dns import DnsOwnershipClient, DnsRecordType, PublicDnsClient
 from rankrat.providers.google_site_verification import (
     GoogleSiteVerificationClient,
     GoogleVerificationMethod,
@@ -31,13 +31,19 @@ class SiteOwnershipRequest:
 
     google_account_id: str
     bing_account_id: str
-    cloudflare_account_id: str
     site_url: str
     timeout_seconds: float
 
     def __post_init__(self) -> None:
         normalized_url = normalize_public_https_root_url(self.site_url, "site_url")
         object.__setattr__(self, "site_url", normalized_url)
+
+
+@dataclass(frozen=True, slots=True)
+class SiteOwnershipWriteRequest(SiteOwnershipRequest):
+    """Ownership request plus the configured DNS provider account used for writes."""
+
+    dns_account_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,16 +80,16 @@ class SiteOwnershipOperator:
         policy: BoundaryPolicy,
         google: GoogleSiteVerificationClient,
         bing: BingWebmasterClient,
-        cloudflare: CloudflareDnsClient,
+        dns_clients: Mapping[Provider, DnsOwnershipClient],
         public_dns: PublicDnsClient,
     ) -> None:
         self._policy = policy
         self._google = google
         self._bing = bing
-        self._cloudflare = cloudflare
+        self._dns_clients = dict(dns_clients)
         self._public_dns = public_dns
 
-    async def status(self, request: SiteOwnershipRequest) -> SiteOwnershipReceipt:
+    async def check(self, request: SiteOwnershipRequest) -> SiteOwnershipReceipt:
         """Read public propagation and provider verification without changing DNS."""
 
         provider_request = self._validate_request(request)
@@ -92,7 +98,7 @@ class SiteOwnershipOperator:
             return self._receipt(request, False, False, False, False, False, False)
         return await self._status_from_material(request, provider_request, material, False, False)
 
-    async def apply(self, request: SiteOwnershipRequest) -> SiteOwnershipReceipt:
+    async def verify(self, request: SiteOwnershipWriteRequest) -> SiteOwnershipReceipt:
         """Ensure both verification records and redeem each propagated proof."""
 
         provider_request = self._validate_request(request)
@@ -100,23 +106,22 @@ class SiteOwnershipOperator:
         if material is None:
             raise InputLimitError("Bing did not expose verification material for the site")
         domain = self._domain(request.site_url)
-        google_record = await self._cloudflare.ensure_verification_record(
-            ProviderReadRequest(
-                AccountId(request.cloudflare_account_id),
-                request.timeout_seconds,
-            ),
+        dns_client = self._dns_client(request.dns_account_id)
+        dns_request = ProviderReadRequest(
+            AccountId(request.dns_account_id),
+            request.timeout_seconds,
+        )
+        google_record = await dns_client.ensure_verification_record(
+            dns_request,
             domain,
-            CloudflareDnsRecordType.TXT,
+            DnsRecordType.TXT,
             domain,
             material.google.token,
         )
-        bing_record = await self._cloudflare.ensure_verification_record(
-            ProviderReadRequest(
-                AccountId(request.cloudflare_account_id),
-                request.timeout_seconds,
-            ),
+        bing_record = await dns_client.ensure_verification_record(
+            dns_request,
             domain,
-            CloudflareDnsRecordType.CNAME,
+            DnsRecordType.CNAME,
             material.bing.dns_verification_code,
             _BING_VERIFICATION_TARGET,
         )
@@ -132,10 +137,6 @@ class SiteOwnershipOperator:
     def _validate_request(self, request: SiteOwnershipRequest) -> ProviderReadRequest:
         self._policy.require_google_onboarding_account(request.google_account_id)
         self._policy.require_bing_onboarding_account(request.bing_account_id)
-        self._policy.resolve_account(
-            request.cloudflare_account_id,
-            Provider.CLOUDFLARE,
-        )
         return ProviderReadRequest(
             AccountId(request.google_account_id),
             request.timeout_seconds,
@@ -184,13 +185,13 @@ class SiteOwnershipOperator:
         domain = self._domain(request.site_url)
         google_dns = await self._public_dns.has_record(
             domain,
-            CloudflareDnsRecordType.TXT,
+            DnsRecordType.TXT,
             material.google.token,
             request.timeout_seconds,
         )
         bing_dns = await self._public_dns.has_record(
             material.bing.dns_verification_code,
-            CloudflareDnsRecordType.CNAME,
+            DnsRecordType.CNAME,
             _BING_VERIFICATION_TARGET,
             request.timeout_seconds,
         )
@@ -256,3 +257,10 @@ class SiteOwnershipOperator:
         if hostname is None:
             raise InputLimitError("site ownership URL does not have a hostname")
         return normalize_indexnow_host(hostname)
+
+    def _dns_client(self, account_id: str) -> DnsOwnershipClient:
+        account = self._policy.resolve_dns_account(account_id)
+        client = self._dns_clients.get(account.provider)
+        if client is None:
+            raise BoundaryDeniedError("configured DNS provider adapter is unavailable")
+        return client

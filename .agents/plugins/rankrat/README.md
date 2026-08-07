@@ -2,7 +2,8 @@
 
 MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — boundary-limited
 SEO and search-analytics operations over Google Search Console, Bing Webmaster
-Tools, GA4, PageSpeed, Cloudflare ownership DNS, and IndexNow, plus bounded
+Tools, GA4, PageSpeed, DNS ownership automation (currently through Cloudflare),
+and IndexNow, plus bounded
 whole-site/backlink intelligence and optional isolated local Lighthouse audits.
 
 rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin has
@@ -55,8 +56,12 @@ default stdio server.
 
 The skill's setup reference has direct published-image commands for the
 credential-free `psyb0t/rankrat-lighthouse` worker and both Rankrat transports,
-plus the exact five MCP tool names and REST routes. It also documents the
-worker's trusted-site scope, Chromium sandbox limitation, and stronger-runtime
+plus the
+[complete MCP tool catalog](../../skills/rankrat/references/setup.md#complete-mcp-tool-catalog),
+including the exact five MCP tool names and REST routes for Lighthouse and the
+writable IndexNow change-notification tool. IndexNow is a push protocol rather
+than a reporting dashboard. The setup reference also documents the worker's
+trusted-site scope, Chromium sandbox limitation, and stronger-runtime
 recommendation; read that security note before enabling browser audits.
 The static stdio plugin does not start that second image, so its five Lighthouse
 tools return `UNAVAILABLE` rather than silently falling back to PageSpeed

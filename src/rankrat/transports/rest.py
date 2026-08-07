@@ -182,7 +182,10 @@ from rankrat.services.schema import (
 )
 from rankrat.services.site_audit import SiteAuditRequest
 from rankrat.services.site_onboarding import SiteOnboardingSubmissionRequest
-from rankrat.services.site_ownership import SiteOwnershipSubmissionRequest
+from rankrat.services.site_ownership import (
+    SiteOwnershipCheckRequest,
+    SiteOwnershipVerificationRequest,
+)
 from rankrat.services.site_remediation import SiteRemediationRequest
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.runtime import ApplicationServices
@@ -820,18 +823,21 @@ class _SiteAuditBody(BaseModel):
     )
 
 
-class _SiteOwnershipBody(BaseModel):
+class _SiteOwnershipCheckBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
-    cloudflare_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
         le=MAX_PROVIDER_TIMEOUT_SECONDS,
     )
+
+
+class _SiteOwnershipVerificationBody(_SiteOwnershipCheckBody):
+    dns_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
 
 
 class _SiteRemediationBody(BaseModel):
@@ -929,19 +935,18 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
         )
 
     @router.post(
-        "/site-ownership-status-checks",
+        "/site-ownership-checks",
         response_model=None,
-        operation_id="site_ownership_status_check",
+        operation_id="site_ownership_check",
     )
-    async def site_ownership_status(body: _SiteOwnershipBody) -> JsonValue:
+    async def site_ownership_check(body: _SiteOwnershipCheckBody) -> JsonValue:
         if services.site_ownership is None:
             raise RuntimeError("site ownership service is unavailable")
         return to_json_value(
-            await services.site_ownership.status(
-                SiteOwnershipSubmissionRequest(
+            await services.site_ownership.check(
+                SiteOwnershipCheckRequest(
                     google_account_id=body.google_account_id,
                     bing_account_id=body.bing_account_id,
-                    cloudflare_account_id=body.cloudflare_account_id,
                     site_url=body.site_url,
                     timeout_seconds=body.timeout_seconds,
                 )
@@ -2376,13 +2381,15 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
             response_model=None,
             operation_id="site_ownership_verification_create",
         )
-        async def site_ownership_verification(body: _SiteOwnershipBody) -> JsonValue:
+        async def site_ownership_verification(
+            body: _SiteOwnershipVerificationBody,
+        ) -> JsonValue:
             return to_json_value(
-                await site_ownership.apply(
-                    SiteOwnershipSubmissionRequest(
+                await site_ownership.verify(
+                    SiteOwnershipVerificationRequest(
                         google_account_id=body.google_account_id,
                         bing_account_id=body.bing_account_id,
-                        cloudflare_account_id=body.cloudflare_account_id,
+                        dns_account_id=body.dns_account_id,
                         site_url=body.site_url,
                         timeout_seconds=body.timeout_seconds,
                     )

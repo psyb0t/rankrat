@@ -174,6 +174,7 @@ GOOGLE_INDEXING_SCOPE = "https://www.googleapis.com/auth/indexing"
 GOOGLE_ANALYTICS_READ_SCOPE = "https://www.googleapis.com/auth/analytics.readonly"
 GOOGLE_ANALYTICS_EDIT_SCOPE = "https://www.googleapis.com/auth/analytics.edit"
 GOOGLE_SITE_VERIFICATION_SCOPE = "https://www.googleapis.com/auth/siteverification"
+MAX_DNS_PROVIDER_ZONE_ID_CHARS = 255
 MAX_CLOUDFLARE_TOKEN_BYTES = 512
 MAX_CLOUDFLARE_DNS_RECORD_CONTENT_CHARS = 2_048
 MAX_CLOUDFLARE_DNS_RECORD_NAME_CHARS = 255

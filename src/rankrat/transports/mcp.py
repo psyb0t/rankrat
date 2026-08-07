@@ -163,7 +163,10 @@ from rankrat.services.schema import (
 )
 from rankrat.services.site_audit import SiteAuditRequest
 from rankrat.services.site_onboarding import SiteOnboardingSubmissionRequest
-from rankrat.services.site_ownership import SiteOwnershipSubmissionRequest
+from rankrat.services.site_ownership import (
+    SiteOwnershipCheckRequest,
+    SiteOwnershipVerificationRequest,
+)
 from rankrat.services.site_remediation import SiteRemediationRequest
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.runtime import ApplicationServices
@@ -403,18 +406,21 @@ class _SiteOnboardingSubmissionArguments(BaseModel):
     )
 
 
-class _SiteOwnershipArguments(BaseModel):
+class _SiteOwnershipCheckArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
-    cloudflare_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
         le=MAX_PROVIDER_TIMEOUT_SECONDS,
     )
+
+
+class _SiteOwnershipVerificationArguments(_SiteOwnershipCheckArguments):
+    dns_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
 
 
 class _SiteAuditArguments(BaseModel):
@@ -1003,8 +1009,8 @@ def _tool_input_schema(name: str) -> dict[str, object]:
         "google_site_submit": _GoogleSiteSubmissionArguments.model_json_schema(),
         "google_sitemap_submit": _GoogleSitemapSubmissionArguments.model_json_schema(),
         "site_onboarding_submit": _SiteOnboardingSubmissionArguments.model_json_schema(),
-        "site_ownership_status": _SiteOwnershipArguments.model_json_schema(),
-        "site_ownership_apply": _SiteOwnershipArguments.model_json_schema(),
+        "site_ownership_check": _SiteOwnershipCheckArguments.model_json_schema(),
+        "site_ownership_verify": _SiteOwnershipVerificationArguments.model_json_schema(),
         "site_audit": _SiteAuditArguments.model_json_schema(),
         "site_remediation_apply": _SiteRemediationArguments.model_json_schema(),
         "google_search_analytics_query": _SearchAnalyticsArguments.model_json_schema(),
@@ -1521,14 +1527,13 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                         )
                     )
                 )
-            if name == "site_ownership_status" and services.site_ownership is not None:
-                ownership_arguments = _SiteOwnershipArguments.model_validate(raw_arguments)
+            if name == "site_ownership_check" and services.site_ownership is not None:
+                ownership_arguments = _SiteOwnershipCheckArguments.model_validate(raw_arguments)
                 return _tool_success(
-                    await services.site_ownership.status(
-                        SiteOwnershipSubmissionRequest(
+                    await services.site_ownership.check(
+                        SiteOwnershipCheckRequest(
                             google_account_id=ownership_arguments.google_account_id,
                             bing_account_id=ownership_arguments.bing_account_id,
-                            cloudflare_account_id=ownership_arguments.cloudflare_account_id,
                             site_url=ownership_arguments.site_url,
                             timeout_seconds=ownership_arguments.timeout_seconds,
                         )
@@ -2175,17 +2180,19 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                     )
                 )
             if (
-                name == "site_ownership_apply"
+                name == "site_ownership_verify"
                 and services.writes_enabled
                 and services.site_ownership is not None
             ):
-                ownership_arguments = _SiteOwnershipArguments.model_validate(raw_arguments)
+                ownership_arguments = _SiteOwnershipVerificationArguments.model_validate(
+                    raw_arguments
+                )
                 return _tool_success(
-                    await services.site_ownership.apply(
-                        SiteOwnershipSubmissionRequest(
+                    await services.site_ownership.verify(
+                        SiteOwnershipVerificationRequest(
                             google_account_id=ownership_arguments.google_account_id,
                             bing_account_id=ownership_arguments.bing_account_id,
-                            cloudflare_account_id=ownership_arguments.cloudflare_account_id,
+                            dns_account_id=ownership_arguments.dns_account_id,
                             site_url=ownership_arguments.site_url,
                             timeout_seconds=ownership_arguments.timeout_seconds,
                         )
