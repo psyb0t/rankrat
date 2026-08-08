@@ -7,7 +7,7 @@ import asyncio
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Final
+from typing import Final, cast
 
 import httpx
 
@@ -45,12 +45,15 @@ _GA4_ACCOUNT_INVENTORY_PATH: Final = "/v1/google-analytics/account-inventory"
 _GA4_REPORT_PATH: Final = "/v1/google-analytics/reports"
 _PAGESPEED_ANALYSIS_PATH: Final = "/v1/pagespeed/analyses"
 _BING_TRAFFIC_TREND_PATH: Final = "/v1/bing/traffic-trend"
+_CLOUDFLARE_ANALYTICS_PATH: Final = "/v1/cloudflare/analytics-reports"
 _PAGESPEED_BOUNDARY_ERROR: Final = (
     "PageSpeed API key is configured but no explicit HTTPS PageSpeed site is available"
 )
 _MAX_REPORT_ROWS: Final = 1
 _REPORT_END_DAY_OFFSET: Final = 2
 _REPORT_DURATION_DAYS: Final = 7
+_CLOUDFLARE_REPORT_DURATION_HOURS: Final = 24
+_CLOUDFLARE_REPORT_LIMIT: Final = 24
 _HEALTH_RETRY_COUNT: Final = 10
 _HEALTH_RETRY_DELAY_SECONDS: Final = 1
 _SAFE_PROVIDER_FAILURE_CODES: Final = frozenset(
@@ -102,9 +105,12 @@ class LiveHttpVerifier:
                 raise LiveHttpVerificationError(
                     "Streamable HTTP MCP initialize returned an unexpected JSON shape"
                 )
-            if not isinstance(mcp_body.get("result"), dict) or not isinstance(
-                mcp_body["result"].get("protocolVersion"), str
-            ):
+            mcp_result = mcp_body.get("result")
+            if not isinstance(mcp_result, dict):
+                raise LiveHttpVerificationError(
+                    "Streamable HTTP MCP initialize returned no protocol"
+                )
+            if not isinstance(mcp_result.get("protocolVersion"), str):
                 raise LiveHttpVerificationError(
                     "Streamable HTTP MCP initialize returned no protocol"
                 )
@@ -145,7 +151,11 @@ class LiveHttpVerifier:
         if account.provider == Provider.GOOGLE:
             await self._verify_google_account(client, account, completed)
             return
-        await self._verify_bing_account(client, account, completed)
+        if account.provider == Provider.BING:
+            await self._verify_bing_account(client, account, completed)
+            return
+        if account.provider == Provider.CLOUDFLARE:
+            await self._verify_cloudflare_account(client, account, completed)
 
     async def _verify_google_account(
         self,
@@ -237,6 +247,28 @@ class LiveHttpVerifier:
             )
             completed.append("bing-traffic")
 
+    async def _verify_cloudflare_account(
+        self,
+        client: httpx.AsyncClient,
+        account: ConfiguredAccount,
+        completed: list[str],
+    ) -> None:
+        start, end = _cloudflare_report_period()
+        for zone in account.dns_zones:
+            await self._request(
+                client,
+                "POST",
+                _CLOUDFLARE_ANALYTICS_PATH,
+                json_body={
+                    "account_id": account.id,
+                    "zone_id": zone.provider_zone_id,
+                    "start": start,
+                    "end": end,
+                    "limit": _CLOUDFLARE_REPORT_LIMIT,
+                },
+            )
+            completed.append("cloudflare-analytics")
+
     async def _request(
         self,
         client: httpx.AsyncClient,
@@ -277,12 +309,12 @@ class LiveHttpVerifier:
 def _safe_provider_failure_code(response: httpx.Response) -> str | None:
     """Extract only Rankrat's finite provider code; never relay a response body."""
     try:
-        body = response.json()
+        body = cast(object, response.json())
     except ValueError:
         return None
     if not isinstance(body, dict):
         return None
-    code = body.get("code")
+    code = cast(dict[object, object], body).get("code")
     if not isinstance(code, str) or code not in _SAFE_PROVIDER_FAILURE_CODES:
         return None
     return code
@@ -292,6 +324,12 @@ def _report_period() -> tuple[str, str]:
     end_date = datetime.now(UTC).date() - timedelta(days=_REPORT_END_DAY_OFFSET)
     start_date = end_date - timedelta(days=_REPORT_DURATION_DAYS - 1)
     return start_date.isoformat(), end_date.isoformat()
+
+
+def _cloudflare_report_period() -> tuple[str, str]:
+    end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    start = end - timedelta(hours=_CLOUDFLARE_REPORT_DURATION_HOURS)
+    return start.isoformat(), end.isoformat()
 
 
 def _parser() -> argparse.ArgumentParser:

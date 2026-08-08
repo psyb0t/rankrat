@@ -17,6 +17,7 @@
 #   RANKRAT_BOUNDARIES            boundary file            ./config/boundaries.json
 #   RANKRAT_SECRETS               secrets directory        ./secrets
 #   RANKRAT_OAUTH                 OAuth state directory    ./oauth
+#   RANKRAT_STATE                 monitor state directory  ./state
 #   RANKRAT_ENV_FILE              env file, setup only     ./.env
 #   RANKRAT_HTTP_PORT             published loopback port  8080
 #   RANKRAT_OAUTH_CALLBACK_PORT   published OAuth port     49152
@@ -42,10 +43,13 @@ readonly DEFAULT_OAUTH_CALLBACK_PORT=49152
 readonly DEFAULT_BOUNDARY_FILE="config/boundaries.json"
 readonly DEFAULT_SECRETS_DIRECTORY="secrets"
 readonly DEFAULT_OAUTH_DIRECTORY="oauth"
+readonly DEFAULT_STATE_DIRECTORY="state"
 readonly DEFAULT_ENVIRONMENT_FILE=".env"
 
 readonly CONTAINER_CONFIG_DIRECTORY="/run/config"
 readonly CONTAINER_OAUTH_TOKEN_ROOT="/run/oauth"
+readonly CONTAINER_STATE_DIRECTORY="/run/state"
+readonly CONTAINER_STATE_DATABASE="/run/state/rankrat.sqlite3"
 readonly CONTAINER_SECRET_ROOT="/run/secrets"
 readonly CONTAINER_HTTP_BEARER_SECRET_FILE="/run/secrets/rankrat/http-bearer-token"
 readonly HOST_HTTP_BEARER_SECRET_RELATIVE_PATH="rankrat/http-bearer-token"
@@ -90,7 +94,7 @@ modes:
 
 host settings (environment):
   RANKRAT_IMAGE RANKRAT_BOUNDARIES RANKRAT_SECRETS RANKRAT_OAUTH
-  RANKRAT_ENV_FILE RANKRAT_HTTP_PORT RANKRAT_OAUTH_CALLBACK_PORT
+  RANKRAT_STATE RANKRAT_ENV_FILE RANKRAT_HTTP_PORT RANKRAT_OAUTH_CALLBACK_PORT
   RANKRAT_READ_ONLY RANKRAT_UNBOUNDED RANKRAT_ALLOW_AGENT_ONBOARDING
 
 The README documents the equivalent plain `docker run` invocations.
@@ -157,6 +161,7 @@ image="${RANKRAT_IMAGE:-$DEFAULT_IMAGE}"
 boundary_file="$(absolute_path "${RANKRAT_BOUNDARIES:-$DEFAULT_BOUNDARY_FILE}")"
 secrets_directory="$(absolute_path "${RANKRAT_SECRETS:-$DEFAULT_SECRETS_DIRECTORY}")"
 oauth_directory="$(absolute_path "${RANKRAT_OAUTH:-$DEFAULT_OAUTH_DIRECTORY}")"
+state_directory="$(absolute_path "${RANKRAT_STATE:-$DEFAULT_STATE_DIRECTORY}")"
 environment_file="$(absolute_path "${RANKRAT_ENV_FILE:-$DEFAULT_ENVIRONMENT_FILE}")"
 http_port="${RANKRAT_HTTP_PORT:-$DEFAULT_HTTP_PORT}"
 oauth_callback_port="${RANKRAT_OAUTH_CALLBACK_PORT:-$DEFAULT_OAUTH_CALLBACK_PORT}"
@@ -175,6 +180,7 @@ fi
 [[ -f "$boundary_file" ]] || fail "$boundary_file is required"
 [[ -d "$secrets_directory" ]] || fail "$secrets_directory is required"
 [[ -d "$oauth_directory" ]] || fail "$oauth_directory is required"
+[[ -d "$state_directory" ]] || fail "$state_directory is required"
 
 boundary_directory="$(cd "$(dirname "$boundary_file")" && pwd)"
 
@@ -210,7 +216,9 @@ common_arguments=(
 	--tmpfs "/tmp:rw,noexec,nosuid,size=$TMPFS_SIZE"
 	--mount "type=bind,src=$secrets_directory,dst=$CONTAINER_SECRET_ROOT,readonly"
 	--mount "type=bind,src=$oauth_directory,dst=$CONTAINER_OAUTH_TOKEN_ROOT"
+	--mount "type=bind,src=$state_directory,dst=$CONTAINER_STATE_DIRECTORY"
 	-e "RANKRAT_OAUTH_TOKEN_ROOT=$CONTAINER_OAUTH_TOKEN_ROOT"
+	-e "RANKRAT_STATE_DATABASE=$CONTAINER_STATE_DATABASE"
 )
 
 mode_arguments=()

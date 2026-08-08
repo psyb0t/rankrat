@@ -34,7 +34,7 @@ from rankrat.services.provider_readiness import (
 )
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.auth import bearer_is_valid, load_bearer_secret
-from rankrat.transports.runtime import ApplicationServices
+from rankrat.transports.runtime import ApplicationServices, build_services
 from rankrat.transports.tool_contracts import ToolAnnotations
 
 
@@ -77,6 +77,27 @@ def test_settings_validate_exposure_paths_levels_and_write_mode(tmp_path: Path) 
     assert unbounded_settings.unbounded is True
     with pytest.raises(ValidationError, match="unbounded mode requires"):
         Settings(unbounded=True)
+    assert Settings.model_validate({"state_database": ""}).state_database is None
+    with pytest.raises(ValidationError):
+        Settings(state_database=Path("relative.sqlite3"))
+    with pytest.raises(ValidationError):
+        Settings(scheduler_interval_seconds=9)
+    with pytest.raises(ValidationError):
+        Settings(state_retention_days=0)
+
+
+def test_build_services_opens_configured_private_state_database(
+    deployment: tuple[Settings, ApplicationServices],
+    tmp_path: Path,
+) -> None:
+    settings, _ = deployment
+    state_dir = tmp_path / "state"
+    state_dir.mkdir(mode=0o700)
+    state_path = state_dir / "rankrat.sqlite3"
+    services = build_services(settings.model_copy(update={"state_database": state_path}))
+    assert services.monitoring.available is True
+    assert state_path.is_file()
+    assert os.stat(state_path).st_mode & 0o777 == 0o600
 
 
 def test_load_settings_wraps_validation(monkeypatch: pytest.MonkeyPatch) -> None:

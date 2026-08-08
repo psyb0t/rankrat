@@ -32,8 +32,9 @@ with a DNS-pinned fetcher.
 Speaks MCP over stdio and Streamable HTTP, plus a REST API for callers that
 don't speak MCP.
 
-**Status:** alpha. Everything documented here works against real accounts; the
-tool surface is still free to move.
+**Status:** alpha. Every shipped surface has mocked and production-transport
+coverage; live-provider verification runs only for accounts whose credentials
+the operator supplies. The tool surface is still free to move.
 
 ## Contents
 
@@ -42,6 +43,7 @@ tool surface is still free to move.
 - [Capabilities and discovery](#capabilities-and-discovery)
 - [Local Lighthouse audits](#local-lighthouse-audits)
 - [Ownership, whole-site audits, and backlinks](#ownership-whole-site-audits-and-backlinks)
+- [SEO intelligence and monitoring](#seo-intelligence-and-monitoring)
 - [Agent integrations](#agent-integrations)
 - [Write capability](#write-capability)
 - [Finding and naming GA4 containers](#finding-and-naming-ga4-containers)
@@ -58,7 +60,7 @@ tool surface is still free to move.
 Rankrat ships as a Docker image; Docker is the only runtime requirement. The
 bootstrap commands below also use a POSIX shell, `curl`, `openssl`, and standard
 core utilities. Create the working layout in a directory of your choosing —
-Rankrat reads all three paths as mounts and never writes outside them:
+Rankrat reads all four paths as mounts and never writes outside them:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/rankrat.sh \
@@ -67,8 +69,8 @@ less rankrat.sh
 chmod +x rankrat.sh
 sudo mv rankrat.sh /usr/local/bin/rankrat.sh
 
-mkdir -p config oauth secrets/google secrets/bing secrets/cloudflare secrets/indexnow secrets/rankrat
-chmod 700 config oauth secrets secrets/google secrets/bing secrets/cloudflare secrets/indexnow secrets/rankrat
+mkdir -p config oauth state secrets/{google,bing,cloudflare,indexnow,rankrat,ahrefs,majestic,moz,semrush,dataforseo}
+chmod 700 config oauth state secrets secrets/*
 
 curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/config/boundaries.json.example \
   -o config/boundaries.json
@@ -98,7 +100,9 @@ rankrat.sh setup
 account represented in the boundary file and that account's configured provider
 access; it does not create a provider resource or submit an IndexNow URL. It
 reports the missing local file, OAuth grant, provider permission, or configured
-resource that needs attention. It is the one wrapper mode that reads `.env`.
+resource that needs attention. Commercial backlink readiness performs a
+one-result query against the first allowed target, which may consume that
+provider's paid API units. It is the one wrapper mode that reads `.env`.
 
 From a checkout, `make setup` first refuses symlinked local config, OAuth, or
 secret paths and normalizes their permissions: directories become owner-only,
@@ -130,9 +134,11 @@ docker run -i --rm --init --read-only \
   -e RANKRAT_READ_ONLY=true \
   -e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
   -e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
+  -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
   --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
+  --mount type=bind,src="$PWD/state",dst=/run/state \
   psyb0t/rankrat:latest stdio
 ```
 
@@ -149,7 +155,7 @@ Swap `stdio` for `http` and add `-p 127.0.0.1:8080:8080`,
 loopback. MCP is then at `http://127.0.0.1:8080/mcp`.
 
 The wrapper reads `RANKRAT_IMAGE`, `RANKRAT_BOUNDARIES`, `RANKRAT_SECRETS`,
-`RANKRAT_OAUTH`, `RANKRAT_ENV_FILE`, `RANKRAT_HTTP_PORT` and
+`RANKRAT_OAUTH`, `RANKRAT_STATE`, `RANKRAT_ENV_FILE`, `RANKRAT_HTTP_PORT` and
 `RANKRAT_OAUTH_CALLBACK_PORT` from the environment to point at non-default
 paths. Those are host-side only — keep them out of `.env`, which goes straight
 to the container, where an unrecognized `RANKRAT_*` variable fails startup.
@@ -166,7 +172,9 @@ clients get the exact enabled surface from `tools/list`: read-only mode omits
 every write tool, writable mode adds the boundary-limited writes, and agent
 onboarding adds its separately gated tool. HTTP callers get the matching
 runtime contract from `/openapi.json` when `RANKRAT_ENABLE_OPENAPI=true`; the
-source contract is [`src/rankrat/api/openapi.yaml`](src/rankrat/api/openapi.yaml).
+committed merged contract is [`openapi.json`](openapi.json), composed from the
+[base API](src/rankrat/api/openapi.yaml) and
+[SEO intelligence](src/rankrat/api/seo-openapi.yaml) YAML sources.
 
 The full, grouped MCP catalog is in the
 [setup reference](.agents/skills/rankrat/references/setup.md#complete-mcp-tool-catalog).
@@ -178,6 +186,12 @@ It covers:
 - PageSpeed Insights, Core Web Vitals and isolated local Lighthouse audits;
 - local HTML/JSON-LD eligibility checks and bounded whole-site crawling;
 - cross-provider comparisons and traffic-health reports;
+- persistent site-audit monitors with snapshots and issue lifecycle history;
+- bounded internal-link graphs, same-site orphan-page joins, and deterministic
+  lexical link suggestions;
+- CrUX history and Cloudflare traffic/cache analytics;
+- normalized backlink reports across Bing, Ahrefs, Majestic, Moz, Semrush, and DataForSEO;
+- content opportunities joined from Search Console, Bing, GA4, and crawl evidence;
 - Google/Bing ownership checks and DNS-provider-backed verification;
 - URL discovery remediation, site onboarding, and IndexNow submission.
 
@@ -221,7 +235,7 @@ hostile page exploits the browser. Use a stronger outer runtime such as gVisor
 or Kata Containers before auditing untrusted content.
 
 From a checkout, the Compose example is the supported local stack. It runs two
-long-lived services plus a one-shot volume initializer:
+long-lived services plus two one-shot volume initializers:
 
 ```sh
 make run-http-lighthouse
@@ -256,7 +270,9 @@ loop:
 | `site_ownership_verify` | `POST /v1/site-ownership-verifications` | Creates only provider-issued Google TXT and Bing CNAME records through the configured DNS provider, then redeems propagated proofs |
 | `site_audit` | `POST /v1/site-audits` | Crawls a bounded configured site and returns page evidence, findings, remediation text, and a normalized score |
 | `site_remediation_apply` | `POST /v1/site-remediations` | Resubmits one bounded sitemap to Google and Bing and a bounded changed-URL batch to Bing |
-| `bing_backlink_intelligence` | `POST /v1/bing/backlink-intelligence` | Walks bounded Bing backlink pages for explicit site URLs and aggregates referring domains and anchor text |
+| `bing_backlink_intelligence` | `POST /v1/bing/backlink-intelligence` | Walks bounded Bing backlink pages for explicit owned-site URLs and aggregates referring domains and anchor text |
+| `backlink_report` | `POST /v1/backlink-reports` | Normalizes one configured Bing or commercial backlink provider into one result shape |
+| `backlink_aggregate` | `POST /v1/backlink-aggregate-reports` | Deduplicates normalized results across configured providers |
 
 Ownership application is idempotent. Exact existing DNS records are reused,
 conflicting CNAMEs are refused, arbitrary DNS CRUD is not exposed, and neither
@@ -274,10 +290,57 @@ answers, and reports when page or issue limits truncate the crawl. Its
 remediation text tells an agent what needs changing; Rankrat does not edit an
 arbitrary CMS or source repository.
 
-Backlink intelligence reports only what Bing exposes for sites the configured
-account owns. It does not scrape competitors, buy links, send outreach, or
-manufacture backlinks. Its useful output is the evidence needed to find weak
-anchor diversity, pages with few referring domains, and links worth reclaiming.
+Backlink reads never scrape, buy links, send outreach, or manufacture backlinks.
+Bing remains restricted to sites the configured Webmaster account owns. The
+commercial adapters read only exact HTTPS targets in their account's
+`backlink_targets` allow-list. They normalize URLs, anchor, follow status,
+authority, and first/last-seen evidence without returning raw provider bodies.
+Ahrefs, Majestic, Moz, Semrush, and DataForSEO require their own paid plans and
+may charge or decrement API units for readiness checks and reports; Rankrat does
+not make one provider's credentials work with another provider. Each report or
+aggregate has one caller-selected whole-operation deadline and a shared ceiling
+of 20 upstream provider requests. Duplicate aggregate sources are rejected,
+and Moz/Bing cursor walking stops at the same request ceiling.
+
+## SEO intelligence and monitoring
+
+The newer intelligence surface is available with identical tool names over
+stdio and Streamable HTTP MCP, and matching `/v1/` REST operations:
+
+| MCP tools | REST route | Purpose |
+| --- | --- | --- |
+| `internal_link_graph` | `POST /v1/internal-link-graphs` | Bounded same-site graph with incoming/outgoing counts |
+| `orphan_page_report` | `POST /v1/orphan-page-reports` | Pages found in Search Console or GA4 but not in the bounded crawl |
+| `internal_link_opportunities` | `POST /v1/internal-link-opportunity-reports` | Missing-link suggestions limited to pages sharing normalized title or path tokens |
+| `crux_history` | `POST /v1/crux/history-reports` | Up to 40 Chrome UX Report history periods for configured URL/origin targets |
+| `cloudflare_analytics` | `POST /v1/cloudflare/analytics-reports` | Bounded hourly traffic, response, byte, visit, sampling, cache-status, and bot-category groups |
+| `content_opportunities` | `POST /v1/content-opportunity-reports` | Search Console, Bing, GA4, and crawl evidence joined into ranked opportunities |
+| `monitors_list`, `monitor_snapshots_list`, `monitor_issues_list`, `issue_events_list` | `GET /v1/monitors...` and `GET /v1/issues...` | Persistent monitor, snapshot, issue, and event history |
+
+Writable mode adds `monitor_create`, `monitor_update`, `monitor_run`,
+`monitor_delete`, and `issue_status_update`. The long-running **HTTP process**
+also starts the background scheduler: it claims due monitors, renews each claim
+while the bounded audit runs, stores immutable snapshots, opens or refreshes
+matching issues, and resolves issues that disappear. Stdio clients can manage
+monitors, run one explicitly, and read history, but no scheduler survives after
+the stdio child exits. There is no external alert delivery: agents poll the
+issue and event tools.
+
+State is SQLite at `RANKRAT_STATE_DATABASE`; the standard wrapper persists it
+under owner-only `state/`, and the Compose stack uses a private named volume.
+Snapshot and event retention is applied after monitor runs. Back up the database
+with SQLite's online-backup tooling or while Rankrat is stopped; do not copy a
+live database file without its WAL state. Setting the database path to an empty
+value disables persistence and makes monitor reads return a finite unavailable
+error.
+
+Writable Cloudflare deployments also expose `cloudflare_cache_purge` for exact
+configured-site URLs and `cloudflare_cache_template_apply` for the finite
+`cache_static_assets` and `bypass_html` templates. The template operation finds
+one Rankrat-marked rule, rejects ambiguous duplicate markers, and creates or
+patches only that exact rule through Cloudflare's per-rule API. It does not
+replace the complete ruleset, preserves unrelated operator rules, and is
+idempotent when the managed rule already matches.
 
 ## Agent integrations
 
@@ -285,8 +348,8 @@ The [skill](.agents/skills/rankrat) works in any agent that reads
 `.agents/skills/`, and installs natively in the clients below. An agent runs the
 published image directly and does not need the wrapper. Installing the skill
 adds operating instructions; it does not create credentials, authorize Google,
-or start a server. Prepare `config/`, `secrets/`, and `oauth/` as described in
-[Quick start](#quick-start) before asking an agent to use Rankrat.
+or start a server. Prepare `config/`, `secrets/`, `oauth/`, and `state/` as
+described in [Quick start](#quick-start) before asking an agent to use Rankrat.
 
 ### Claude Code
 
@@ -318,7 +381,7 @@ The [OpenClaw plugin](.agents/plugins/rankrat) contributes a static stdio MCP
 server that runs the published image directly in read-only mode and needs
 nothing else running. OpenClaw deliberately sanitizes a stdio child's ambient
 environment, so the launcher uses `$HOME/.config/rankrat/config` and, when
-present, sibling `secrets` and `oauth` directories. Run [Quick start](#quick-start)
+present, sibling `secrets`, `oauth`, and `state` directories. Run [Quick start](#quick-start)
 from `$HOME/.config/rankrat` before enabling the plugin. The launcher uses the
 current POSIX UID/GID, keeps provider secrets read-only, and permits Google to
 persist a rotated OAuth refresh token. For custom paths, writes, onboarding, or
@@ -348,7 +411,8 @@ HTTP; stdio access is controlled by who can start the process.
 
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
 Indexing notifications, Search Console site/sitemap changes, DNS-provider-backed
-ownership verification, discovery remediation, and new-site onboarding. They
+ownership verification, discovery remediation, monitor lifecycle management,
+exact Cloudflare cache purges/templates, and new-site onboarding. They
 are marked write/destructive in MCP; callers should still treat provider
 acceptance and DNS propagation as asynchronous.
 
@@ -457,6 +521,11 @@ Never put a credential in source, YAML, Makefiles, or chat.
 | PageSpeed API key | `secrets/google/pagespeed-api-key` |
 | Bing Webmaster API key | `secrets/bing/api-key` |
 | Cloudflare scoped API token | `secrets/cloudflare/api-token` |
+| Ahrefs API token | `secrets/ahrefs/api-token` |
+| Majestic API key | `secrets/majestic/api-key` |
+| Moz access ID and secret (`ID:SECRET`) | `secrets/moz/credentials` |
+| Semrush API key | `secrets/semrush/api-key` |
+| DataForSEO login and password (`LOGIN:PASSWORD`) | `secrets/dataforseo/credentials` |
 | IndexNow key | `secrets/indexnow/key` |
 | HTTP bearer secret | `secrets/rankrat/http-bearer-token` |
 
@@ -521,7 +590,29 @@ the path **inside the container** — `secrets/` is mounted read-only at
 "pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key"
 ```
 
-Leave that field unset to run keyless.
+Leave that field unset to run PageSpeed keyless. `crux_history` uses the same
+file but the CrUX History API requires the key, so that tool reports an
+authentication/configuration error when it is absent.
+
+### Commercial backlink providers
+
+Every commercial provider is optional. Put one credential on a single line at
+the path above, add a provider account to `config/boundaries.json`, and list
+only the absolute HTTPS targets that account may query in `backlink_targets`.
+Use `ID:SECRET` for Moz and `LOGIN:PASSWORD` for DataForSEO; the other three
+files contain only their token/key. The example boundary contains all five
+shapes—remove accounts you do not use.
+
+Create credentials in the provider's own console: [Ahrefs API](https://app.ahrefs.com/api),
+[Majestic API](https://majestic.com/account/api), [Moz API](https://moz.com/products/api),
+[Semrush API](https://www.semrush.com/api-use/), and
+[DataForSEO API](https://app.dataforseo.com/api-access). These are paid
+third-party data sources with their own quotas and per-call costs. Rankrat does
+not silently fall back from one to another; `backlink_aggregate` calls exactly
+the sources in its request, returns successful evidence alongside typed source
+failures, and fails the whole operation only when every requested source fails.
+One aggregate cannot repeat an identical source, exceed 20 upstream requests in
+total, or outlive its `timeout_seconds` deadline.
 
 ### Bing and IndexNow
 
@@ -563,18 +654,21 @@ this section entirely if you are not submitting URLs to IndexNow.
 
 1. Open [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens)
    and choose **Create Token → Create Custom Token**.
-2. Grant only **Zone → DNS → Edit** and **Zone → Zone → Read**. Under Zone
-   Resources, include only the zones Rankrat should verify; do not use the
-   account-wide Global API Key.
+2. Grant **Zone → Zone → Read** and only the feature permissions you use:
+   **DNS → Edit** for ownership, **Analytics → Read** for analytics,
+   **Cache Purge → Purge** for exact purges, and **Cache Rules → Edit** (shown
+   by some Cloudflare surfaces as **Cache Settings Write**) for templates.
+   Under Zone Resources, include only the zones Rankrat should manage; do not
+   use the account-wide Global API Key.
 3. Save the token as one line in `secrets/cloudflare/api-token`, mode `0600`.
 4. In each zone's Cloudflare **Overview**, copy the 32-character Zone ID into
    that account's `dns_zones` entry as `provider_zone_id` in
    `config/boundaries.json`. Replace both the all-zero ID and `example.com` from
    the example file.
 
-The token can list only the allowed zones and create/read verification records.
-Rankrat's API is narrower still: it exposes no generic DNS name, type, or value
-chosen by the caller. In `RANKRAT_UNBOUNDED=true` bootstrap mode it may discover
+Rankrat's API remains narrower than those provider permissions: it exposes no
+generic DNS name/type/value, whole-zone purge, or arbitrary cache-rule body.
+In `RANKRAT_UNBOUNDED=true` bootstrap mode it may discover
 the most-specific zone visible to that fixed Cloudflare account; bounded mode
 requires the exact zone in `dns_zones`.
 
@@ -593,13 +687,21 @@ the boundary; callers cannot choose provider origins or resources outside it.
 account and resource selectors for providers you configured, so `make setup`
 can run those deeper live suites without requiring credentials for the others.
 `rankrat.sh setup` separately checks every account represented in the boundary
-file. HTTP mode requires the bearer-secret file even on loopback, and mounts it
-only into the running container.
+file. Commercial backlink readiness performs a one-result provider query and
+can consume paid API units. HTTP mode requires the bearer-secret file even on
+loopback, and mounts it only into the running container.
 
 `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` is the only Lighthouse setting consumed by
 Rankrat. It defaults to `/run/lighthouse/lighthouse.sock`; set it to an empty
 value to disable the worker. Worker timeout and socket settings belong to the
 companion container and are shown in `docker-compose.yml.example`.
+
+Persistent monitoring uses `RANKRAT_STATE_DATABASE`,
+`RANKRAT_SCHEDULER_INTERVAL_SECONDS`, and `RANKRAT_STATE_RETENTION_DAYS`.
+The database parent and file must be real, non-symlink paths owned by the
+container UID with no group/other permission bits. The wrapper and
+`make init-config` prepare `state/` accordingly. Snapshot/event retention is
+applied after monitor runs; deleting a monitor cascades only its local history.
 
 ### Unbounded bootstrap mode
 
@@ -642,10 +744,12 @@ Unbounded mode is also why that run mounts the boundary file's *directory* at
 atomically, and a rename over a bind-mounted file is not possible. Running the
 image by hand for an unbounded session needs the same substitution.
 
-The authoritative REST contract is
-[`src/rankrat/api/openapi.yaml`](src/rankrat/api/openapi.yaml). Run
-`make generate-openapi` then `make check-openapi` after a spec change.
-The source lists the full writable contract; a running read-only server removes
+The authoritative REST contract is the two YAML sources:
+[`src/rankrat/api/openapi.yaml`](src/rankrat/api/openapi.yaml) and
+[`src/rankrat/api/seo-openapi.yaml`](src/rankrat/api/seo-openapi.yaml). They
+generate the committed merged [`openapi.json`](openapi.json). Run
+`make generate-openapi` then `make check-openapi` after either source changes.
+The sources list the full writable contract; a running read-only server removes
 write routes from its served `/openapi.json` document.
 
 ## Verification
@@ -681,6 +785,7 @@ make test-live
 make test-live-google-search-console
 make test-live-google-analytics
 make test-live-pagespeed
+make test-live-cloudflare
 make test-live-bing
 make test-live-http
 ```
@@ -720,21 +825,23 @@ and scan both production images.
   bounded report. Chromium uses `--no-sandbox` inside that locked-down companion
   because the container is the browser isolation boundary; do not run the
   worker directly on a host or add provider credential mounts to it.
-- The Compose initializer is the only root process in the Lighthouse stack. It
-  is networkless, receives only `CHOWN` and `FOWNER`, prepares the private Unix
-  socket volume, exits, and is not part of the running service set.
+- The two Compose initializers are the only root processes. They are
+  networkless, receive only `CHOWN` and `FOWNER`, prepare the private state and
+  Unix-socket volumes, exit, and are not part of the running service set.
 
 ## Known gaps
 
-**TODO — monitoring and regression detection.** Persisting audit baselines,
-scheduling rechecks, alerting on score/indexing/backlink regressions, and
-tracking issue lifecycle over time are not implemented yet. Current reports are
-point-in-time and the caller owns storage and scheduling.
+**Monitoring does not send notifications.** Rankrat persists scheduled site
+audit snapshots and issue lifecycle events, but it does not email, page, or post
+to a webhook. A caller polls the monitor issue/event tools and decides how to
+alert. Backlink and provider-indexing regressions remain point-in-time reports;
+the built-in scheduled monitor currently runs the deterministic site audit.
 
-**TODO — broader Cloudflare performance controls.** Rankrat currently uses
-Cloudflare only for narrowly scoped ownership DNS proofs. Cache settings,
-redirect rules, compression, image optimization, firewall controls, and other
-zone performance/security mutations are intentionally not exposed yet.
+**Cloudflare writes are deliberately finite.** Exact URL purges and two named
+cache templates are exposed. Whole-zone purge, arbitrary cache rules, redirects,
+compression, image optimization, firewall, and security-policy mutation are not.
+Cache-template reads and writes are serialized per zone inside the Rankrat
+runtime, so concurrent callers cannot both create the first managed rule.
 
 **Discovery remediation is sequential, not transactional.** Google sitemap
 submission, Bing sitemap submission, and Bing changed-URL submission are

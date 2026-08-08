@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import tomllib
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -8,6 +10,7 @@ from fastapi.routing import APIRoute
 
 from rankrat.errors import ConfigurationError
 from rankrat.transports.openapi import (
+    _merge_fragment,
     _validate_document,
     apply_openapi_operation_ids,
     load_openapi_document,
@@ -18,12 +21,13 @@ from rankrat.transports.openapi import (
 def test_openapi_source_is_isolated_between_callers() -> None:
     first_document = load_openapi_document()
     second_document = load_openapi_document()
+    project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
 
     first_document["info"] = {"title": "changed", "version": "0.0.0"}
 
     assert second_document["info"] == {
         "title": "rankrat",
-        "version": "0.1.0",
+        "version": project["project"]["version"],
         "description": (
             "Boundary-limited SEO operations over REST and MCP. The source document "
             "lists the full writable contract; a read-only runtime removes write routes "
@@ -190,6 +194,56 @@ def test_openapi_source_validation_rejects_invalid_documents(
 ) -> None:
     with pytest.raises(ConfigurationError, match=message):
         _validate_document(document)
+
+
+@pytest.mark.parametrize(
+    ("fragment", "message"),
+    (
+        (
+            {
+                "paths": {"/one": {"post": {"operationId": "other"}}},
+                "components": {"schemas": {"New": {"type": "object"}}},
+            },
+            "path must be unique",
+        ),
+        (
+            {
+                "paths": {"/two": {"get": {"operationId": "two"}}},
+                "components": {"schemas": {"Existing": {"type": "object"}}},
+            },
+            "schema must be unique",
+        ),
+    ),
+)
+def test_openapi_fragment_merge_rejects_duplicate_contract_ownership(
+    fragment: dict[str, object],
+    message: str,
+) -> None:
+    document: dict[str, object] = {
+        "paths": {"/one": {"get": {"operationId": "one"}}},
+        "components": {"schemas": {"Existing": {"type": "object"}}},
+    }
+    with pytest.raises(ConfigurationError, match=message):
+        _merge_fragment(document, fragment)
+
+
+def test_openapi_fragment_merge_adds_unique_paths_and_schemas() -> None:
+    document: dict[str, object] = {
+        "paths": {"/one": {"get": {"operationId": "one"}}},
+        "components": {"schemas": {"Existing": {"type": "object"}}},
+    }
+    _merge_fragment(
+        document,
+        {
+            "paths": {"/two": {"get": {"operationId": "two"}}},
+            "components": {"schemas": {"New": {"type": "object"}}},
+        },
+    )
+    assert set(_mapping(document["paths"])) == {"/one", "/two"}
+    assert set(_mapping(_mapping(document["components"])["schemas"])) == {
+        "Existing",
+        "New",
+    }
 
 
 def _mapping(value: object) -> dict[str, object]:

@@ -16,8 +16,10 @@ from rankrat.errors import ConfigurationError
 
 _SPECIFICATION_PACKAGE = "rankrat.api"
 _SPECIFICATION_FILE = "openapi.yaml"
+_SPECIFICATION_FRAGMENT_FILES = ("seo-openapi.yaml",)
 _OPERATION_METHODS = frozenset({"delete", "get", "head", "options", "patch", "post", "put"})
 _MANUAL_OPERATION_FIELDS = frozenset({"security"})
+_ERROR_ENVELOPE_REFERENCE = "#/components/schemas/ErrorEnvelope"
 
 
 def load_openapi_document() -> dict[str, object]:
@@ -65,10 +67,20 @@ def fastapi_drift_document(document: dict[str, object]) -> dict[str, object]:
         _mapping(info, "OpenAPI source document has invalid info").pop("description", None)
     components = expected_document.get("components")
     if components is not None:
-        _mapping(components, "OpenAPI source document has invalid components").pop(
+        component_mapping = _mapping(
+            components,
+            "OpenAPI source document has invalid components",
+        )
+        component_mapping.pop(
             "securitySchemes",
             None,
         )
+        schemas = component_mapping.get("schemas")
+        if schemas is not None:
+            _mapping(schemas, "OpenAPI source document has invalid schemas").pop(
+                "ErrorEnvelope",
+                None,
+            )
     paths = _mapping(
         expected_document.get("paths"),
         "OpenAPI source document requires paths",
@@ -83,7 +95,48 @@ def fastapi_drift_document(document: dict[str, object]) -> dict[str, object]:
                 )
                 for field in _MANUAL_OPERATION_FIELDS:
                     operation_mapping.pop(field, None)
+                responses_value = operation_mapping.get("responses")
+                if responses_value is not None:
+                    responses = _mapping(
+                        responses_value,
+                        "OpenAPI source document has invalid responses",
+                    )
+                    responses.pop("default", None)
+                    validation_response = responses.get("422")
+                    if _response_schema_reference(validation_response) == (
+                        _ERROR_ENVELOPE_REFERENCE
+                    ):
+                        responses["422"] = _fastapi_validation_response()
     return expected_document
+
+
+def _response_schema_reference(response: object) -> str | None:
+    if not isinstance(response, dict):
+        return None
+    response_mapping = cast(dict[str, object], response)
+    content = response_mapping.get("content")
+    if not isinstance(content, dict):
+        return None
+    content_mapping = cast(dict[str, object], content)
+    media = content_mapping.get("application/json")
+    if not isinstance(media, dict):
+        return None
+    media_mapping = cast(dict[str, object], media)
+    schema = media_mapping.get("schema")
+    if not isinstance(schema, dict):
+        return None
+    schema_mapping = cast(dict[str, object], schema)
+    reference = schema_mapping.get("$ref")
+    return reference if isinstance(reference, str) else None
+
+
+def _fastapi_validation_response() -> dict[str, object]:
+    return {
+        "description": "Validation Error",
+        "content": {
+            "application/json": {"schema": {"$ref": "#/components/schemas/HTTPValidationError"}}
+        },
+    }
 
 
 def apply_openapi_operation_ids(
@@ -142,17 +195,50 @@ def _application_operations(
 @cache
 def _load_openapi_document() -> dict[str, object]:
     try:
-        raw_document = (
-            files(_SPECIFICATION_PACKAGE).joinpath(_SPECIFICATION_FILE).read_text(encoding="utf-8")
-        )
+        specification_files = files(_SPECIFICATION_PACKAGE)
+        raw_document = specification_files.joinpath(_SPECIFICATION_FILE).read_text(encoding="utf-8")
         parsed_document: object = yaml.safe_load(raw_document)
+        parsed_fragments = tuple(
+            yaml.safe_load(specification_files.joinpath(name).read_text(encoding="utf-8"))
+            for name in _SPECIFICATION_FRAGMENT_FILES
+        )
     except (OSError, yaml.YAMLError) as error:
         raise ConfigurationError("OpenAPI source document could not be loaded") from error
     if not isinstance(parsed_document, dict):
         raise ConfigurationError("OpenAPI source document must be an object")
     document = cast(dict[str, object], parsed_document)
+    for parsed_fragment in parsed_fragments:
+        if not isinstance(parsed_fragment, dict):
+            raise ConfigurationError("OpenAPI source fragment must be an object")
+        _merge_fragment(document, cast(dict[str, object], parsed_fragment))
     _validate_document(document)
     return document
+
+
+def _merge_fragment(document: dict[str, object], fragment: dict[str, object]) -> None:
+    paths = _mapping(document.get("paths"), "OpenAPI source document requires paths")
+    fragment_paths = _mapping(fragment.get("paths"), "OpenAPI source fragment requires paths")
+    duplicate_paths = paths.keys() & fragment_paths.keys()
+    if duplicate_paths:
+        raise ConfigurationError("OpenAPI source fragment path must be unique")
+    paths.update(fragment_paths)
+    components = _mapping(
+        document.get("components"),
+        "OpenAPI source document requires components",
+    )
+    schemas = _mapping(components.get("schemas"), "OpenAPI source document requires schemas")
+    fragment_components = _mapping(
+        fragment.get("components"),
+        "OpenAPI source fragment requires components",
+    )
+    fragment_schemas = _mapping(
+        fragment_components.get("schemas"),
+        "OpenAPI source fragment requires schemas",
+    )
+    duplicate_schemas = schemas.keys() & fragment_schemas.keys()
+    if duplicate_schemas:
+        raise ConfigurationError("OpenAPI source fragment schema must be unique")
+    schemas.update(fragment_schemas)
 
 
 def _validate_document(document: dict[str, object]) -> None:

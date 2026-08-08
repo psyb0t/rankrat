@@ -33,3 +33,15 @@ class SiteFetchError(RankratError):
 
 class IndexNowRateLimitError(RankratError):
     """Raised when a configured IndexNow target has exhausted its request rate."""
+
+
+class StateUnavailableError(RankratError):
+    """Persistent state is disabled or cannot be safely opened."""
+
+
+class StateConflictError(RankratError):
+    """A state mutation conflicts with an existing record or active claim."""
+
+
+class StateNotFoundError(RankratError):
+    """A requested state record does not exist inside the caller's boundary."""

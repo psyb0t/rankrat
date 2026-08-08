@@ -64,6 +64,17 @@ def _policy(tmp_path: Path) -> BoundaryPolicy:
                         "credential": str(secret_root / "bing" / "api-key"),
                         "sites": ["https://example.com/"],
                     },
+                    {
+                        "id": "cloudflare-main",
+                        "provider": "cloudflare",
+                        "credential": str(secret_root / "cloudflare" / "api-token"),
+                        "dns_zones": [
+                            {
+                                "provider_zone_id": "a" * 32,
+                                "name": "example.com",
+                            }
+                        ],
+                    },
                 ],
                 "indexnow_targets": [],
             }
@@ -107,10 +118,12 @@ async def test_live_http_verifier_exercises_real_transport_route_shapes(tmp_path
         ("POST", "/v1/google-analytics/reports"),
         ("POST", "/v1/pagespeed/analyses"),
         ("POST", "/v1/bing/traffic-trend"),
+        ("POST", "/v1/cloudflare/analytics-reports"),
     }
     assert "mcp" in completed
     assert "pagespeed" in completed
     assert "bing-traffic" in completed
+    assert "cloudflare-analytics" in completed
 
 
 @pytest.mark.asyncio
@@ -201,6 +214,26 @@ def test_live_http_shell_runner_uses_default_egress_and_never_submits_indexnow()
     assert "indexnow" not in script.lower()
     assert "environment_file" not in script
     assert "--env-file" not in script
+
+
+def test_final_image_exercises_writable_stdio_with_mounted_state() -> None:
+    script = _FINAL_IMAGE_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "checking writable stdio MCP persists monitor state" in script
+    assert "type=bind,src=$state_directory,dst=/run/state" in script
+    assert "RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3" in script
+    assert "RANKRAT_READ_ONLY=false" in script
+    assert '[[ -f "$state_directory/rankrat.sqlite3" ]]' in script
+    assert "Audit '\\'' OR 1=1--" in script
+
+
+def test_final_image_runs_changed_surface_bad_input_smoke() -> None:
+    script = _FINAL_IMAGE_SCRIPT_PATH.read_text(encoding="utf-8")
+
+    assert "INVALID_INTERNAL_LINK_REQUEST" in script
+    assert "CROSS_BOUNDARY_CRUX_REQUEST" in script
+    assert '[[ "$oversized_status" == "413" ]]' in script
+    assert '"code":"VALIDATION_FAILED"' in script
 
 
 def test_final_image_streamable_mcp_uses_the_mcp_timeout_budget() -> None:

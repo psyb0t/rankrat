@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
+import contextvars
 import json
+import logging
 import re
 import uuid
 from collections.abc import AsyncIterator
@@ -24,7 +27,14 @@ from rankrat.constants import (
     MCP_PATH,
     PROVIDER_OPERATION_FAILED_MESSAGE,
 )
-from rankrat.errors import IndexNowRateLimitError, InputLimitError, RankratError
+from rankrat.errors import (
+    IndexNowRateLimitError,
+    InputLimitError,
+    RankratError,
+    StateConflictError,
+    StateNotFoundError,
+    StateUnavailableError,
+)
 from rankrat.logging import reset_log_scope, with_log_scope
 from rankrat.models.common import to_json_value
 from rankrat.providers.base import ProviderFailureCode, ProviderOperationError
@@ -58,6 +68,7 @@ _SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"referrer-policy", b"strict-origin-when-cross-origin"),
     (b"permissions-policy", b"geolocation=(), microphone=(), camera=()"),
 )
+logger = logging.getLogger(__name__)
 
 
 async def _send_json_error(send: Send, status: int, code: str, message: str) -> None:
@@ -221,8 +232,25 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        async with manager.run():
-            yield
+        scheduler_task: asyncio.Task[None] | None = None
+        if services.monitoring.available:
+            context = contextvars.copy_context()
+            scheduler_task = context.run(
+                asyncio.create_task,
+                _run_monitor_scheduler(
+                    services,
+                    settings.scheduler_interval_seconds,
+                ),
+                name="rankrat-monitor-scheduler",
+            )
+        try:
+            async with manager.run():
+                yield
+        finally:
+            if scheduler_task is not None:
+                scheduler_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await scheduler_task
 
     app = FastAPI(
         title="rankrat",
@@ -255,7 +283,7 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
 
     @app.exception_handler(RankratError)
     async def rankrat_error(_: Request, error: RankratError) -> JSONResponse:
-        status_code = 429 if isinstance(error, IndexNowRateLimitError) else 400
+        status_code = _rankrat_error_status(error)
         return JSONResponse(
             status_code=status_code,
             content={"code": "REQUEST_REJECTED", "message": str(error)},
@@ -289,3 +317,58 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
     wrapped = _BodyLimitASGI(wrapped, MAX_HTTP_BODY_BYTES)
     wrapped = _RequestIDASGI(wrapped)
     return _SecurityHeadersASGI(wrapped)
+
+
+async def _run_monitor_scheduler(
+    services: ApplicationServices,
+    interval_seconds: int,
+) -> None:
+    logger.info("monitor scheduler started", extra={"interval_seconds": interval_seconds})
+    while True:
+        try:
+            result = await services.monitoring.run_next_due()
+            if result is None:
+                await asyncio.sleep(interval_seconds)
+                continue
+            logger.info(
+                "monitor run completed",
+                extra={
+                    "monitor_id": result.monitor.id,
+                    "site_url": result.monitor.site_url,
+                    "score": result.snapshot.score,
+                    "issue_count": result.snapshot.issue_count,
+                },
+            )
+        except ProviderOperationError as error:
+            logger.warning(
+                "scheduled monitor provider operation failed",
+                extra={"provider_failure_code": error.code.value},
+            )
+            await asyncio.sleep(interval_seconds)
+        except RankratError as error:
+            logger.warning(
+                "scheduled monitor run was rejected",
+                extra={"error_type": type(error).__name__},
+            )
+            await asyncio.sleep(interval_seconds)
+        # The scheduler is a long-lived supervisor boundary. An unexpected bug
+        # is logged and delayed here so one malformed state row cannot silently
+        # disable every future monitor run.
+        except Exception as error:
+            logger.error(
+                "scheduled monitor run failed unexpectedly",
+                extra={"error_type": type(error).__name__},
+            )
+            await asyncio.sleep(interval_seconds)
+
+
+def _rankrat_error_status(error: RankratError) -> int:
+    if isinstance(error, IndexNowRateLimitError):
+        return 429
+    if isinstance(error, StateUnavailableError):
+        return 503
+    if isinstance(error, StateNotFoundError):
+        return 404
+    if isinstance(error, StateConflictError):
+        return 409
+    return 400

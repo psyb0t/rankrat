@@ -20,6 +20,7 @@ def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
     assert "RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY)" in source
     assert "RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED)" in source
     assert "RANKRAT_ALLOW_AGENT_ONBOARDING=$(RANKRAT_ALLOW_AGENT_ONBOARDING)" in source
+    assert "RANKRAT_STATE=$(STATE)" in source
     assert "./rankrat.sh" in source
     assert "$(WRAPPER) stdio" in _target(source, "run")
     assert "$(WRAPPER) http" in _target(source, "run-http")
@@ -78,9 +79,9 @@ def test_init_config_creates_and_preserves_a_safe_http_bearer_secret() -> None:
 
     assert "secrets/rankrat/http-bearer-token" in target
     assert 'test -L "$$path"' in target
-    assert "config, OAuth, and secret paths must not contain symlinks" in target
-    assert "find config oauth secrets -type d -exec chmod 700 {} +" in target
-    assert "find oauth secrets -type f -exec chmod 600 {} +" in target
+    assert "config, OAuth, secret, and state paths must not contain symlinks" in target
+    assert "find config oauth secrets state -type d -exec chmod 700 {} +" in target
+    assert "find oauth secrets state -type f -exec chmod 600 {} +" in target
     assert "chmod 600 config/boundaries.json .env" in target
     assert 'test -f "$$token" && test ! -L "$$token"' in target
     assert "secrets.token_urlsafe(32)" in target
@@ -117,6 +118,7 @@ def test_live_target_runs_every_provider_and_transport_target() -> None:
         "test-live-google-search-console",
         "test-live-google-analytics",
         "test-live-pagespeed",
+        "test-live-cloudflare",
         "test-live-bing",
         "test-live-indexnow",
         "test-live-http",
@@ -186,7 +188,7 @@ def test_reusable_workflows_are_pinned_to_one_reviewed_commit() -> None:
 def test_public_docs_describe_the_initializer_as_a_one_shot_service() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "two\nlong-lived services plus a one-shot volume initializer" in readme
+    assert "two\nlong-lived services plus two one-shot volume initializers" in readme
     assert "two-service Compose" not in readme
     assert "two-service deployment" not in readme
 
@@ -251,6 +253,8 @@ def test_lighthouse_dependency_lifecycle_is_sandboxed_and_age_gated() -> None:
     assert "minimumReleaseAge: 10080" in workspace
     assert "- brace-expansion@5.0.9" in workspace
     assert "brace-expansion: 5.0.9" in workspace
+    assert "- nanoid@3.3.17" in workspace
+    assert "nanoid: 3.3.17" in workspace
     tooling_target = _target(makefile, "test-tooling")
     assert "bump_lighthouse_minimum_release_age.sh" in tooling_target
     assert "minimumReleaseAge: 10080" in tooling_target

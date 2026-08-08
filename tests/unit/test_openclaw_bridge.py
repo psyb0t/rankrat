@@ -54,6 +54,17 @@ def test_openclaw_manifest_declares_a_static_stdio_server() -> None:
     assert "Lighthouse" in manifest["description"]
 
 
+def test_codex_manifest_exposes_install_surface_metadata() -> None:
+    manifest = json.loads(Path(".agents/.codex-plugin/plugin.json").read_text(encoding="utf-8"))
+
+    interface = manifest["interface"]
+    assert interface["displayName"] == "Rankrat"
+    assert interface["category"] == "Developer Tools"
+    assert "MCP stdio" in interface["capabilities"]
+    assert interface["websiteURL"] == "https://github.com/psyb0t/rankrat"
+    assert interface["defaultPrompt"]
+
+
 def test_bridge_uses_openclaw_safe_environment_and_standard_layout(
     tmp_path: Path,
 ) -> None:
@@ -62,8 +73,10 @@ def test_bridge_uses_openclaw_safe_environment_and_standard_layout(
     config = _create_config(root)
     secrets = root / "secrets"
     oauth = root / "oauth"
+    state = root / "state"
     secrets.mkdir(mode=0o700)
     oauth.mkdir(mode=0o700)
+    state.mkdir(mode=0o700)
 
     result = _run_bridge_module_isolated(
         """
@@ -84,6 +97,8 @@ process.exitCode = status;
     assert f"type=bind,src={config.resolve()},dst=/run/config,readonly" in arguments
     assert f"type=bind,src={secrets.resolve()},dst=/run/secrets,readonly" in arguments
     assert f"type=bind,src={oauth.resolve()},dst=/run/oauth" in arguments
+    assert f"type=bind,src={state.resolve()},dst=/run/state" in arguments
+    assert "RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3" in arguments
 
 
 def test_bridge_package_has_no_runtime_extension_or_http_proxy_dependency() -> None:
@@ -122,7 +137,8 @@ def test_bridge_runs_hardened_bounded_docker_stdio_command(tmp_path: Path) -> No
     config = tmp_path / "config with spaces"
     secrets = tmp_path / "secrets"
     oauth = tmp_path / "oauth"
-    for directory in (config, secrets, oauth):
+    state = tmp_path / "state"
+    for directory in (config, secrets, oauth, state):
         directory.mkdir()
     (config / "boundaries.json").write_text("{}", encoding="utf-8")
 
@@ -140,6 +156,7 @@ process.exitCode = status;
             "RANKRAT_CONFIG_DIR": str(config),
             "RANKRAT_SECRETS_DIR": str(secrets),
             "RANKRAT_OAUTH_DIR": str(oauth),
+            "RANKRAT_STATE_DIR": str(state),
             "RANKRAT_LOG_LEVEL": "debug",
             "RANKRAT_IMAGE": "registry.example/rankrat:test",
             "UNRELATED_RANKRAT_SETTING": "must-not-be-forwarded",
@@ -162,6 +179,8 @@ process.exitCode = status;
     assert f"type=bind,src={config.resolve()},dst=/run/config,readonly" in arguments
     assert f"type=bind,src={secrets.resolve()},dst=/run/secrets,readonly" in arguments
     assert f"type=bind,src={oauth.resolve()},dst=/run/oauth" in arguments
+    assert f"type=bind,src={state.resolve()},dst=/run/state" in arguments
+    assert "RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3" in arguments
     assert f"type=bind,src={oauth.resolve()},dst=/run/oauth,readonly" not in arguments
     assert "RANKRAT_LOG_LEVEL=debug" in arguments
     assert "UNRELATED_RANKRAT_SETTING=must-not-be-forwarded" not in arguments

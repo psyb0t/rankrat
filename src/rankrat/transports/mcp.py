@@ -170,6 +170,11 @@ from rankrat.services.site_ownership import (
 from rankrat.services.site_remediation import SiteRemediationRequest
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.runtime import ApplicationServices
+from rankrat.transports.seo_mcp import (
+    SEO_TOOL_NOT_HANDLED,
+    dispatch_seo_tool,
+    seo_mcp_tools,
+)
 from rankrat.transports.tool_contracts import ToolAnnotations, tool_catalog
 
 _OBJECT_SCHEMA = "object"
@@ -1376,7 +1381,7 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
 
     @server.list_tools()  # type: ignore[misc,no-untyped-call]
     async def list_tools() -> list[types.Tool]:
-        return [
+        established_tools = [
             types.Tool(
                 name=contract.name,
                 description=contract.description,
@@ -1388,6 +1393,7 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                 services.agent_onboarding_enabled,
             )
         ]
+        return established_tools + seo_mcp_tools(services.writes_enabled)
 
     @server.list_resources()  # type: ignore[misc,no-untyped-call]
     async def list_resources() -> list[types.Resource]:
@@ -1428,6 +1434,9 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
     ) -> list[types.TextContent] | types.CallToolResult:
         raw_arguments = arguments or {}
         try:
+            seo_result = await dispatch_seo_tool(services, name, raw_arguments)
+            if seo_result is not SEO_TOOL_NOT_HANDLED:
+                return _tool_success(seo_result)
             analytics_or_pagespeed_result = await _google_analytics_or_pagespeed_tool(
                 services,
                 name,

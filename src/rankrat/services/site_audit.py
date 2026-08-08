@@ -94,6 +94,9 @@ class SiteAuditPage:
     internal_links: int
     external_links: int
     issue_count: int
+    internal_link_urls: tuple[str, ...] = ()
+    crawl_depth: int = 0
+    discovered_in_sitemap: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,18 +133,20 @@ class SiteAuditService:
         self._policy = policy
         self._fetcher = fetcher
 
+    def authorize(self, account_id: str, site_url: str) -> str:
+        """Authorize an exact configured site without making an outbound request."""
+
+        return self._policy.require_pagespeed_url(account_id, site_url, site_url)
+
     async def audit(self, request: SiteAuditRequest) -> SiteAuditReport:
         """Audit robots, sitemaps, and a bounded same-site page graph."""
 
-        self._policy.require_pagespeed_url(
-            request.account_id,
-            request.site_url,
-            request.site_url,
-        )
+        self.authorize(request.account_id, request.site_url)
         discovered_sitemaps = await self._discover_sitemaps(request)
         seeds = [request.site_url]
         for sitemap_url in discovered_sitemaps:
             seeds.extend(await self._sitemap_urls(request, sitemap_url))
+        sitemap_seeds = frozenset(seeds[1:])
         queue = deque((url, 0) for url in dict.fromkeys(seeds))
         queued = set(url for url, _ in queue)
         pages: list[SiteAuditPage] = []
@@ -154,7 +159,19 @@ class SiteAuditService:
                 fetched = await self._fetcher.fetch(url, request.timeout_seconds)
             except SiteFetchError:
                 issues.append(self._fetch_issue(url))
-                pages.append(SiteAuditPage(url, 0, None, None, 0, 0, 1))
+                pages.append(
+                    SiteAuditPage(
+                        url,
+                        0,
+                        None,
+                        None,
+                        0,
+                        0,
+                        1,
+                        crawl_depth=depth,
+                        discovered_in_sitemap=url in sitemap_seeds,
+                    )
+                )
                 continue
             parsed, page_issues = self._audit_fetched_page(request.site_url, fetched)
             issues.extend(page_issues)
@@ -176,6 +193,9 @@ class SiteAuditService:
                     internal_links=len(internal_links),
                     external_links=len(external_links),
                     issue_count=len(page_issues),
+                    internal_link_urls=internal_links,
+                    crawl_depth=depth,
+                    discovered_in_sitemap=url in sitemap_seeds,
                 )
             )
             if depth >= request.max_depth:

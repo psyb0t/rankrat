@@ -19,6 +19,9 @@ the ones in the settings model, not example values.
 | `RANKRAT_LOG_FILE` | `/tmp/rankrat/rankrat.log` | Log destination. |
 | `RANKRAT_LOG_LEVEL` | `INFO` | Standard Python log levels. |
 | `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` | `/run/lighthouse/lighthouse.sock` | Optional Unix socket for the isolated local Lighthouse worker. Empty disables it. |
+| `RANKRAT_STATE_DATABASE` | unset | Absolute SQLite path for monitors, snapshots, and issue events. Empty/unset disables persistence. The wrapper sets `/run/state/rankrat.sqlite3`. |
+| `RANKRAT_SCHEDULER_INTERVAL_SECONDS` | `60` | How often the HTTP process claims due monitors; accepted range 10–3600 seconds. |
+| `RANKRAT_STATE_RETENTION_DAYS` | `180` | Snapshot/event retention after a monitor run; accepted range 1–3650 days. |
 | `RANKRAT_ENABLE_OPENAPI` | `false` | Serve the OpenAPI document. |
 | `RANKRAT_READ_ONLY` | `true` | See "Write access" below. |
 | `RANKRAT_UNBOUNDED` | `false` | Reusable trusted-onboarding mode; see "Unbounded mode". Requires `RANKRAT_READ_ONLY=false`. |
@@ -35,6 +38,9 @@ that `make setup` runs after the image's setup check. They are blank in
 `.env.example`: set them only for providers you configured and leave all
 unused-provider selectors blank so those extra live suites skip. The image's
 `setup` command itself checks every account represented in the boundary file.
+For Ahrefs, Majestic, Moz, Semrush, and DataForSEO this is a real one-result
+query against the account's first allowed target, so it can consume paid API
+units.
 
 ## The boundary file
 
@@ -62,6 +68,7 @@ to the configured boundaries and to what the provider account itself permits.
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
 Indexing notifications, Search Console site/sitemap changes, DNS-provider-backed
 ownership verification, discovery remediation, and new-site onboarding, and
+monitor lifecycle operations plus finite Cloudflare cache purges/templates, and
 are marked as writes in MCP.
 
 ## Unbounded mode
@@ -110,16 +117,24 @@ exception: they are absent unless writable mode enables them.
   what the account can do.
 - **Bing Webmaster Tools** — an API key from the Bing Webmaster dashboard,
   placed under `RANKRAT_SECRET_ROOT`.
-- **Cloudflare** — a scoped API token with Zone Read and DNS Edit only for the
-  selected zones, stored at the credential path in the Cloudflare boundary
-  account. Put each zone in the provider-neutral `dns_zones` array with its
-  Cloudflare Zone ID in `provider_zone_id`. Ownership calls accept
-  `dns_account_id`; they do not expose a Cloudflare-specific request field.
-  Rankrat exposes only Google TXT and Bing CNAME verification records.
+- **Cloudflare** — a zone-scoped token stored at the boundary account's
+  credential path. Grant Zone Read plus only what is used: DNS Edit for
+  ownership, Analytics Read for reports, Cache Purge for exact URL purges, and
+  Cache Rules Edit/Cache Settings Write for the two named templates. Put each
+  zone in `dns_zones` with its Zone ID in `provider_zone_id`. Rankrat exposes no
+  arbitrary DNS record, whole-zone purge, or arbitrary cache-rule body.
 - **PageSpeed Insights** — an API key, same location, and the one Google surface
   that does not use OAuth: the key goes on the query string, so the Google
   consent flow grants it nothing. It is optional — with no key configured the
   call still goes out, unauthenticated, under a much tighter quota.
+  `crux_history` uses the same file and requires the key.
+- **Ahrefs / Majestic / Semrush** — one API token/key line in the credential
+  file. **Moz** uses `ACCESS_ID:SECRET`; **DataForSEO** uses `LOGIN:PASSWORD`.
+  Each account must list exact absolute HTTPS `backlink_targets`. All five are
+  optional paid data sources with provider-specific quotas and costs. Setup
+  validates each configured credential with one result from the first target.
+  Each report or aggregate has one `timeout_seconds` deadline and shares a
+  20-request upstream budget; aggregate sources must be unique.
 - **Local Lighthouse** — no credential. The optional companion image receives
   only a shared Unix socket and outbound browser network access. Rankrat accepts
   only requested URLs beneath the account's `pagespeed_sites` and rejects a
@@ -139,7 +154,7 @@ wrapper around these same invocations. Run it from its installed skill path with
 `bash references/rankrat.sh` when the wrapper is more convenient than the plain
 Docker commands below; no system-wide installation is required.
 
-Both transports take the same three mounts. Container-side paths are the
+Both transports take the same four mounts. Container-side paths are the
 server's defaults, so only the host side changes:
 
 | Host | Container | Access | Holds |
@@ -147,6 +162,7 @@ server's defaults, so only the host side changes:
 | `./config` | `/run/config` | read-only normally; validated writable mount for unbounded mode or agent onboarding | `boundaries.json` |
 | `./secrets` | `/run/secrets` | read-only | provider credentials, HTTP bearer secret |
 | `./oauth` | `/run/oauth` | writable | stored Google OAuth token; refresh may rotate it |
+| `./state` | `/run/state` | writable, owner-only | SQLite monitor definitions, snapshots, issues, and events |
 
 **stdio** — the default mode, for a client that owns the process:
 
@@ -159,6 +175,8 @@ docker run -i --rm --init --read-only \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
   --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
+  --mount type=bind,src="$PWD/state",dst=/run/state \
+  -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
   psyb0t/rankrat stdio
 ```
 
@@ -177,6 +195,8 @@ docker run --rm --init --read-only \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
   --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
+  --mount type=bind,src="$PWD/state",dst=/run/state \
+  -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
   psyb0t/rankrat http
 ```
 
@@ -293,22 +313,39 @@ The SEO expansion has the same names over stdio and Streamable HTTP MCP:
 | `site_audit` | `POST /v1/site-audits` |
 | `site_remediation_apply` | `POST /v1/site-remediations` |
 | `bing_backlink_intelligence` | `POST /v1/bing/backlink-intelligence` |
+| `internal_link_graph` | `POST /v1/internal-link-graphs` |
+| `orphan_page_report` | `POST /v1/orphan-page-reports` |
+| `internal_link_opportunities` | `POST /v1/internal-link-opportunity-reports` |
+| `crux_history` | `POST /v1/crux/history-reports` |
+| `cloudflare_analytics` | `POST /v1/cloudflare/analytics-reports` |
+| `backlink_report` | `POST /v1/backlink-reports` |
+| `backlink_aggregate` | `POST /v1/backlink-aggregate-reports` |
+| `content_opportunities` | `POST /v1/content-opportunity-reports` |
 
 ## Complete MCP tool catalog
 
 `tools/list` is authoritative for a running server because startup settings
 decide which tools exist. The grouped inventory below mirrors the tool catalog
-in the source. The exact REST paths and schemas live in the
-[OpenAPI source](https://github.com/psyb0t/rankrat/blob/main/src/rankrat/api/openapi.yaml);
-when enabled, `/openapi.json` removes write routes from a read-only server.
+in the source. The exact REST paths and schemas live in the committed
+[merged OpenAPI document](https://github.com/psyb0t/rankrat/blob/main/openapi.json),
+composed from the
+[base](https://github.com/psyb0t/rankrat/blob/main/src/rankrat/api/openapi.yaml)
+and
+[SEO intelligence](https://github.com/psyb0t/rankrat/blob/main/src/rankrat/api/seo-openapi.yaml)
+YAML sources. When enabled, the runtime `/openapi.json` removes write routes
+from a read-only server.
 
 ### Read-only tools
 
 - **Server, boundaries, and guidance:** `server_info`, `accounts_list`,
   `sites_list`, `diagnostics`, `provider_readiness`, `onboarding_guide`.
-- **Site, ownership, schema, and backlinks:** `site_audit`,
+- **Site, ownership, schema, links, and opportunities:** `site_audit`,
   `site_ownership_check`, `schema_validate_url`, `schema_validate_html`,
-  `schema_validate_json_ld`, `bing_backlink_intelligence`.
+  `schema_validate_json_ld`, `bing_backlink_intelligence`, `backlink_report`,
+  `backlink_aggregate`, `internal_link_graph`, `orphan_page_report`,
+  `internal_link_opportunities`, `content_opportunities`.
+- **Persistent monitoring:** `monitors_list`, `monitor_snapshots_list`,
+  `monitor_issues_list`, `issue_events_list`.
 - **Google Search Console and Indexing metadata:**
   `google_search_analytics_summary`, `google_search_analytics_comparison`,
   `google_search_analytics_dimension_report`,
@@ -327,11 +364,12 @@ when enabled, `/openapi.json` removes write routes from a read-only server.
   `google_analytics_ecommerce_performance`,
   `google_analytics_audience_segments`, `google_analytics_user_behavior`,
   `google_analytics_conversion_funnel`.
-- **PageSpeed and local Lighthouse:** `pagespeed_analyze`,
+- **PageSpeed, CrUX, Cloudflare, and local Lighthouse:** `pagespeed_analyze`,
   `pagespeed_core_web_vitals`, `lighthouse_audit`,
   `lighthouse_seo_findings`, `lighthouse_accessibility_findings`,
   `lighthouse_performance_findings`,
-  `lighthouse_best_practices_findings`.
+  `lighthouse_best_practices_findings`, `crux_history`,
+  `cloudflare_analytics`.
 - **Cross-provider analysis:** `ga4_pagespeed_correlation`,
   `ga4_search_console_comparison`, `search_engine_comparison`,
   `search_engine_traffic_health`.
@@ -361,6 +399,10 @@ These appear only when `RANKRAT_READ_ONLY=false`:
   `google_analytics_property_rename`.
 - **Ownership and discovery remediation:** `site_ownership_verify`,
   `site_remediation_apply`.
+- **Persistent monitoring:** `monitor_create`, `monitor_update`,
+  `monitor_delete`, `monitor_run`, `issue_status_update`.
+- **Cloudflare performance:** `cloudflare_cache_purge`,
+  `cloudflare_cache_template_apply`.
 
 `site_onboarding_submit` is the additional writable tool exposed only when
 `RANKRAT_ALLOW_AGENT_ONBOARDING=true`. It is kept separate because it persists
@@ -372,6 +414,15 @@ the exact resources it creates into the boundary file.
 - `provider_readiness` — which providers are actually configured.
 - `accounts_list` / `sites_list` — the boundary as the server sees it.
 - `diagnostics` — deeper detail when one of the above is not what you expected.
+- `monitors_list` and `monitor_issues_list` — whether scheduled audit history
+  is accumulating and which lifecycle issues remain open.
 
 If a provider-specific tool returns nothing, check `provider_readiness` before
 assuming the data is missing upstream.
+
+Automatic due-monitor execution belongs to the long-running HTTP process.
+Stdio exposes the same monitor CRUD, manual-run, snapshot, issue, and event
+tools, but its process lifetime is controlled by the MCP client and it does not
+leave a background scheduler behind. Persist `/run/state` for either transport.
+For backups, use SQLite's online-backup mechanism or stop Rankrat first; copying
+only a live database file can omit WAL state.

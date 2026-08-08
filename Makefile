@@ -18,6 +18,7 @@ BOUNDARIES ?= $(PWD)/config/boundaries.json
 ENV_FILE ?= $(PWD)/.env
 SECRETS ?= $(PWD)/secrets
 OAUTH ?= $(PWD)/oauth
+STATE ?= $(PWD)/state
 OAUTH_ACCOUNT_ID ?= google
 OAUTH_CALLBACK_PORT ?= 49152
 HTTP_PORT ?= 8080
@@ -66,6 +67,7 @@ WRAPPER := RANKRAT_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG) \
 	RANKRAT_BOUNDARIES=$(BOUNDARIES) \
 	RANKRAT_SECRETS=$(SECRETS) \
 	RANKRAT_OAUTH=$(OAUTH) \
+	RANKRAT_STATE=$(STATE) \
 	RANKRAT_ENV_FILE=$(ENV_FILE) \
 	RANKRAT_HTTP_PORT=$(HTTP_PORT) \
 	RANKRAT_OAUTH_CALLBACK_PORT=$(OAUTH_CALLBACK_PORT) \
@@ -145,7 +147,7 @@ LIGHTHOUSE_MUTATE_RUN := docker run --rm --init \
 	$(LIGHTHOUSE_LOCK_IMAGE)
 
 .PHONY: help version dev-image lighthouse-dev-image lighthouse-lock-image lighthouse-image lock-image init-config setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove lighthouse-pkg-lock lighthouse-pkg-add lighthouse-pkg-update lighthouse-pkg-upgrade lighthouse-pkg-remove \
-	lint lighthouse-lint lint-fix format lighthouse-format test lighthouse-test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-bing test-live-indexnow test-live-http test-image test-lighthouse-image \
+	lint lighthouse-lint lint-fix format lighthouse-format test lighthouse-test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-cloudflare test-live-bing test-live-indexnow test-live-http test-image test-lighthouse-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
 	run-http-lighthouse auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
 
@@ -174,14 +176,15 @@ lighthouse-image: ## Build the hardened Lighthouse companion image
 lock-image: ## Build the minimal, sandboxed Python-version-transition lock image
 	docker build -f Dockerfile.lock -t $(LOCK_IMAGE) .
 
-init-config: dev-image ## Create gitignored local boundary, secret, and OAuth-state paths without overwriting
-	$(DEV_RUN) sh -ec 'for path in config oauth secrets; do if test -L "$$path" || { test -e "$$path" && test ! -d "$$path"; }; then echo "$$path must be a real directory" >&2; exit 1; fi; done; mkdir -p config oauth secrets/google secrets/bing secrets/cloudflare secrets/indexnow secrets/rankrat; if find config oauth secrets -type l -print -quit | grep -q .; then echo "config, OAuth, and secret paths must not contain symlinks" >&2; exit 1; fi; cp -n config/boundaries.json.example config/boundaries.json; cp -n .env.example .env; for file in config/boundaries.json .env; do test -f "$$file" && test ! -L "$$file" || { echo "$$file must be a regular file" >&2; exit 1; }; done; token=secrets/rankrat/http-bearer-token; if test -e "$$token" || test -L "$$token"; then test -f "$$token" && test ! -L "$$token" || { echo "$$token must be a regular file" >&2; exit 1; }; else umask 077; python -c "import secrets; print(secrets.token_urlsafe(32))" > "$$token"; fi; find config oauth secrets -type d -exec chmod 700 {} +; find oauth secrets -type f -exec chmod 600 {} +; chmod 600 config/boundaries.json .env'
+init-config: dev-image ## Create gitignored local configuration and state paths without overwriting
+	$(DEV_RUN) sh -ec 'for path in config oauth secrets state; do if test -L "$$path" || { test -e "$$path" && test ! -d "$$path"; }; then echo "$$path must be a real directory" >&2; exit 1; fi; done; mkdir -p config oauth state secrets/google secrets/bing secrets/cloudflare secrets/indexnow secrets/rankrat secrets/ahrefs secrets/majestic secrets/moz secrets/semrush secrets/dataforseo; if find config oauth secrets state -type l -print -quit | grep -q .; then echo "config, OAuth, secret, and state paths must not contain symlinks" >&2; exit 1; fi; cp -n config/boundaries.json.example config/boundaries.json; cp -n .env.example .env; for file in config/boundaries.json .env; do test -f "$$file" && test ! -L "$$file" || { echo "$$file must be a regular file" >&2; exit 1; }; done; token=secrets/rankrat/http-bearer-token; if test -e "$$token" || test -L "$$token"; then test -f "$$token" && test ! -L "$$token" || { echo "$$token must be a regular file" >&2; exit 1; }; else umask 077; python -c "import secrets; print(secrets.token_urlsafe(32))" > "$$token"; fi; find config oauth secrets state -type d -exec chmod 700 {} +; find oauth secrets state -type f -exec chmod 600 {} +; chmod 600 config/boundaries.json .env'
 
 setup: init-config build ## Check configured provider access, then verify the shipped HTTP/MCP transport
 	$(WRAPPER) setup
 	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-google-analytics RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-pagespeed RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-cloudflare RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-bing RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-http RANKRAT_DEV_IMAGE_SOURCE=local
 
@@ -312,6 +315,7 @@ test-live: dev-image ## Run every configured provider and shipped transport chec
 	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-google-analytics RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-pagespeed RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-cloudflare RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-bing RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-indexnow RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-http RANKRAT_DEV_IMAGE_SOURCE=local
@@ -324,6 +328,9 @@ test-live-google-analytics: test-live-one ## Run configured GA4 report and disco
 
 test-live-pagespeed: LIVE_SELECTOR := test_live_pagespeed
 test-live-pagespeed: test-live-one ## Run configured PageSpeed key and analysis checks
+
+test-live-cloudflare: LIVE_SELECTOR := test_live_cloudflare
+test-live-cloudflare: test-live-one ## Run configured Cloudflare readiness and analytics checks
 
 test-live-bing: LIVE_SELECTOR := test_live_bing
 test-live-bing: test-live-one ## Run configured Bing Webmaster checks

@@ -15,11 +15,14 @@ const TRANSPORT_STDIO = "stdio";
 const CONTAINER_CONFIG = "/run/config";
 const CONTAINER_SECRETS = "/run/secrets";
 const CONTAINER_OAUTH = "/run/oauth";
+const CONTAINER_STATE = "/run/state";
+const CONTAINER_STATE_DATABASE = "/run/state/rankrat.sqlite3";
 const BOUNDARY_FILE_NAME = "boundaries.json";
 const STANDARD_CONFIG_ROOT_PARTS = [".config", "rankrat"];
 const STANDARD_CONFIG_DIR_NAME = "config";
 const STANDARD_SECRETS_DIR_NAME = "secrets";
 const STANDARD_OAUTH_DIR_NAME = "oauth";
+const STANDARD_STATE_DIR_NAME = "state";
 const TRUE = "true";
 const FALSE = "false";
 const POSIX_GROUP_AND_OTHER_WRITE_BITS = 0o022;
@@ -240,6 +243,11 @@ export function buildDockerArgs(environment, commandArgs = []) {
       standardRoot ? resolve(standardRoot, STANDARD_OAUTH_DIR_NAME) : undefined,
       CONTAINER_OAUTH,
     ],
+    [
+      "RANKRAT_STATE_DIR",
+      standardRoot ? resolve(standardRoot, STANDARD_STATE_DIR_NAME) : undefined,
+      CONTAINER_STATE,
+    ],
   ];
 
   for (const [
@@ -254,11 +262,14 @@ export function buildDockerArgs(environment, commandArgs = []) {
     );
     if (resolvedHostPath) {
       const readOnlySuffix =
-        containerPath === CONTAINER_OAUTH ? "" : ",readonly";
+        containerPath === CONTAINER_SECRETS ? ",readonly" : "";
       args.push(
         "--mount",
         `type=bind,src=${resolvedHostPath},dst=${containerPath}${readOnlySuffix}`,
       );
+      if (containerPath === CONTAINER_STATE) {
+        args.push("-e", `RANKRAT_STATE_DATABASE=${CONTAINER_STATE_DATABASE}`);
+      }
     }
   }
 

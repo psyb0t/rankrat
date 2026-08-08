@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from enum import Enum
 from pathlib import Path
 from typing import cast
@@ -68,6 +69,17 @@ def test_dns_boundaries_use_provider_neutral_zone_fields(tmp_path: Path) -> None
                 "provider": "cloudflare",
                 "credential": str(tmp_path / "dns-token"),
                 "cloudflare_zones": [{"id": "a" * 32, "name": "example.com"}],
+            }
+        )
+
+
+def test_backlink_provider_requires_an_explicit_target(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="require backlink_targets"):
+        _document(
+            {
+                "id": "ahrefs-main",
+                "provider": "ahrefs",
+                "credential": str(tmp_path / "ahrefs-token"),
             }
         )
 
@@ -818,6 +830,8 @@ def test_json_conversion_accepts_safe_types_and_rejects_paths() -> None:
         "values": ["one"],
     }
     assert to_json_value(_PlainEnum.VALUE) == "value"
+    assert to_json_value(date(2025, 1, 1)) == "2025-01-01"
+    assert to_json_value(datetime(2025, 1, 1, tzinfo=UTC)) == "2025-01-01T00:00:00+00:00"
     with pytest.raises(TypeError):
         to_json_value(Path("/secret"))
     with pytest.raises(TypeError):

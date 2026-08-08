@@ -1,6 +1,6 @@
 ---
 name: rankrat
-description: Query Google Search Console, Bing Webmaster Tools, Google Analytics 4 (GA4), and PageSpeed Insights, run local Lighthouse and bounded whole-site audits, automate Google/Bing DNS ownership through a configured DNS provider adapter, apply sitemap and URL discovery remediation, and aggregate Bing backlink evidence through one self-hosted MCP server. Includes search analytics, indexing, crawl, ranking, schema, performance, audience, conversion, referring-domain, and anchor-text reports. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, backlinks, browser scores, or search traffic for sites they control.
+description: Query Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare analytics, and configured backlink providers; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, backlinks, browser scores, performance history, or search traffic for sites they control.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
@@ -9,9 +9,9 @@ metadata:
     requires:
       bins: [docker]
 permissions:
-  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed Insights, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow provider endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
+  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed/CrUX, Cloudflare, Ahrefs, Majestic, Moz, Semrush, DataForSEO, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
   shell: "docker run invocations for the published image, or bash execution of the bundled references/rankrat.sh wrapper; no other host access is required."
-  filesystem: "reads the boundary config and provider credentials. Local initialization creates an HTTP bearer secret; Google authorization writes its token record; IndexNow initialization creates or retains its local key and updates .env plus the boundary file; agent onboarding and unbounded onboarding update the one configured boundary file with exact created-resource IDs."
+  filesystem: "reads the boundary config and provider credentials; writes only the configured OAuth token store, persistent SQLite monitor state, locally initialized IndexNow key, and—when separately enabled—the one boundary file updated with exact onboarding resource IDs."
 ---
 
 # rankrat
@@ -67,14 +67,26 @@ the bearer token if anything else can reach it.
 - GA4 reporting: realtime, content and landing-page performance, organic search
   landing pages, traffic sources, ecommerce, audience segments, user behavior,
   conversion funnels.
-- PageSpeed Insights, and fetching a page's structured-data schema.
+- PageSpeed Insights, CrUX history, and fetching a page's structured-data schema.
 - Whole-site crawling for deterministic metadata, canonical, robots, sitemap,
   duplicate-title, link, and structured-data findings with remediation text.
 - Google/Bing ownership checks and narrowly scoped verification through the
   configured DNS adapter; Cloudflare is currently supported.
 - IndexNow change notifications for bounded URLs. This is a writable push
   protocol, not a reporting dashboard or an indexing guarantee.
-- Bing backlink detail aggregated into referring domains and anchor summaries.
+- Normalized and aggregated backlink evidence from bounded Bing, Ahrefs,
+  Majestic, Moz, Semrush, and DataForSEO targets. A call has one deadline and a
+  shared 20-request provider budget; duplicate aggregate sources are rejected.
+- Internal-link graphs, same-site orphan-page joins, lexical link suggestions
+  limited to pages sharing normalized title/path tokens, and ranked content
+  opportunities joined across search, analytics, and crawl data.
+- Cloudflare hourly traffic/cache analytics, plus exact purges and two finite
+  cache templates in writable mode. Template mutations are serialized per zone
+  within the running Rankrat process.
+- Persistent site-audit monitors, immutable snapshots, issue lifecycle events,
+  and explicit acknowledge/resolve operations. The background scheduler runs
+  only in the long-lived HTTP process; stdio supports explicit monitor runs and
+  history. Poll these tools because Rankrat does not send external notifications.
 - Local Lighthouse performance, accessibility, best-practices, and SEO scores
   or category-specific failed findings when the companion worker is configured.
 - Checking which providers are actually wired up (`provider_readiness`,
@@ -114,6 +126,8 @@ docker run -i --rm --init --read-only \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
   --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
+  --mount type=bind,src="$PWD/state",dst=/run/state \
+  -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
   psyb0t/rankrat stdio
 ```
 
@@ -132,6 +146,8 @@ docker run --rm --init --read-only \
   --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
   --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
   --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
+  --mount type=bind,src="$PWD/state",dst=/run/state \
+  -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
   psyb0t/rankrat http
 ```
 

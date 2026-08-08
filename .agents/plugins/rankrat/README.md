@@ -3,8 +3,9 @@
 MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — boundary-limited
 SEO and search-analytics operations over Google Search Console, Bing Webmaster
 Tools, GA4, PageSpeed, DNS ownership automation (currently through Cloudflare),
-and IndexNow, plus bounded
-whole-site/backlink intelligence and optional isolated local Lighthouse audits.
+CrUX, and IndexNow, plus bounded whole-site, internal-link, backlink, content
+opportunity, persistent monitoring, and optional isolated local Lighthouse
+audits.
 
 rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin has
 no OpenClaw runtime extension; its static MCP definition executes the bundled
@@ -23,19 +24,28 @@ variables. It uses this standard layout:
 $HOME/.config/rankrat/config/boundaries.json
 $HOME/.config/rankrat/secrets/
 $HOME/.config/rankrat/oauth/
+$HOME/.config/rankrat/state/
 ```
 
 Run the repository's [Quick start](https://github.com/psyb0t/rankrat#quick-start)
 from `$HOME/.config/rankrat`, then install/enable the plugin. Only `config` is
-required — the other two directories can be omitted for a boundary that uses
-just credential-free tools. Config and provider secrets are read-only. OAuth
-storage is writable because Google may rotate the refresh token during refresh.
-The launcher runs as the current POSIX UID/GID with no capabilities, a read-only
-root, and CPU, memory, and process limits.
+required. `secrets` and `oauth` may be omitted for credential-free tools, and
+`state` may be omitted when persistent monitoring is not needed. Config and
+provider secrets are read-only. OAuth storage is writable because Google may
+rotate the refresh token during refresh; state is writable for the SQLite
+monitor database. The launcher runs as the current POSIX UID/GID with no
+capabilities, a read-only root, and CPU, memory, and process limits.
+
+The static read-only stdio child can read persistent monitor history. A directly
+launched writable stdio process can also create monitors and run one explicitly.
+Automatic due-monitor scheduling runs only in Rankrat's long-lived HTTP mode,
+so use the shared Streamable HTTP deployment when monitors must execute without
+an agent keeping a stdio process alive.
 
 The direct `rankrat-mcp` executable still accepts `RANKRAT_CONFIG_DIR`,
-`RANKRAT_SECRETS_DIR`, `RANKRAT_OAUTH_DIR`, and `RANKRAT_IMAGE`; those ambient
-overrides are for a direct shell launch, not OpenClaw's sanitized static server.
+`RANKRAT_SECRETS_DIR`, `RANKRAT_OAUTH_DIR`, `RANKRAT_STATE_DIR`, and
+`RANKRAT_IMAGE`; those ambient overrides are for a direct shell launch, not
+OpenClaw's sanitized static server.
 
 ## Streamable HTTP
 
@@ -74,6 +84,9 @@ entirely, so an agent cannot discover them. The static OpenClaw stdio server
 intentionally stays at that default. Use the Streamable HTTP form for writes:
 the already-running Rankrat server fixes read-only, unbounded, and onboarding
 settings at startup, while OpenClaw receives only the MCP URL and bearer header.
+Within one running server, Cloudflare cache-template writes are serialized per
+zone. Backlink reports and aggregates have one deadline and one shared
+20-request upstream budget, and duplicate aggregate sources are rejected.
 
 When the launcher is invoked directly with unbounded mode or agent onboarding
 enabled, it verifies owner-only config-directory permissions, ownership,

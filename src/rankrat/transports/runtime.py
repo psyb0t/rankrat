@@ -7,11 +7,24 @@ from dataclasses import dataclass
 from rankrat import __version__
 from rankrat.config import Settings
 from rankrat.constants import GOOGLE_SITE_VERIFICATION_SCOPE
+from rankrat.operator.content_opportunities import ContentOpportunityOperator
+from rankrat.operator.internal_links import InternalLinkOperator
+from rankrat.operator.monitoring import MonitoringOperator
 from rankrat.operator.site_onboarding import SiteOnboardingOperator
 from rankrat.operator.site_ownership import SiteOwnershipOperator
 from rankrat.policy.boundaries import BoundaryPolicy
+from rankrat.providers.backlinks import (
+    AhrefsBacklinkClient,
+    BingBacklinkClient,
+    DataForSeoBacklinkClient,
+    MajesticBacklinkClient,
+    MozBacklinkClient,
+    SemrushBacklinkClient,
+)
 from rankrat.providers.bing import BingWebmasterClient
 from rankrat.providers.cloudflare import CloudflareDnsClient
+from rankrat.providers.cloudflare_performance import CloudflarePerformanceClient
+from rankrat.providers.crux import CruxHistoryClient
 from rankrat.providers.dns import PublicDnsClient
 from rankrat.providers.google_analytics import (
     GOOGLE_ANALYTICS_READ_SCOPE,
@@ -32,9 +45,12 @@ from rankrat.providers.lighthouse import LighthouseWorkerClient
 from rankrat.providers.pagespeed import PageSpeedClient
 from rankrat.providers.schema_fetch import PublicSchemaFetcher
 from rankrat.providers.site_fetch import PublicSiteFetcher
+from rankrat.services.backlinks import BacklinkService
 from rankrat.services.bing import BingWebmasterService
 from rankrat.services.capabilities import CapabilityService
+from rankrat.services.cloudflare_performance import CloudflarePerformanceService
 from rankrat.services.cross_provider import CrossProviderService
+from rankrat.services.crux import CruxHistoryService
 from rankrat.services.diagnostics import DiagnosticsService
 from rankrat.services.google_analytics import GoogleAnalyticsDataService
 from rankrat.services.google_analytics_admin import GoogleAnalyticsAdminService
@@ -54,6 +70,7 @@ from rankrat.services.site_onboarding import SiteOnboardingService
 from rankrat.services.site_ownership import SiteOwnershipService
 from rankrat.services.site_remediation import SiteRemediationService
 from rankrat.services.sites import SitesService
+from rankrat.state.sqlite import SQLiteStateRepository
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +91,12 @@ class ApplicationServices:
     sites: SitesService
     onboarding_guide: OnboardingGuideService
     google_analytics_admin: GoogleAnalyticsAdminService
+    monitoring: MonitoringOperator
+    internal_links: InternalLinkOperator
+    crux: CruxHistoryService
+    cloudflare_performance: CloudflarePerformanceService
+    backlinks: BacklinkService
+    content_opportunities: ContentOpportunityOperator
     writes_enabled: bool = False
     agent_onboarding_enabled: bool = False
     indexnow: IndexNowService | None = None
@@ -113,6 +136,19 @@ def build_services(settings: Settings) -> ApplicationServices:
     bing_client = BingWebmasterClient(policy)
     cloudflare_client = CloudflareDnsClient(policy)
     pagespeed_client = PageSpeedClient(policy)
+    crux_client = CruxHistoryClient(policy)
+    cloudflare_performance_client = CloudflarePerformanceClient(policy)
+    commercial_backlink_clients = (
+        AhrefsBacklinkClient(policy),
+        MajesticBacklinkClient(policy),
+        MozBacklinkClient(policy),
+        SemrushBacklinkClient(policy),
+        DataForSeoBacklinkClient(policy),
+    )
+    backlink_clients = {
+        client.provider: client
+        for client in (BingBacklinkClient(bing_client), *commercial_backlink_clients)
+    }
     indexnow = None
     google_indexing = None
     google_sites = None
@@ -196,6 +232,20 @@ def build_services(settings: Settings) -> ApplicationServices:
         policy,
         LighthouseWorkerClient(settings.lighthouse_worker_socket),
     )
+    site_audit = SiteAuditService(policy, PublicSiteFetcher())
+    state_repository = (
+        SQLiteStateRepository.open(settings.state_database, settings.state_retention_days)
+        if settings.state_database is not None
+        else None
+    )
+    monitoring = MonitoringOperator(state_repository, site_audit)
+    internal_links = InternalLinkOperator(
+        site_audit,
+        google_search_console,
+        google_analytics,
+    )
+    backlink_service = BacklinkService(backlink_clients)
+    cloudflare_performance = CloudflarePerformanceService(cloudflare_performance_client)
     return ApplicationServices(
         capabilities=CapabilityService(settings, policy, __version__),
         cross_provider=CrossProviderService(
@@ -219,6 +269,7 @@ def build_services(settings: Settings) -> ApplicationServices:
                 google_client.provider: google_client,
                 bing_client.provider: bing_client,
                 cloudflare_client.provider: cloudflare_client,
+                **{client.provider: client for client in commercial_backlink_clients},
             },
         ),
         sites=SitesService(policy),
@@ -232,6 +283,17 @@ def build_services(settings: Settings) -> ApplicationServices:
                 GoogleConfiguredTokenProvider(policy, (GOOGLE_ANALYTICS_EDIT_SCOPE,)),
             ),
         ),
+        monitoring=monitoring,
+        internal_links=internal_links,
+        crux=CruxHistoryService(crux_client),
+        cloudflare_performance=cloudflare_performance,
+        backlinks=backlink_service,
+        content_opportunities=ContentOpportunityOperator(
+            google_search_console,
+            bing_webmaster,
+            google_analytics,
+            site_audit,
+        ),
         writes_enabled=settings.writes_enabled,
         agent_onboarding_enabled=settings.agent_onboarding_enabled,
         indexnow=indexnow,
@@ -241,5 +303,5 @@ def build_services(settings: Settings) -> ApplicationServices:
         site_onboarding=site_onboarding,
         site_ownership=site_ownership,
         site_remediation=site_remediation,
-        site_audit=SiteAuditService(policy, PublicSiteFetcher()),
+        site_audit=site_audit,
     )

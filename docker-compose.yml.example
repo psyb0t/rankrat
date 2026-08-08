@@ -1,4 +1,27 @@
 services:
+  state-volume-init:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["chown -R ${RANKRAT_UID:-10001}:${RANKRAT_GID:-10001} /run/state && chmod 0700 /run/state"]
+    volumes:
+      - rankrat_state:/run/state
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    user: "0:0"
+    pids_limit: 16
+    cpus: 0.25
+    mem_limit: 64m
+    restart: "no"
+    network_mode: none
+
   lighthouse-volume-init:
     build:
       context: .
@@ -31,6 +54,9 @@ services:
       RANKRAT_BOUNDARY_FILE: /run/config/boundaries.json
       RANKRAT_SECRET_ROOT: /run/secrets
       RANKRAT_OAUTH_TOKEN_ROOT: /run/oauth
+      RANKRAT_STATE_DATABASE: /run/state/rankrat.sqlite3
+      RANKRAT_SCHEDULER_INTERVAL_SECONDS: "60"
+      RANKRAT_STATE_RETENTION_DAYS: "180"
       RANKRAT_HTTP_BEARER_SECRET_FILE: /run/secrets/rankrat/http-bearer-token
       RANKRAT_HTTP_HOST: 0.0.0.0
       RANKRAT_HTTP_PORT: "8080"
@@ -47,6 +73,7 @@ services:
       # replaces it and the read-only flag still covers the file inside.
       - ./config:/run/config:ro
       - ./oauth:/run/oauth:rw
+      - rankrat_state:/run/state:rw
       - lighthouse_runtime:/run/lighthouse:ro
     secrets:
       - source: rankrat_http_bearer_token
@@ -61,6 +88,16 @@ services:
         target: /run/secrets/cloudflare/api-token
       - source: indexnow_key
         target: /run/secrets/indexnow/key
+      - source: ahrefs_api_token
+        target: /run/secrets/ahrefs/api-token
+      - source: majestic_api_key
+        target: /run/secrets/majestic/api-key
+      - source: moz_credentials
+        target: /run/secrets/moz/credentials
+      - source: semrush_api_key
+        target: /run/secrets/semrush/api-key
+      - source: dataforseo_credentials
+        target: /run/secrets/dataforseo/credentials
     cap_drop:
       - ALL
     security_opt:
@@ -86,6 +123,8 @@ services:
       retries: 5
       start_period: 15s
     depends_on:
+      state-volume-init:
+        condition: service_completed_successfully
       lighthouse:
         condition: service_healthy
     # Some Docker hosts block analyticsadmin.googleapis.com from user-defined
@@ -145,6 +184,17 @@ secrets:
     file: ./secrets/cloudflare/api-token
   indexnow_key:
     file: ./secrets/indexnow/key
+  ahrefs_api_token:
+    file: ./secrets/ahrefs/api-token
+  majestic_api_key:
+    file: ./secrets/majestic/api-key
+  moz_credentials:
+    file: ./secrets/moz/credentials
+  semrush_api_key:
+    file: ./secrets/semrush/api-key
+  dataforseo_credentials:
+    file: ./secrets/dataforseo/credentials
 
 volumes:
   lighthouse_runtime:
+  rankrat_state:

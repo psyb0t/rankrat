@@ -17,7 +17,13 @@ from rankrat.constants import (
     DEFAULT_LOG_FILE,
     DEFAULT_LOG_LEVEL,
     DEFAULT_OAUTH_TOKEN_ROOT,
+    DEFAULT_SCHEDULER_INTERVAL_SECONDS,
     DEFAULT_SECRET_ROOT,
+    DEFAULT_STATE_RETENTION_DAYS,
+    MAX_SCHEDULER_INTERVAL_SECONDS,
+    MAX_STATE_RETENTION_DAYS,
+    MIN_SCHEDULER_INTERVAL_SECONDS,
+    MIN_STATE_RETENTION_DAYS,
 )
 from rankrat.errors import ConfigurationError
 
@@ -44,6 +50,17 @@ class Settings(BaseSettings):
     http_port: int = Field(default=DEFAULT_HTTP_PORT, ge=1, le=65_535)
     log_level: str = DEFAULT_LOG_LEVEL
     lighthouse_worker_socket: Path | None = DEFAULT_LIGHTHOUSE_WORKER_SOCKET
+    state_database: Path | None = None
+    scheduler_interval_seconds: int = Field(
+        default=DEFAULT_SCHEDULER_INTERVAL_SECONDS,
+        ge=MIN_SCHEDULER_INTERVAL_SECONDS,
+        le=MAX_SCHEDULER_INTERVAL_SECONDS,
+    )
+    state_retention_days: int = Field(
+        default=DEFAULT_STATE_RETENTION_DAYS,
+        ge=MIN_STATE_RETENTION_DAYS,
+        le=MAX_STATE_RETENTION_DAYS,
+    )
     enable_openapi: bool = False
     read_only: bool = True
     unbounded: bool = False
@@ -68,12 +85,20 @@ class Settings(BaseSettings):
             return None
         return value
 
+    @field_validator("state_database", mode="before")
+    @classmethod
+    def empty_state_database_disables_state(cls, value: object) -> object:
+        if value == "":
+            return None
+        return value
+
     @field_validator(
         "boundary_file",
         "secret_root",
         "oauth_token_root",
         "log_file",
         "lighthouse_worker_socket",
+        "state_database",
         "http_bearer_secret_file",
     )
     @classmethod

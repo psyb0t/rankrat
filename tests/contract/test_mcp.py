@@ -381,12 +381,36 @@ async def test_mcp_tool_catalog_annotations_and_calls(
             "bing_url_information",
             "site_audit",
             "site_ownership_check",
+            "internal_link_graph",
+            "orphan_page_report",
+            "internal_link_opportunities",
+            "crux_history",
+            "cloudflare_analytics",
+            "backlink_report",
+            "backlink_aggregate",
+            "content_opportunities",
+            "monitors_list",
+            "monitor_snapshots_list",
+            "monitor_issues_list",
+            "issue_events_list",
+        }
+        new_open_world_tools = {
+            "internal_link_graph",
+            "orphan_page_report",
+            "internal_link_opportunities",
+            "crux_history",
+            "cloudflare_analytics",
+            "backlink_report",
+            "backlink_aggregate",
+            "content_opportunities",
         }
         for tool in tools.tools:
             assert tool.annotations is not None
             assert tool.annotations.readOnlyHint is True
             assert tool.annotations.destructiveHint is False
-            assert tool.annotations.openWorldHint is tool.name.startswith("lighthouse_")
+            assert tool.annotations.openWorldHint is (
+                tool.name.startswith("lighthouse_") or tool.name in new_open_world_tools
+            )
 
         accounts = await client.call_tool("accounts_list", {"provider": "google"})
         accounts_payload = json.loads(accounts.content[0].text)  # type: ignore[union-attr]

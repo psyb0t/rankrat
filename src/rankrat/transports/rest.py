@@ -189,6 +189,7 @@ from rankrat.services.site_ownership import (
 from rankrat.services.site_remediation import SiteRemediationRequest
 from rankrat.services.sites import AccountsListRequest, SitesListRequest
 from rankrat.transports.runtime import ApplicationServices
+from rankrat.transports.seo_rest import build_seo_router
 
 
 class _IndexNowSubmissionBody(BaseModel):
@@ -2437,6 +2438,7 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
                 )
             )
 
+    router.include_router(build_seo_router(services))
     return router
 
 

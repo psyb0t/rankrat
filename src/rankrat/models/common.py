@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, is_dataclass
+from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, cast
@@ -17,6 +18,8 @@ def to_json_value(value: object) -> JsonValue:
         return value
     if isinstance(value, Enum):
         return to_json_value(value.value)
+    if isinstance(value, datetime | date):
+        return value.isoformat()
     if isinstance(value, Path):
         raise TypeError("paths must never be serialized into public responses")
     if is_dataclass(value) and not isinstance(value, type):

@@ -2,6 +2,36 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.9.0 — 2026-08-08
+
+Adds a persistent SEO intelligence layer while preserving the same strict
+boundary, transport, and read-only discovery semantics.
+
+- Adds persistent site-audit monitors, immutable snapshots, issue lifecycle
+  history, manual runs, and a bounded HTTP scheduler backed by an owner-only
+  SQLite database. Monitor and Cloudflare mutation tools remain absent from
+  read-only servers.
+- Adds internal-link graphs, orphan-page joins, deterministic missing-link
+  opportunities, and content opportunities that combine Search Console, Bing,
+  GA4, and bounded crawl evidence.
+- Adds Chrome UX Report history and bounded Cloudflare hourly analytics, exact
+  URL purges, and two named cache templates that preserve unmanaged rules.
+- Adds normalized backlink adapters for Ahrefs, Majestic, Moz, Semrush, and
+  DataForSEO alongside Bing, plus cross-provider deduplication. Provider
+  readiness validates commercial credentials through a one-result query
+  against the account's first allowed target. Each call has one deadline and a
+  shared 20-request provider budget; duplicate aggregate sources are rejected.
+- Serializes Cloudflare cache-template mutations per zone so concurrent callers
+  cannot both create the first Rankrat-managed rule.
+- Exposes the complete surface through YAML-first OpenAPI, REST, MCP stdio, and
+  Streamable HTTP MCP, with strict typed inputs, mocked external-provider
+  contracts, transport-parity tests, persistent state mounts, and synchronized
+  setup and agent documentation.
+- Pins the Lighthouse test toolchain's transitive Nano ID dependency to the
+  first patched 3.x release for CVE-2026-67213, and gives cold image stdio
+  probes a bounded 60-second budget so loaded Docker hosts do not produce
+  false-negative release smokes.
+
 ## v0.8.0 — 2026-08-07
 
 Makes site-ownership automation DNS-provider-neutral before additional DNS

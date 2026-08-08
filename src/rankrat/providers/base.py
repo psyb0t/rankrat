@@ -8,7 +8,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import NewType, Protocol
 
-from rankrat.constants import MAX_INDEXNOW_URLS
+import httpx
+
+from rankrat.constants import MAX_INDEXNOW_URLS, MAX_PROVIDER_RESPONSE_BYTES
 from rankrat.models.boundaries import Provider
 
 MIN_PROVIDER_TIMEOUT_SECONDS = 0.1
@@ -38,6 +40,44 @@ class ProviderOperationError(Exception):
     def __init__(self, code: ProviderFailureCode, message: str) -> None:
         super().__init__(message)
         self.code = code
+
+
+async def read_limited_response(
+    response: httpx.Response,
+    *,
+    description: str,
+    maximum_bytes: int = MAX_PROVIDER_RESPONSE_BYTES,
+) -> bytes:
+    """Read one provider response without buffering beyond the configured limit."""
+
+    content_length = response.headers.get("content-length")
+    if content_length is not None:
+        try:
+            parsed_content_length = int(content_length)
+        except ValueError as error:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                f"{description} returned an invalid content length",
+            ) from error
+        if parsed_content_length < 0:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                f"{description} returned an invalid content length",
+            )
+        if parsed_content_length > maximum_bytes:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                f"{description} response exceeds the allowed size",
+            )
+    body = bytearray()
+    async for chunk in response.aiter_bytes():
+        if len(body) + len(chunk) > maximum_bytes:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                f"{description} response exceeds the allowed size",
+            )
+        body.extend(chunk)
+    return bytes(body)
 
 
 @dataclass(frozen=True, slots=True)

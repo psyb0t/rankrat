@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Final
 
 import pytest
@@ -10,6 +10,7 @@ from rankrat.config import Settings
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import AccountId, ProviderReadRequest
 from rankrat.providers.bing import BingWebmasterClient
+from rankrat.providers.cloudflare_performance import CloudflarePerformanceClient
 from rankrat.providers.google_analytics import (
     GOOGLE_ANALYTICS_READ_SCOPE,
     GoogleAnalyticsDataClient,
@@ -35,6 +36,10 @@ from rankrat.services.bing import (
     BingUrlInformationRequest,
     BingUrlSubmissionQuotaRequest,
     BingWebmasterService,
+)
+from rankrat.services.cloudflare_performance import (
+    CloudflareAnalyticsRequest,
+    CloudflarePerformanceService,
 )
 from rankrat.services.google_analytics import (
     Ga4AccountDiscoveryRequest,
@@ -76,6 +81,10 @@ _LIVE_BING_LANGUAGE_ENV: Final = "RANKRAT_LIVE_BING_LANGUAGE"
 _LIVE_BING_PAGE_URL_ENV: Final = "RANKRAT_LIVE_BING_PAGE_URL"
 _LIVE_BING_QUERY_ENV: Final = "RANKRAT_LIVE_BING_QUERY"
 _LIVE_BING_SITE_URL_ENV: Final = "RANKRAT_LIVE_BING_SITE_URL"
+_LIVE_CLOUDFLARE_ACCOUNT_ID_ENV: Final = "RANKRAT_LIVE_CLOUDFLARE_ACCOUNT_ID"
+_LIVE_CLOUDFLARE_ZONE_ID_ENV: Final = "RANKRAT_LIVE_CLOUDFLARE_ZONE_ID"
+_LIVE_CLOUDFLARE_REPORT_HOURS: Final = 24
+_LIVE_CLOUDFLARE_REPORT_LIMIT: Final = 24
 
 
 @pytest.mark.asyncio
@@ -330,6 +339,37 @@ async def test_live_pagespeed_analysis_matches_mocked_contract() -> None:
     )
 
     assert isinstance(result.categories, tuple)
+
+
+@pytest.mark.asyncio
+async def test_live_cloudflare_analytics_matches_mocked_contract() -> None:
+    if os.environ.get("RANKRAT_RUN_LIVE_TESTS") != "true":
+        pytest.skip("live provider checks are not explicitly enabled")
+    account_id = os.environ.get(_LIVE_CLOUDFLARE_ACCOUNT_ID_ENV)
+    zone_id = os.environ.get(_LIVE_CLOUDFLARE_ZONE_ID_ENV)
+    if not account_id or not zone_id:
+        pytest.skip("an explicit live Cloudflare account ID and zone ID are required")
+
+    settings = Settings()
+    policy = BoundaryPolicy.from_file(
+        settings.boundary_file,
+        settings.secret_root,
+        settings.oauth_token_root,
+    )
+    service = CloudflarePerformanceService(CloudflarePerformanceClient(policy))
+    end = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    report = await service.analytics(
+        CloudflareAnalyticsRequest(
+            account_id,
+            zone_id,
+            end - timedelta(hours=_LIVE_CLOUDFLARE_REPORT_HOURS),
+            end,
+            limit=_LIVE_CLOUDFLARE_REPORT_LIMIT,
+        )
+    )
+
+    assert report.zone_id == zone_id
+    assert isinstance(report.points, tuple)
 
 
 @pytest.mark.asyncio

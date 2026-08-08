@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.psyb0t/rankrat",
   "title": "Rankrat",
-  "description": "Audit owned sites, automate search-engine ownership, inspect analytics and backlinks, and apply bounded SEO remediation through one self-hosted MCP server.",
+  "description": "Audit and monitor owned sites, inspect search, analytics, CrUX, internal links, content opportunities, Cloudflare performance, and multi-provider backlinks, then apply bounded SEO remediation through one self-hosted MCP server.",
   "version": "0.0.0",
   "repository": {
     "url": "https://github.com/psyb0t/rankrat",

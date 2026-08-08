@@ -4,10 +4,12 @@ set -euo pipefail
 readonly HTTP_PORT=8080
 readonly HTTP_RETRY_COUNT=10
 readonly HTTP_CONNECT_TIMEOUT_SECONDS=2
-readonly MCP_TIMEOUT_SECONDS=30
+readonly MCP_TIMEOUT_SECONDS=60
 readonly SCHEMA_VALIDATE_URL_PATH="/v1/schema/validate-url"
 readonly SERVER_INFO_URL_PATH="/v1/server-info"
 readonly SITE_ONBOARDING_URL_PATH="/v1/site-onboarding-submissions"
+readonly INTERNAL_LINK_GRAPH_URL_PATH="/v1/internal-link-graphs"
+readonly CRUX_HISTORY_URL_PATH="/v1/crux/history-reports"
 readonly OPENAPI_PATH="/openapi.json"
 readonly OPENAPI_VERSION="3.1.0"
 readonly SERVER_INFO_OPERATION_ID="serverInfo"
@@ -20,6 +22,11 @@ readonly MCP_INITIALIZE_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","
 readonly MCP_INITIALIZED_NOTIFICATION='{"jsonrpc":"2.0","method":"notifications/initialized"}'
 readonly MCP_TOOLS_LIST_REQUEST='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 readonly MCP_SERVER_INFO_REQUEST='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"server_info","arguments":{}}}'
+readonly MCP_MONITOR_CREATE_REQUEST='{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"monitor_create","arguments":{"name":"Audit '\'' OR 1=1--","account_id":"google","site_url":"https://example.com/"}}}'
+readonly MCP_MONITORS_LIST_REQUEST='{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"monitors_list","arguments":{"account_id":"google","site_url":"https://example.com/"}}}'
+readonly INVALID_INTERNAL_LINK_REQUEST='{"account_id":"google","site_url":"https://example.com/","unexpected":true}'
+readonly MISSING_INTERNAL_LINK_REQUEST='{"site_url":"https://example.com/"}'
+readonly CROSS_BOUNDARY_CRUX_REQUEST='{"account_id":"google","site_url":"https://example.com/","target":"https://attacker.invalid/"}'
 readonly TEST_HTTP_BEARER_SECRET="test-only-not-a-real-secret-value-000000000000"
 readonly PRIVATE_SCHEMA_URL_REQUEST='{"url":"https://127.0.0.1/"}'
 readonly PARENT_BASH_PROCESS_ID="$BASHPID"
@@ -73,6 +80,10 @@ assert_test_mounts_exist() {
 		log ERROR "temporary OAuth directory disappeared"
 		exit 1
 	}
+	[[ -d "$state_directory" ]] || {
+		log ERROR "temporary state directory disappeared"
+		exit 1
+	}
 	[[ -f "$boundary_file" ]] || {
 		log ERROR "temporary boundary file disappeared"
 		exit 1
@@ -116,14 +127,16 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 readonly config_directory="$temporary_directory/config"
 readonly secret_directory="$temporary_directory/secrets"
 readonly oauth_directory="$temporary_directory/oauth"
+readonly state_directory="$temporary_directory/state"
 readonly boundary_file="$config_directory/boundaries.json"
 readonly curl_authorization_config="$temporary_directory/curl-authorization.conf"
-mkdir "$config_directory" "$secret_directory" "$oauth_directory"
+mkdir "$config_directory" "$secret_directory" "$oauth_directory" "$state_directory"
 cp "$boundary_example" "$boundary_file"
 printf '%s\n' "$TEST_HTTP_BEARER_SECRET" >"$secret_directory/test-http-bearer"
 printf 'header = "Authorization: Bearer %s"\n' "$TEST_HTTP_BEARER_SECRET" \
 	>"$curl_authorization_config"
 chmod 755 "$temporary_directory" "$config_directory" "$secret_directory" "$oauth_directory"
+chmod 700 "$state_directory"
 chmod 600 "$secret_directory/test-http-bearer"
 chmod 600 "$curl_authorization_config"
 assert_test_mounts_exist
@@ -185,6 +198,27 @@ grep -Fq '\"read_only\":true' <<<"$mcp_call_output" || {
 	exit 1
 }
 
+log INFO "checking writable stdio MCP persists monitor state"
+state_mcp_output=$(printf '%s\n' \
+	"$MCP_INITIALIZE_REQUEST" \
+	"$MCP_INITIALIZED_NOTIFICATION" \
+	"$MCP_MONITOR_CREATE_REQUEST" \
+	"$MCP_MONITORS_LIST_REQUEST" | timeout --kill-after=2s \
+	"${MCP_TIMEOUT_SECONDS}s" docker run --rm -i --network none \
+	"${container_security_args[@]}" \
+	--mount "type=bind,src=$state_directory,dst=/run/state" \
+	-e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
+	-e RANKRAT_READ_ONLY=false \
+	"$image_reference")
+grep -Fq "\\\"name\\\":\\\"Audit ' OR 1=1--\\\"" <<<"$state_mcp_output" || {
+	log ERROR "writable stdio MCP did not create and list a persisted monitor"
+	exit 1
+}
+[[ -f "$state_directory/rankrat.sqlite3" ]] || {
+	log ERROR "writable stdio MCP did not create the mounted state database"
+	exit 1
+}
+
 log INFO "checking loopback-only HTTP health and authentication"
 docker run -d --name "$container_name" --network bridge \
 	-p "127.0.0.1::${HTTP_PORT}" \
@@ -205,6 +239,8 @@ readonly health_url="http://127.0.0.1:${host_port}/healthz"
 readonly ready_url="http://127.0.0.1:${host_port}/ready"
 readonly openapi_url="http://127.0.0.1:${host_port}${OPENAPI_PATH}"
 readonly schema_validate_url="http://127.0.0.1:${host_port}${SCHEMA_VALIDATE_URL_PATH}"
+readonly internal_link_graph_url="http://127.0.0.1:${host_port}${INTERNAL_LINK_GRAPH_URL_PATH}"
+readonly crux_history_url="http://127.0.0.1:${host_port}${CRUX_HISTORY_URL_PATH}"
 readonly mcp_url="http://127.0.0.1:${host_port}/mcp/"
 
 for ((attempt = 1; attempt <= HTTP_RETRY_COUNT; attempt++)); do
@@ -232,6 +268,17 @@ unauthorized_status=$(curl --silent --show-error --output /dev/null --write-out 
 	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$ready_url")
 [[ "$unauthorized_status" == "401" ]] || {
 	log ERROR "protected ready endpoint accepted an unauthenticated request"
+	exit 1
+}
+
+wrong_bearer_secret="definitely-wrong-test-token"
+wrong_bearer_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--header "Authorization: Bearer ${wrong_bearer_secret}" "$ready_url")
+[[ "$wrong_bearer_status" == "401" ]] || {
+	log ERROR "protected ready endpoint accepted an incorrect bearer secret"
 	exit 1
 }
 
@@ -313,6 +360,52 @@ private_schema_response=$(curl --silent --show-error --config "$curl_authorizati
 	--data "$PRIVATE_SCHEMA_URL_REQUEST" "$schema_validate_url")
 grep -Fq '"code":"REQUEST_REJECTED"' <<<"$private_schema_response" || {
 	log ERROR "public schema validation did not reject a loopback target"
+	exit 1
+}
+
+invalid_shape_response=$(curl --silent --show-error --config "$curl_authorization_config" \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" --request POST \
+	--header 'Content-Type: application/json' \
+	--data "$INVALID_INTERNAL_LINK_REQUEST" "$internal_link_graph_url")
+grep -Fq '"code":"VALIDATION_FAILED"' <<<"$invalid_shape_response" || {
+	log ERROR "strict request validation accepted an unexpected field"
+	exit 1
+}
+
+missing_field_response=$(curl --silent --show-error --config "$curl_authorization_config" \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" --request POST \
+	--header 'Content-Type: application/json' \
+	--data "$MISSING_INTERNAL_LINK_REQUEST" "$internal_link_graph_url")
+grep -Fq '"code":"VALIDATION_FAILED"' <<<"$missing_field_response" || {
+	log ERROR "strict request validation accepted a missing required field"
+	exit 1
+}
+
+cross_boundary_response=$(curl --silent --show-error --config "$curl_authorization_config" \
+	--noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" --request POST \
+	--header 'Content-Type: application/json' \
+	--data "$CROSS_BOUNDARY_CRUX_REQUEST" "$crux_history_url")
+grep -Fq '"code":"REQUEST_REJECTED"' <<<"$cross_boundary_response" || {
+	log ERROR "CrUX history accepted a target outside the configured site"
+	exit 1
+}
+
+readonly oversized_body="$temporary_directory/oversized-request.json"
+dd if=/dev/zero bs=1048576 count=2 status=none | tr '\0' 'x' >"$oversized_body"
+oversized_status=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+	--config "$curl_authorization_config" --noproxy '*' --proto '=http' --max-redirs 0 \
+	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+	--max-time "$MCP_TIMEOUT_SECONDS" --request POST \
+	--header 'Content-Type: application/json' --header 'Expect:' \
+	--data-binary "@$oversized_body" "$internal_link_graph_url")
+[[ "$oversized_status" == "413" ]] || {
+	log ERROR "HTTP body limit did not reject an oversized request"
 	exit 1
 }
 
