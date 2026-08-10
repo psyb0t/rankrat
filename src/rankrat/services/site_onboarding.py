@@ -22,8 +22,8 @@ _LOGGER = logging.getLogger(__name__)
 class SiteOnboardingSubmissionRequest:
     """One configured website onboarding request ready for provider writes."""
 
-    google_account_id: str
-    bing_account_id: str
+    google_account_id: str | None
+    bing_account_id: str | None
     site_url: str
     google_analytics_parent_account_id: str | None = None
     display_name: str | None = None
@@ -46,7 +46,6 @@ class SiteOnboardingService:
         """Create remote provider resources within configured account boundaries."""
 
         operator_request = self._operator_request(request)
-        self._operator.validate_request(operator_request)
         try:
             receipt = await self._operator.onboard(operator_request)
         except (ProviderOperationError, RankratError):
@@ -54,8 +53,8 @@ class SiteOnboardingService:
                 _LOGGER,
                 logging.WARNING,
                 "Site onboarding mutation failed",
-                google_account_id=operator_request.google_account_id,
-                bing_account_id=operator_request.bing_account_id,
+                google_account_id=operator_request.google_account_id or "automatic",
+                bing_account_id=operator_request.bing_account_id or "automatic",
                 site_url=operator_request.site_url,
             )
             raise
@@ -63,8 +62,8 @@ class SiteOnboardingService:
             _LOGGER,
             logging.INFO,
             "Site onboarding mutation accepted",
-            google_account_id=operator_request.google_account_id,
-            bing_account_id=operator_request.bing_account_id,
+            google_account_id=receipt.google_account_id,
+            bing_account_id=receipt.bing_account_id,
             site_url=operator_request.site_url,
         )
         return receipt

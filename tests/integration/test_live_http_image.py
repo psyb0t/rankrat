@@ -53,7 +53,6 @@ def _policy(tmp_path: Path) -> BoundaryPolicy:
                         "credential": str(secret_root / "google" / "oauth-client.json"),
                         "oauth_token_file": str(oauth_root / "google.json"),
                         "pagespeed_api_key_file": str(secret_root / "google" / "pagespeed-api-key"),
-                        "google_account_discovery": True,
                         "search_console_sites": ["sc-domain:example.com"],
                         "pagespeed_sites": ["https://example.com/"],
                         "ga4_properties": ["123456789"],
@@ -219,6 +218,11 @@ def test_live_http_shell_runner_uses_default_egress_and_never_submits_indexnow()
 def test_final_image_exercises_writable_stdio_with_mounted_state() -> None:
     script = _FINAL_IMAGE_SCRIPT_PATH.read_text(encoding="utf-8")
 
+    security_arguments = script.split("container_security_args=(", maxsplit=1)[1].split(
+        ")\nreadonly -a container_security_args",
+        maxsplit=1,
+    )[0]
+    assert "RANKRAT_READ_ONLY=true" in security_arguments
     assert "checking writable stdio MCP persists monitor state" in script
     assert "type=bind,src=$state_directory,dst=/run/state" in script
     assert "RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3" in script

@@ -31,7 +31,6 @@ class ServerInfoResponse:
     name: str
     version: str
     read_only: bool
-    unbounded: bool
     http_bearer_auth_configured: bool
     providers: tuple[ProviderCapability, ...]
 
@@ -65,7 +64,6 @@ class CapabilityService:
             name=_SERVER_NAME,
             version=self._version,
             read_only=self._settings.read_only,
-            unbounded=self._settings.unbounded,
             http_bearer_auth_configured=(self._settings.http_bearer_secret_file is not None),
             providers=capabilities,
         )

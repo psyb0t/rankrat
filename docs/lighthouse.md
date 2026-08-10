@@ -26,10 +26,10 @@ in the separate `psyb0t/rankrat-lighthouse` image.
 | `lighthouse_performance_findings` | `POST /v1/lighthouse/performance-findings` | Failed performance audits |
 | `lighthouse_best_practices_findings` | `POST /v1/lighthouse/best-practices-findings` | Failed best-practices audits |
 
-Every call takes `account_id`, a configured `site_url`, a child `page_url`, and
-an optional timeout between 5 and 300 seconds. The account's `pagespeed_sites`
-allow-list authorizes PageSpeed and Lighthouse; enabling the browser creates no
-second URL scope.
+Every call takes `account_id`, a known `site_url`, a child `page_url`, and an
+optional timeout between 5 and 300 seconds. The account's `pagespeed_sites`
+inventory supplies site roots for PageSpeed and Lighthouse child-URL
+containment; enabling the browser creates no second credential scope.
 
 ## Architecture
 
@@ -55,18 +55,21 @@ URL before returning a result.
 From a checkout:
 
 ```sh
-make run-http-lighthouse
+make run-http
 ```
 
-Equivalent Compose flow:
+Equivalent published-image wrapper flow:
 
 ```sh
-cp docker-compose.yml.example docker-compose.yml
-docker compose config --quiet
-docker compose up --build
+export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
+rankrat.sh http -d
 ```
 
-The example:
+The wrapper creates the reviewed Compose deployment in the selected profile
+when absent and preserves an existing operator file. Omit `-d` to attach to
+both services' logs.
+
+The committed Compose deployment:
 
 - binds Rankrat HTTP to host loopback;
 - uses a named Unix-socket volume as the only service-to-service channel;

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "rankrat"
-version = "0.9.1"
+version = "0.10.0"
 description = "A security-first, boundary-limited SEO and search analytics service over REST and MCP."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"

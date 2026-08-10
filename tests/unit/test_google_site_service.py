@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from rankrat.errors import BoundaryDeniedError
 from rankrat.models.boundaries import BoundaryDocument
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.google_search_console import GoogleSearchConsoleClient
@@ -66,7 +65,7 @@ async def test_google_site_add_is_boundary_limited(
 
 
 @pytest.mark.asyncio
-async def test_google_site_rejects_out_of_scope_intent(
+async def test_google_site_accepts_account_scoped_property_intent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     service = _service()
@@ -77,15 +76,14 @@ async def test_google_site_rejects_out_of_scope_intent(
         deleted = True
 
     monkeypatch.setattr(service._client, "delete_site", delete_site)
-    with pytest.raises(BoundaryDeniedError):
-        await service.submit(
-            GoogleSiteSubmissionRequest(
-                "google-main",
-                "sc-domain:outside.example.com",
-                GoogleSiteOperation.DELETE,
-            )
+    await service.submit(
+        GoogleSiteSubmissionRequest(
+            "google-main",
+            "sc-domain:outside.example.com",
+            GoogleSiteOperation.DELETE,
         )
-    assert deleted is False
+    )
+    assert deleted is True
 
 
 @pytest.mark.asyncio

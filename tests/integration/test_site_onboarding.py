@@ -14,6 +14,7 @@ from rankrat.operator.site_onboarding import (
 )
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.bing import BingWebmasterClient
+from rankrat.providers.google_analytics import GoogleAnalyticsDataClient
 from rankrat.providers.google_analytics_admin import GoogleAnalyticsAdminClient
 from rankrat.providers.google_search_console import GoogleSearchConsoleClient
 
@@ -25,8 +26,6 @@ async def _token(_: Path) -> str:
 def _operator(
     tmp_path: Path,
     handler: httpx.MockTransport,
-    *,
-    unbounded: bool = False,
 ) -> tuple[Path, SiteOnboardingOperator]:
     secret_root = tmp_path / "secrets"
     secret_root.mkdir()
@@ -61,12 +60,12 @@ def _operator(
         boundary_file,
         secret_root,
         oauth_root,
-        unbounded=unbounded,
     )
     return boundary_file, SiteOnboardingOperator(
         boundary_file,
         policy,
         GoogleAnalyticsAdminClient(policy, _token, lambda: handler),
+        GoogleAnalyticsDataClient(policy, _token, lambda: handler),
         GoogleSearchConsoleClient(policy, _token, lambda: handler),
         BingWebmasterClient(policy, lambda: handler),
     )
@@ -80,6 +79,19 @@ async def test_site_onboarding_creates_all_provider_resources_then_updates_bound
 
     def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
+        if request.url.path.endswith("/accountSummaries"):
+            return httpx.Response(
+                200,
+                json={
+                    "accountSummaries": [
+                        {
+                            "name": "accountSummaries/123",
+                            "account": "accounts/123",
+                            "displayName": "Example account",
+                        }
+                    ]
+                },
+            )
         if request.url.host == "analyticsadmin.googleapis.com" and request.url.path.endswith(
             "/properties"
         ):
@@ -106,8 +118,12 @@ async def test_site_onboarding_creates_all_provider_resources_then_updates_bound
                     },
                 },
             )
+        if request.url.host == "www.googleapis.com" and request.method == "GET":
+            return httpx.Response(200, json={})
         if request.url.host == "www.googleapis.com":
             return httpx.Response(204)
+        if request.url.path.endswith("/GetUserSites"):
+            return httpx.Response(200, json=[])
         return httpx.Response(200, json={"d": None})
 
     boundary_file, operator = _operator(tmp_path, httpx.MockTransport(handler))
@@ -130,53 +146,65 @@ async def test_site_onboarding_creates_all_provider_resources_then_updates_bound
     assert [request.url.host for request in requests] == [
         "analyticsadmin.googleapis.com",
         "analyticsadmin.googleapis.com",
+        "analyticsadmin.googleapis.com",
         "www.googleapis.com",
+        "www.googleapis.com",
+        "ssl.bing.com",
         "ssl.bing.com",
     ]
     assert "apikey=test-bing-key" not in boundary_file.read_text(encoding="utf-8")
 
 
 @pytest.mark.asyncio
-async def test_unbounded_site_onboarding_accepts_a_discovered_parent_and_persists_boundaries(
+async def test_site_onboarding_reuses_existing_provider_resources_idempotently(
     tmp_path: Path,
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
-        if request.url.host == "analyticsadmin.googleapis.com" and request.url.path.endswith(
-            "/properties"
-        ):
-            payload = json.loads(request.content)
+        if request.url.path.endswith("/accountSummaries"):
             return httpx.Response(
                 200,
                 json={
-                    "name": "properties/456",
-                    "parent": payload["parent"],
-                    "displayName": "example.com",
-                    "timeZone": "Etc/UTC",
-                    "currencyCode": "USD",
+                    "accountSummaries": [
+                        {
+                            "name": "accountSummaries/456",
+                            "account": "accounts/456",
+                            "displayName": "Example account",
+                            "propertySummaries": [
+                                {"property": "properties/456", "displayName": "example.com"}
+                            ],
+                        }
+                    ]
                 },
             )
-        if request.url.host == "analyticsadmin.googleapis.com":
+        if request.url.path.endswith("/dataStreams"):
             return httpx.Response(
                 200,
                 json={
-                    "name": "properties/456/dataStreams/789",
-                    "displayName": "example.com",
-                    "type": "WEB_DATA_STREAM",
-                    "webStreamData": {
-                        "defaultUri": "https://example.com/",
-                        "measurementId": "G-ABC123",
-                    },
+                    "dataStreams": [
+                        {
+                            "name": "properties/456/dataStreams/789",
+                            "displayName": "example.com",
+                            "type": "WEB_DATA_STREAM",
+                            "webStreamData": {
+                                "defaultUri": "https://example.com/",
+                                "measurementId": "G-ABC123",
+                            },
+                        }
+                    ]
                 },
             )
         if request.url.host == "www.googleapis.com":
-            return httpx.Response(204)
-        return httpx.Response(200, json={"d": None})
+            return httpx.Response(
+                200,
+                json={
+                    "siteEntry": [
+                        {"siteUrl": "https://example.com/", "permissionLevel": "siteOwner"}
+                    ]
+                },
+            )
+        return httpx.Response(200, json=[{"Url": "https://example.com/"}])
 
-    boundary_file, operator = _operator(
-        tmp_path,
-        httpx.MockTransport(handler),
-        unbounded=True,
-    )
+    boundary_file, operator = _operator(tmp_path, httpx.MockTransport(handler))
     receipt = await operator.onboard(
         SiteOnboardingRequest(
             "google-main",
@@ -192,6 +220,9 @@ async def test_unbounded_site_onboarding_accepts_a_discovered_parent_and_persist
         tmp_path / "oauth",
     )
     assert receipt.boundary_updated is True
+    assert receipt.ga4_created is False
+    assert receipt.google_search_console_added is False
+    assert receipt.bing_added is False
     assert (
         persisted_policy.require_resource(
             "google-main",
@@ -217,6 +248,19 @@ async def test_site_onboarding_reports_partial_success_without_boundary_write(
     tmp_path: Path,
 ) -> None:
     def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/accountSummaries"):
+            return httpx.Response(
+                200,
+                json={
+                    "accountSummaries": [
+                        {
+                            "name": "accountSummaries/123",
+                            "account": "accounts/123",
+                            "displayName": "Example account",
+                        }
+                    ]
+                },
+            )
         if request.url.host == "analyticsadmin.googleapis.com" and request.url.path.endswith(
             "/properties"
         ):

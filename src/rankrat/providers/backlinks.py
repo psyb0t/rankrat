@@ -320,7 +320,7 @@ class _BaseBacklinkClient(ABC):
         raise NotImplementedError
 
     async def readiness(self, request: ProviderReadRequest) -> ProviderReadiness:
-        """Validate credentials with one bounded read against the first allowed target."""
+        """Validate credentials with one bounded read against the first inventoried target."""
         account = self._policy.resolve_account(str(request.account_id), self.provider)
         await self.links(request, account.backlink_targets[0], 1, 0)
         return ProviderReadiness(

@@ -1,6 +1,6 @@
 # @psyb0t/rankrat
 
-MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — boundary-limited
+MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — account-authorized
 SEO and search-analytics operations over Google Search Console, Bing Webmaster
 Tools, GA4, PageSpeed, DNS ownership automation (currently through Cloudflare),
 CrUX, and IndexNow, plus bounded whole-site, internal-link, backlink, content
@@ -22,8 +22,8 @@ Streamable HTTP deployment described below.
 
 Runs the published image and talks to it directly. Nothing needs to be running
 first. OpenClaw intentionally starts stdio MCP children with a restricted
-environment, so the static plugin does not depend on exported `RANKRAT_*`
-variables. It uses this standard layout:
+environment. The plugin declares the settings it consumes and uses this
+standard layout when `RANKRAT_DATA_DIR` is unset:
 
 ```bash
 $HOME/.config/rankrat/config/boundaries.json
@@ -32,31 +32,41 @@ $HOME/.config/rankrat/oauth/
 $HOME/.config/rankrat/state/
 ```
 
-Run the repository's [Quick start](https://github.com/psyb0t/rankrat#quick-start)
-from `$HOME/.config/rankrat`, then install/enable the plugin. Only `config` is
-required. `secrets` and `oauth` may be omitted for credential-free tools, and
-`state` may be omitted when persistent monitoring is not needed. Config and
-provider secrets are read-only. OAuth storage is writable because Google may
+Run the repository's [Quick start](https://github.com/psyb0t/rankrat#quick-start),
+then set `RANKRAT_DATA_DIR` to that checkout's absolute path or move its fixed
+layout under `$HOME/.config/rankrat`. The profile must contain `config/`,
+`secrets/`, `oauth/`, and `state/`; `config/boundaries.json` is required.
+Provider secrets are read-only. OAuth storage is writable because Google may
 rotate the refresh token during refresh; state is writable for the SQLite
 monitor database. The launcher runs as the current POSIX UID/GID with no
 capabilities, a read-only root, and CPU, memory, and process limits.
 
-The static read-only stdio child can read persistent monitor history. A directly
-launched writable stdio process can also create monitors and run one explicitly.
+The static stdio child uses Rankrat's writable default, so it can create
+monitors and run one explicitly as well as read persistent history. Set
+`RANKRAT_READ_ONLY=true` for a direct launcher when only reads should exist.
 Automatic due-monitor scheduling runs only in Rankrat's long-lived HTTP mode,
 so use the shared Streamable HTTP deployment when monitors must execute without
 an agent keeping a stdio process alive.
 
-The direct `rankrat-mcp` executable still accepts `RANKRAT_CONFIG_DIR`,
-`RANKRAT_SECRETS_DIR`, `RANKRAT_OAUTH_DIR`, `RANKRAT_STATE_DIR`, and
-`RANKRAT_IMAGE`; those ambient overrides are for a direct shell launch, not
-OpenClaw's sanitized static server.
+`RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile` is the only host-path
+override. It selects config, credentials, OAuth authorization, and state as one
+unit, so multiple site projects can reuse the same logged-in provider accounts.
+The launcher also accepts `RANKRAT_IMAGE`, `RANKRAT_READ_ONLY`, and
+`RANKRAT_LOG_LEVEL` through its declared plugin environment.
 
 ## Streamable HTTP
 
 For a Rankrat server you are already running, replace the plugin's static stdio
 definition with OpenClaw's native Streamable HTTP client. There is no proxy
 process and the bearer token never appears in a child-process argument.
+
+Start the shared Rankrat + Lighthouse server from the bundled skill or installed
+wrapper. The selected profile owns the generated/preserved Compose deployment:
+
+```bash
+export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
+bash /absolute/path/to/rankrat.sh http -d
+```
 
 ```bash
 export RANKRAT_AUTH_TOKEN="$(<"$HOME/.config/rankrat/secrets/rankrat/http-bearer-token")"
@@ -86,21 +96,21 @@ Insights.
 
 ## Writes
 
-rankrat is read-only by default and its write tools are absent from `tools/list`
-entirely, so an agent cannot discover them. The static OpenClaw stdio server
-intentionally stays at that default. Use the Streamable HTTP form for writes:
-the already-running Rankrat server fixes read-only, unbounded, and onboarding
-settings at startup, while OpenClaw receives only the MCP URL and bearer header.
+Rankrat is writable by default. The static OpenClaw stdio server therefore
+exposes every supported mutation permitted by the configured provider accounts,
+including site onboarding. Set `RANKRAT_READ_ONLY=true` to make all write tools
+absent from `tools/list`. Use the Streamable HTTP form for a shared service with
+centralized bearer authentication; OpenClaw receives only the MCP URL and
+bearer header.
 Within one running server, Cloudflare cache-template writes are serialized per
 zone. Backlink reports and aggregates have one deadline and one shared
 20-request upstream budget, and duplicate aggregate sources are rejected.
 
-When the launcher is invoked directly with unbounded mode or agent onboarding
-enabled, it verifies owner-only config-directory permissions, ownership,
-regular-file and ancestor-symlink constraints before making only `/run/config`
-writable. This lets onboarding persist exact provider IDs instead of mutating a
-provider and then failing the local boundary update. Provider secrets remain
-read-only.
+In writable mode the launcher verifies owner-only config-directory permissions,
+ownership, regular-file and ancestor-symlink constraints before making only
+`/run/config` writable. This lets discovery and onboarding persist provider
+inventory instead of mutating a provider and then failing the local update.
+Provider secrets remain read-only.
 
 ## License
 

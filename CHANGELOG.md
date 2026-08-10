@@ -2,6 +2,40 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.10.0 — 2026-08-10
+
+Makes each configured provider credential the authority for its full account,
+adds one guided credential setup, and gives HTTP deployments a persistent
+Compose-backed profile.
+
+- **Breaking.** Changes `RANKRAT_READ_ONLY` from `true` by default to `false`.
+  Set `RANKRAT_READ_ONLY=true` to omit every mutating REST route and MCP tool;
+  writable mode now includes `site_onboarding_submit` without a second switch.
+- **Breaking.** Removes `RANKRAT_UNBOUNDED`,
+  `RANKRAT_ALLOW_AGENT_ONBOARDING`, `google_account_discovery`, and the legacy
+  per-path wrapper variables. A configured provider credential now authorizes
+  all supported resources that its provider account can reach; resource arrays
+  in `boundaries.json` are discovered inventory and URL-containment roots.
+- Adds `make setup` and `rankrat.sh setup` as an interactive provider setup:
+  they print the required account-wide console permissions, accept secrets
+  through hidden terminal prompts, complete Google OAuth, preserve unrelated
+  accounts on reruns, and validate live provider access before succeeding.
+- Makes Google and Bing account IDs optional for site onboarding when exactly
+  one matching account is configured, reuses existing GA4, Search Console, and
+  Bing resources, and persists the resolved account/resource inventory.
+- Replaces `docker-compose.yml.example` with a runnable
+  `docker-compose.yml`. `rankrat.sh http` uses the selected
+  `RANKRAT_DATA_DIR` as its Compose project, generates the reviewed deployment
+  when absent, preserves an existing operator file, and supports `-d` or
+  `--detach` with automatic service restarts.
+- Uses one shared profile layout for stdio, HTTP, setup, Claude Code, Codex,
+  and OpenClaw while mounting only its fixed config, secret, OAuth, and state
+  children. The repository wrapper and packaged agent reference remain
+  byte-identical.
+- Synchronizes the YAML-first OpenAPI contract, generated JSON, REST and MCP
+  catalogs, environment template, Make targets, live checks, README manual,
+  and all committed agent integrations with the new behavior.
+
 ## v0.9.1 — 2026-08-10
 
 Reorganizes Rankrat's public documentation into a concise entry point and a

@@ -1,9 +1,10 @@
 # Monitoring and remediation
 
-Rankrat has no approval-ID protocol. You choose whether the process is trusted
-for writes at startup. In read-only mode, write tools and REST routes are absent
-from discovery. In writable mode, calls remain limited by resource boundaries,
-fixed provider origins, request limits, upstream permissions, and HTTP auth.
+You choose whether the process is trusted for writes at startup. In read-only
+mode, write tools and REST routes are absent from discovery. In writable mode,
+configured account credentials authorize their reachable resources; fixed
+provider origins, request limits, URL containment, upstream permissions, and
+HTTP auth still apply.
 
 ## Contents
 
@@ -24,10 +25,10 @@ fixed provider origins, request limits, upstream permissions, and HTTP auth.
 ```sh
 RANKRAT_READ_ONLY=false rankrat.sh          # writable stdio MCP
 RANKRAT_READ_ONLY=false rankrat.sh http     # writable REST + HTTP MCP
+RANKRAT_READ_ONLY=false rankrat.sh http -d  # persistent restartable scheduler
 ```
 
-This does not automatically expose agent onboarding; that has a separate switch
-because it can persist newly created provider resources into the boundary.
+Writable mode includes site onboarding; read-only mode omits it.
 
 ## Persistent monitors
 
@@ -69,6 +70,10 @@ interval it:
 Stdio supports explicit monitor management and `monitor_run`, but a stdio child
 cannot perform future due work after its caller exits.
 
+Use `rankrat.sh http -d` for an unattended scheduler. Its Compose services use
+`restart: unless-stopped`, while an attached `rankrat.sh http` exits with the
+foreground Compose process.
+
 Rankrat sends no email, webhook, or pager notification. Agents poll issue/event
 tools and decide how to notify. The built-in scheduler monitors site-audit
 findings, not every backlink or provider-indexing metric.
@@ -87,12 +92,12 @@ only its local Rankrat history; it does not delete provider data.
 
 | Tool | Behavior |
 | --- | --- |
-| `google_site_submit` | Add or delete one approved Search Console property |
-| `google_sitemap_submit` | Submit or delete one bounded sitemap |
+| `google_site_submit` | Add or delete one Search Console property reachable through the account |
+| `google_sitemap_submit` | Submit or delete one sitemap beneath a selected property |
 | `google_indexing_submit` | Publish one eligible URL notification |
 | `google_indexing_batch_submit` | Publish a bounded eligible multipart batch |
 | `google_analytics_account_rename` | Rename one discovery-authorized account |
-| `google_analytics_property_rename` | Rename one configured property |
+| `google_analytics_property_rename` | Rename one account-visible property |
 
 Provider acceptance is asynchronous. A successful sitemap submit means Google
 accepted the API request, not that it fetched or processed the sitemap. Poll
@@ -110,9 +115,9 @@ the same. Rankrat does not expose Analytics deletion.
 
 | Tool | Behavior |
 | --- | --- |
-| `bing_url_submit` | Submit a bounded URL batch |
-| `bing_sitemap_submit` | Submit or delete a bounded sitemap |
-| `bing_site_submit` | Add or delete one approved site |
+| `bing_url_submit` | Submit a child-URL batch for one selected site |
+| `bing_sitemap_submit` | Submit or delete one sitemap for one selected site |
+| `bing_site_submit` | Add or delete one account-visible site |
 
 Check `bing_url_submission_quota` before large submissions. Site/sitemap
 deletion is destructive and remains constrained to exact configured resources.
@@ -151,8 +156,8 @@ failing provider, then retry the idempotent workflow.
 
 - `site_ownership_verify` creates only provider-issued DNS proofs through a
   configured DNS adapter and redeems propagated ownership.
-- `site_onboarding_submit` creates GA4/Search Console/Bing resources and appears
-  only with `RANKRAT_ALLOW_AGENT_ONBOARDING=true` plus writable mode.
+- `site_onboarding_submit` creates or reuses GA4/Search Console/Bing resources
+  in writable mode and records the discovered inventory.
 
 Read [Ownership and onboarding](ownership-and-onboarding.md) for DNS propagation,
 GA4 account limits, and partial-failure handling.
@@ -180,7 +185,8 @@ it is not a distributed lock across multiple Rankrat deployments.
 
 Before enabling writes:
 
-1. Confirm the boundary contains only intended resources.
+1. Confirm every configured credential belongs to the intended provider
+   account and has the intended account-wide permissions.
 2. Give provider tokens only the permissions in
    [Providers and credentials](providers.md).
 3. Keep HTTP on loopback/private networking with bearer auth.

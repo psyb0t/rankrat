@@ -62,14 +62,7 @@ class Settings(BaseSettings):
         le=MAX_STATE_RETENTION_DAYS,
     )
     enable_openapi: bool = False
-    read_only: bool = True
-    unbounded: bool = False
-    # Onboarding creates billable provider resources and rewrites the boundary
-    # file this server enforces, so it widens its own future scope. Writable mode
-    # alone should not hand an agent that reach: this is a second, explicit
-    # switch, and it gates only the agent-reachable surfaces. The operator CLI
-    # command is unaffected -- that one is a human at a terminal.
-    allow_agent_onboarding: bool = False
+    read_only: bool = False
     http_bearer_secret_file: Path | None = Field(
         default=None,
         validation_alias=AliasChoices(
@@ -133,21 +126,11 @@ class Settings(BaseSettings):
     def validate_network_exposure(self) -> Settings:
         if not self.is_loopback_bind and self.http_bearer_secret_file is None:
             raise ValueError("non-loopback HTTP bind requires an HTTP bearer secret file")
-        if self.unbounded and self.read_only:
-            raise ValueError("unbounded mode requires RANKRAT_READ_ONLY=false")
-        if self.allow_agent_onboarding and self.read_only:
-            raise ValueError("agent onboarding requires RANKRAT_READ_ONLY=false")
         return self
 
     @property
-    def agent_onboarding_enabled(self) -> bool:
-        """Reach the onboarding tool only when both switches are deliberately set."""
-
-        return self.writes_enabled and self.allow_agent_onboarding
-
-    @property
     def writes_enabled(self) -> bool:
-        """Expose write tools only when the operator explicitly disables read-only mode."""
+        """Expose account-scoped writes unless the operator enables read-only mode."""
 
         return not self.read_only
 

@@ -2,12 +2,30 @@
   "id": "@psyb0t/rankrat",
   "name": "rankrat",
   "version": "0.0.0",
-  "description": "Self-hosted, boundary-limited SEO audits, monitoring, internal links, CrUX, ownership, remediation, backlinks, analytics, Cloudflare performance, PageSpeed, and optional local Lighthouse tools. The default server starts the published Rankrat image over MCP stdio.",
+  "description": "Self-hosted, account-authorized SEO audits, monitoring, internal links, CrUX, ownership, remediation, backlinks, analytics, Cloudflare performance, PageSpeed, and optional local Lighthouse tools. The default server starts the published Rankrat image over MCP stdio.",
   "mcpServers": {
     "rankrat": {
       "transport": "stdio",
       "command": "node",
       "args": ["./bin/cli.js"]
+    }
+  },
+  "environment": {
+    "RANKRAT_DATA_DIR": {
+      "required": false,
+      "description": "Absolute shared profile directory containing config, secrets, OAuth records, state, and .env. Defaults to $HOME/.config/rankrat."
+    },
+    "RANKRAT_IMAGE": {
+      "required": false,
+      "description": "Published Rankrat image reference. Defaults to psyb0t/rankrat."
+    },
+    "RANKRAT_READ_ONLY": {
+      "required": false,
+      "description": "Set to true to omit every write tool. Defaults to false."
+    },
+    "RANKRAT_LOG_LEVEL": {
+      "required": false,
+      "description": "Rankrat server log level."
     }
   },
   "configSchema": {

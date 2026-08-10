@@ -73,15 +73,17 @@ def test_dns_boundaries_use_provider_neutral_zone_fields(tmp_path: Path) -> None
         )
 
 
-def test_backlink_provider_requires_an_explicit_target(tmp_path: Path) -> None:
-    with pytest.raises(ValidationError, match="require backlink_targets"):
-        _document(
-            {
-                "id": "ahrefs-main",
-                "provider": "ahrefs",
-                "credential": str(tmp_path / "ahrefs-token"),
-            }
-        )
+def test_backlink_provider_credential_authorizes_account_wide_target_discovery(
+    tmp_path: Path,
+) -> None:
+    document = _document(
+        {
+            "id": "ahrefs-main",
+            "provider": "ahrefs",
+            "credential": str(tmp_path / "ahrefs-token"),
+        }
+    )
+    assert document.accounts[0].backlink_targets == ()
 
 
 def test_boundary_models_normalize_sites_and_reject_invalid_shapes(tmp_path: Path) -> None:
@@ -226,7 +228,7 @@ def test_boundary_models_normalize_sites_and_reject_invalid_shapes(tmp_path: Pat
             _document(invalid)
 
 
-def test_google_account_discovery_allows_only_google_read_resources(tmp_path: Path) -> None:
+def test_configured_google_account_authorizes_account_scoped_resources(tmp_path: Path) -> None:
     credential = tmp_path / "credential"
     document = _document(
         {
@@ -234,13 +236,11 @@ def test_google_account_discovery_allows_only_google_read_resources(tmp_path: Pa
             "provider": "google",
             "credential": str(credential),
             "oauth_token_file": str(tmp_path / "oauth" / "google-main.json"),
-            "google_account_discovery": True,
         }
     )
     policy = BoundaryPolicy(document)
 
-    assert document.accounts[0].google_account_discovery is True
-    assert policy.require_google_account_discovery("google-main") == document.accounts[0]
+    assert policy.require_google_account("google-main") == document.accounts[0]
     assert (
         policy.require_google_read_resource(
             "google-main",
@@ -265,44 +265,18 @@ def test_google_account_discovery_allows_only_google_read_resources(tmp_path: Pa
         )
         == "https://www.example.com/article"
     )
-    with pytest.raises(BoundaryDeniedError):
+    assert (
         policy.require_resource(
             "google-main",
             Provider.GOOGLE,
             ResourceKind.SEARCH_CONSOLE_SITE,
             "sc-domain:example.com",
         )
-
-    with pytest.raises(ValidationError):
-        _document(
-            {
-                "id": "bing-main",
-                "provider": "bing",
-                "credential": str(credential),
-                "google_account_discovery": True,
-            }
-        )
-    with pytest.raises(ValidationError):
-        _document(
-            {
-                "id": "google-string",
-                "provider": "google",
-                "credential": str(credential),
-                "google_account_discovery": "true",
-            }
-        )
-    with pytest.raises(ValidationError, match="requires oauth_token_file"):
-        _document(
-            {
-                "id": "google-no-oauth",
-                "provider": "google",
-                "credential": str(credential),
-                "google_account_discovery": True,
-            }
-        )
+        == document.accounts[0]
+    )
 
 
-def test_unbounded_policy_preserves_accounts_but_bypasses_resource_allow_lists(
+def test_account_selection_is_automatic_only_when_provider_has_one_account(
     tmp_path: Path,
 ) -> None:
     credential = tmp_path / "credential"
@@ -323,16 +297,7 @@ def test_unbounded_policy_preserves_accounts_but_bypasses_resource_allow_lists(
             ]
         }
     )
-    bounded_policy = BoundaryPolicy(document)
-    with pytest.raises(BoundaryDeniedError):
-        bounded_policy.require_resource(
-            "google-main",
-            Provider.GOOGLE,
-            ResourceKind.GA4_PROPERTY,
-            "456",
-        )
-
-    policy = BoundaryPolicy(document, unbounded=True)
+    policy = BoundaryPolicy(document)
     assert (
         policy.require_resource(
             "google-main",
@@ -342,7 +307,8 @@ def test_unbounded_policy_preserves_accounts_but_bypasses_resource_allow_lists(
         )
         == document.accounts[0]
     )
-    assert policy.require_google_account_discovery("google-main") == document.accounts[0]
+    assert policy.select_account(Provider.GOOGLE) == document.accounts[0]
+    assert policy.select_account(Provider.BING) == document.accounts[1]
     with pytest.raises(BoundaryDeniedError):
         policy.require_resource(
             "missing",
@@ -352,14 +318,13 @@ def test_unbounded_policy_preserves_accounts_but_bypasses_resource_allow_lists(
         )
 
 
-def test_google_account_discovery_requests_only_its_read_scopes(tmp_path: Path) -> None:
+def test_read_only_google_runtime_requires_account_wide_read_scopes(tmp_path: Path) -> None:
     account = _document(
         {
             "id": "google-main",
             "provider": "google",
             "credential": str(tmp_path / "oauth-client.json"),
             "oauth_token_file": str(tmp_path / "oauth" / "google-main.json"),
-            "google_account_discovery": True,
         }
     ).accounts[0]
 
@@ -644,8 +609,10 @@ def test_boundary_policy_loads_and_fails_closed(tmp_path: Path) -> None:
         policy.resolve_account("missing")
     with pytest.raises(BoundaryDeniedError):
         policy.resolve_account("main", Provider.BING)
-    with pytest.raises(BoundaryDeniedError):
-        policy.require_resource("main", Provider.GOOGLE, ResourceKind.GA4_PROPERTY, "999")
+    assert (
+        policy.require_resource("main", Provider.GOOGLE, ResourceKind.GA4_PROPERTY, "999").id
+        == "main"
+    )
 
     bing_document = _document(
         {

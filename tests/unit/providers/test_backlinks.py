@@ -9,7 +9,7 @@ import httpx
 import pytest
 
 from rankrat.constants import MAX_BACKLINK_PROVIDER_REQUESTS
-from rankrat.errors import BoundaryDeniedError, InputLimitError
+from rankrat.errors import InputLimitError
 from rankrat.models.boundaries import BoundaryDocument, Provider
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.backlinks import (
@@ -317,7 +317,7 @@ async def test_adapters_reject_cross_boundary_and_malformed_provider_data(
             )
         ),
     )
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.links(
             _request(Provider.AHREFS),
             "https://other.example/article",

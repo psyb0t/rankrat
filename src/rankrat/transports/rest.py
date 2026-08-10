@@ -283,8 +283,8 @@ class _GoogleSiteSubmissionBody(BaseModel):
 class _SiteOnboardingSubmissionBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
-    bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    google_account_id: str | None = Field(default=None, pattern=ACCOUNT_ID_PATTERN)
+    bing_account_id: str | None = Field(default=None, pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     google_analytics_parent_account_id: str | None = Field(default=None, max_length=64)
     display_name: str | None = Field(
@@ -1332,7 +1332,6 @@ def build_api_router(services: ApplicationServices) -> APIRouter:
             services.onboarding_guide.render(
                 OnboardingGuideRequest(site_url=body.site_url),
                 writes_enabled=services.writes_enabled,
-                agent_onboarding_enabled=services.agent_onboarding_enabled,
             )
         )
 

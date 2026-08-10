@@ -10,14 +10,14 @@
 
 Search Console, Bing Webmaster Tools, GA4, PageSpeed, Cloudflare, CrUX, and
 backlink providers each have their own view of a site. Rankrat puts them behind
-one self-hosted service so an agent can join the evidence and apply explicitly
-enabled, bounded remediation.
+one self-hosted service so a human can tell an agent what outcome they want and
+let the agent inspect, create, update, or remove supported provider resources.
 
-It is a rat, not a burglar. You provide credentials and an explicit boundary
-file. Rankrat fixes credential accounts and explicit resource scope there. A
-Google account may deliberately opt into read access for every OAuth-visible
-Search Console site and GA4 property; writes remain separately gated. Rankrat
-is read-only by default, so write tools do not appear until enabled.
+It is a rat, not a burglar. You provide the provider accounts; those credentials
+are Rankrat's authority. Resource lists in `boundaries.json` are discovered
+inventory and URL-containment data, not a second permission system. Rankrat is
+writable by default. Set `RANKRAT_READ_ONLY=true` when a deployment must omit
+every mutating REST route and MCP tool.
 
 Rankrat speaks MCP over stdio, MCP over Streamable HTTP at `/mcp`, and a
 FastAPI JSON API under `/v1/`. Wrapper-managed HTTP uses a bearer; a custom
@@ -32,6 +32,7 @@ loopback-only launch may explicitly omit it.
 - [Run it](#run-it)
 - [Safety model](#safety-model)
 - [Documentation](#documentation)
+- [Agent integrations](#agent-integrations)
 - [Development](#development)
 - [Project information](#project-information)
 
@@ -39,68 +40,61 @@ loopback-only launch may explicitly omit it.
 
 | Area | What Rankrat exposes |
 | --- | --- |
-| Google | Search Console analytics, inspection and sitemaps; GA4 inventory and reports; bounded property, sitemap, indexing, ownership, and rename writes |
-| Bing | Search, crawl, indexing, sitemap, backlink, quota, keyword, opportunity, cannibalization, and bounded submission operations |
+| Google | Search Console analytics, inspection and sitemaps; GA4 inventory and reports; property, sitemap, indexing, ownership, onboarding, and rename writes |
+| Bing | Search, crawl, indexing, sitemap, backlink, quota, keyword, opportunity, cannibalization, and site/submission operations |
 | Performance | PageSpeed, Core Web Vitals, CrUX history, Cloudflare analytics, and isolated local Lighthouse audits |
 | Site intelligence | Whole-site audits, schema eligibility, internal-link graphs, orphan pages, content opportunities, and cross-provider comparisons |
-| Ownership and onboarding | Google/Bing checks, provider-neutral DNS verification through Cloudflare, and bounded GA4/Search Console/Bing onboarding |
+| Ownership and onboarding | Google/Bing checks, provider-neutral DNS verification through Cloudflare, and idempotent GA4/Search Console/Bing onboarding |
 | Backlinks | Normalized Bing, Ahrefs, Majestic, Moz, Semrush, and DataForSEO evidence with multi-provider deduplication |
 | Monitoring and remediation | Persistent monitors and issue history, sitemap/URL resubmission, IndexNow, exact Cloudflare purges, and finite cache templates |
 
-Runtime discovery is authoritative: read-only deployments omit writes, and
-agent onboarding has its own gate. See the [MCP tool catalog](docs/tool-reference.md)
-and generated [OpenAPI document](openapi.json).
+Runtime discovery is authoritative: read-only deployments omit every write;
+writable deployments include onboarding with the other mutations. See the
+[MCP tool catalog](docs/tool-reference.md) and generated
+[OpenAPI document](openapi.json).
 
 ## Quick start
 
-Docker is the only runtime requirement. Bootstrap uses a POSIX shell, `curl`,
-`openssl`, and standard core utilities.
+Docker and GNU Make are the only checkout setup requirements. The guided setup
+prints the provider console URL and account-wide permissions for each selected
+provider, accepts credentials through hidden terminal prompts, stores them in
+standard owner-only paths, completes Google OAuth, and runs live capability
+checks before declaring the installation ready.
+
+Rerunning setup is additive: selected providers are added or refreshed, while
+unselected accounts and their discovered inventory stay unchanged. If a
+provider already has multiple account entries, choose the intended entry in
+`config/boundaries.json` before refreshing that provider.
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/rankrat.sh -o rankrat.sh
-less rankrat.sh
-chmod +x rankrat.sh
-sudo mv rankrat.sh /usr/local/bin/rankrat.sh
-
-mkdir -p config oauth state \
-  secrets/{google,bing,cloudflare,indexnow,rankrat,ahrefs,majestic,moz,semrush,dataforseo}
-chmod 700 config oauth state secrets secrets/*
-
-curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/config/boundaries.json.example \
-  -o config/boundaries.json
-curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/.env.example -o .env
-chmod 600 config/boundaries.json .env
-
-install -m 600 /dev/null secrets/rankrat/http-bearer-token
-openssl rand -base64 32 | tr -d '\n' > secrets/rankrat/http-bearer-token
+git clone https://github.com/psyb0t/rankrat.git
+cd rankrat
+make setup
 ```
 
-Remove unused example accounts, add only allowed resources, and put credentials
-in their owner-readable files. If Google is configured:
-
-```sh
-rankrat.sh auth-google --account-id google --print-authorization-url
-rankrat.sh setup
-```
-
-`setup` performs read-only live readiness checks; it does not create provider
-resources or submit URLs. Exact provider console links and permissions are in
+Setup does not submit URLs or create site properties. It validates account
+access so a later agent session can do those jobs through the normal API/MCP
+tools. Exact provider details and the standalone-wrapper path are in
+[Getting started](docs/getting-started.md) and
 [Providers and credentials](docs/providers.md).
 
 ## Run it
 
 ```sh
-rankrat.sh          # MCP over stdio
-rankrat.sh http     # REST + Streamable HTTP MCP on 127.0.0.1:8080
+make run             # MCP over stdio
+make run-http        # Rankrat + Lighthouse over HTTP, attached to Compose
+rankrat.sh http -d   # same HTTP stack detached with automatic restarts
 ```
 
 For HTTP, MCP is at `http://127.0.0.1:8080/mcp`; REST is under `/v1/`.
-Stdio uses no port or bearer. The wrapper, plain `docker run`, Docker Compose,
+Stdio uses no port or bearer. HTTP uses the selected data directory as its
+Compose project, creates `docker-compose.yml` there when missing, and preserves
+an existing operator file. The wrapper, plain `docker run`, Docker Compose,
 HTTP authentication, and client configurations are in
 [Transports and deployment](docs/transports.md).
 
 Compose runs two
-long-lived services plus two one-shot volume initializers; details are in the
+long-lived services plus one one-shot volume initializer; details are in the
 deployment guide.
 
 Local browser audits use the separate `psyb0t/rankrat-lighthouse` image over a
@@ -108,12 +102,14 @@ Unix socket; it receives no provider credentials. See [Lighthouse](docs/lighthou
 
 ## Safety model
 
-- `RANKRAT_READ_ONLY=true` removes write REST routes and MCP tools.
-- `RANKRAT_READ_ONLY=false` adds ordinary boundary-limited writes.
-- `RANKRAT_UNBOUNDED=true` temporarily relaxes per-resource allow-lists for a
-  trusted bootstrap while keeping credential accounts fixed.
-- `RANKRAT_ALLOW_AGENT_ONBOARDING=true` separately exposes the operation that
-  creates provider resources and persists their exact boundaries.
+- Rankrat is writable by default. Configured account credentials authorize all
+  supported provider operations and all resources those accounts can reach.
+- `RANKRAT_READ_ONLY=true` removes write REST routes and MCP tools from runtime
+  discovery. It is the only capability switch.
+- The operator decides whether the caller is a careful human-directed agent or
+  a fully autonomous one. Remote HTTP still uses the configured bearer.
+- Resource arrays are cached inventory and containment data. Onboarding and
+  discovery update them so retries reuse existing resources.
 - Secrets are read-only mounts; OAuth records and monitor state have separate
   writable mounts.
 
@@ -130,6 +126,43 @@ The REST source is YAML-first: [`openapi.yaml`](src/rankrat/api/openapi.yaml)
 and [`seo-openapi.yaml`](src/rankrat/api/seo-openapi.yaml) generate
 [`openapi.json`](openapi.json). Agent clients can use the repository's skill,
 Claude Code and Codex manifests, or OpenClaw integration under [`.agents`](.agents/).
+
+## Agent integrations
+
+The [Rankrat skill](.agents/skills/rankrat) works in agents that read
+`.agents/skills/`. The integrations below cover both MCP stdio and a shared
+Streamable HTTP server.
+
+### Claude Code
+
+```sh
+claude plugin marketplace add psyb0t/agents
+claude plugin install rankrat@psyb0t
+```
+
+### Codex
+
+```sh
+codex plugin marketplace add psyb0t/agents
+codex plugin add rankrat@psyb0t
+```
+
+Installed through the catalog, the skill invokes as `$rankrat:rankrat`. Codex
+also discovers it as `$rankrat` directly from a Rankrat checkout.
+
+### OpenClaw
+
+```sh
+openclaw skills install @psyb0t/rankrat
+openclaw plugins install clawhub:@psyb0t/rankrat
+```
+
+The plugin launches the published image over MCP stdio using the standard
+`$HOME/.config/rankrat/` layout. Set one absolute `RANKRAT_DATA_DIR` in every
+client to reuse the same provider accounts, OAuth authorization, inventory,
+and monitor state from any site repository. To use an already-running shared server,
+configure OpenClaw for its authenticated `http://127.0.0.1:8080/mcp`
+Streamable HTTP endpoint. See [Transports](docs/transports.md#agent-integrations).
 
 ## Development
 

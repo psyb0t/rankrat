@@ -599,7 +599,7 @@ class BingWebmasterClient:
         )
 
     async def list_sites(self, request: ProviderReadRequest) -> tuple[str, ...]:
-        """Return only upstream sites that exactly match the configured boundary."""
+        """Return every Bing site visible to the configured account credential."""
         account = self._boundary_policy.resolve_account(str(request.account_id), Provider.BING)
         payload = await self._request_json(
             "GetUserSites",
@@ -627,8 +627,7 @@ class BingWebmasterClient:
                     ProviderFailureCode.INVALID_RESPONSE,
                     "Bing Webmaster returned an invalid site entry",
                 ) from error
-            if site.Url in account.bing_sites:
-                visible.append(site.Url)
+            visible.append(site.Url)
         return tuple(visible)
 
     async def read_site_data(

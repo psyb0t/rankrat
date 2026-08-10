@@ -762,21 +762,18 @@ def required_google_oauth_scopes(
     account: ConfiguredAccount,
     enable_writes: bool,
 ) -> tuple[str, ...]:
-    """Derive the smallest fixed Google scope set for one immutable account."""
+    """Return the Google scopes required by the selected runtime posture."""
     if account.provider != Provider.GOOGLE:
         raise ValueError("configured account is not a Google OAuth account")
-    scopes: list[str] = []
-    if account.search_console_sites or account.google_account_discovery:
-        scopes.append(GOOGLE_SEARCH_CONSOLE_READ_SCOPE)
-    if account.search_console_sites:
+    scopes = [
+        GOOGLE_SEARCH_CONSOLE_READ_SCOPE,
+        GOOGLE_ANALYTICS_READ_SCOPE,
+    ]
+    if enable_writes:
         scopes.append(GOOGLE_INDEXING_SCOPE)
-        if enable_writes:
-            scopes.append(GOOGLE_SEARCH_CONSOLE_WRITE_SCOPE)
-            scopes.append(GOOGLE_SITE_VERIFICATION_SCOPE)
-    if account.ga4_properties or account.google_account_discovery:
-        scopes.append(GOOGLE_ANALYTICS_READ_SCOPE)
-        if enable_writes:
-            scopes.append(GOOGLE_ANALYTICS_EDIT_SCOPE)
+        scopes.append(GOOGLE_SEARCH_CONSOLE_WRITE_SCOPE)
+        scopes.append(GOOGLE_SITE_VERIFICATION_SCOPE)
+        scopes.append(GOOGLE_ANALYTICS_EDIT_SCOPE)
     normalized_scopes = tuple(scopes)
     _require_scopes(normalized_scopes)
     return normalized_scopes

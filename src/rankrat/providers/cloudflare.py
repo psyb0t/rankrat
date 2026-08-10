@@ -114,8 +114,7 @@ class CloudflareDnsClient:
             self._validate_zone_id(zone.provider_zone_id)
             return zone
         except BoundaryDeniedError:
-            if not self._boundary_policy.unbounded:
-                raise
+            pass
         account = self._boundary_policy.resolve_account(
             str(request.account_id),
             Provider.CLOUDFLARE,

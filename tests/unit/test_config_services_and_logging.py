@@ -70,13 +70,10 @@ def test_settings_validate_exposure_paths_levels_and_write_mode(tmp_path: Path) 
             Settings.model_validate(values)
     write_settings = Settings(read_only=False)
     assert write_settings.writes_enabled is True
+    assert Settings().writes_enabled is True
     assert (
         Settings.model_validate({"lighthouse_worker_socket": ""}).lighthouse_worker_socket is None
     )
-    unbounded_settings = Settings(read_only=False, unbounded=True)
-    assert unbounded_settings.unbounded is True
-    with pytest.raises(ValidationError, match="unbounded mode requires"):
-        Settings(unbounded=True)
     assert Settings.model_validate({"state_database": ""}).state_database is None
     with pytest.raises(ValidationError):
         Settings(state_database=Path("relative.sqlite3"))
@@ -113,7 +110,6 @@ def test_services_filter_boundaries_and_report_capabilities(
     server_info = services.capabilities.server_info(ServerInfoRequest())
     assert server_info.name == "rankrat"
     assert server_info.read_only is True
-    assert server_info.unbounded is False
     assert [item.provider for item in server_info.providers] == [Provider.GOOGLE, Provider.BING]
 
     accounts = services.sites.accounts_list(AccountsListRequest(provider=Provider.GOOGLE))

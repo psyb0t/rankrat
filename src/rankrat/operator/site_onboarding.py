@@ -25,11 +25,13 @@ from rankrat.errors import ConfigurationError, InputLimitError, RankratError
 from rankrat.models.boundaries import (
     BoundaryDocument,
     ConfiguredAccount,
+    Provider,
     normalize_public_https_root_url,
 )
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import AccountId, ProviderOperationError, ProviderReadRequest
 from rankrat.providers.bing import BingWebmasterClient
+from rankrat.providers.google_analytics import Ga4AccountSummary, GoogleAnalyticsDataClient
 from rankrat.providers.google_analytics_admin import (
     Ga4SiteProperty,
     Ga4SitePropertyCreateRequest,
@@ -56,8 +58,8 @@ class SiteOnboardingPartialError(RankratError):
 class SiteOnboardingRequest:
     """One validated operator request for a public site root."""
 
-    google_account_id: str
-    bing_account_id: str
+    google_account_id: str | None
+    bing_account_id: str | None
     site_url: str
     google_analytics_parent_account_id: str | None = None
     display_name: str | None = None
@@ -113,6 +115,9 @@ class SiteOnboardingReceipt:
     google_search_console_added: bool
     bing_added: bool
     boundary_updated: bool
+    google_account_id: str = ""
+    bing_account_id: str = ""
+    ga4_created: bool = False
 
 
 class SiteOnboardingOperator:
@@ -123,46 +128,63 @@ class SiteOnboardingOperator:
         boundary_file: Path,
         policy: BoundaryPolicy,
         google_analytics: GoogleAnalyticsAdminClient,
+        google_analytics_inventory: GoogleAnalyticsDataClient,
         google_search_console: GoogleSearchConsoleClient,
         bing: BingWebmasterClient,
     ) -> None:
         self._boundary_file = boundary_file
         self._policy = policy
         self._google_analytics = google_analytics
+        self._google_analytics_inventory = google_analytics_inventory
         self._google_search_console = google_search_console
         self._bing = bing
 
     async def onboard(self, request: SiteOnboardingRequest) -> SiteOnboardingReceipt:
         """Create provider resources, then atomically persist their exact local boundaries."""
 
-        parent_account_id = self.validate_request(request)
+        google_account = self._policy.select_account(
+            Provider.GOOGLE,
+            request.google_account_id,
+        )
+        bing_account = self._policy.select_account(
+            Provider.BING,
+            request.bing_account_id,
+        )
         display_name = request.display_name
         if display_name is None:
             raise RuntimeError("site onboarding request is missing a display name")
 
         completed_stages: list[str] = []
         try:
-            property_result = await self._google_analytics.create_site_property(
-                ProviderReadRequest(AccountId(request.google_account_id), request.timeout_seconds),
-                Ga4SitePropertyCreateRequest(
-                    account_id=request.google_account_id,
-                    parent_account_id=parent_account_id,
-                    display_name=display_name,
-                    site_url=request.site_url,
-                    time_zone=request.time_zone,
-                    currency_code=request.currency_code,
-                ),
+            property_result, ga4_created = await self._resolve_ga4_site(
+                google_account.id,
+                request,
+                display_name,
             )
             completed_stages.append("google_analytics")
-            await self._google_search_console.add_site_for_onboarding(
-                ProviderReadRequest(AccountId(request.google_account_id), request.timeout_seconds),
-                request.site_url,
+            google_provider_request = ProviderReadRequest(
+                AccountId(google_account.id),
+                request.timeout_seconds,
             )
+            google_sites = await self._google_search_console.list_sites(google_provider_request)
+            google_search_console_added = request.site_url not in google_sites
+            if google_search_console_added:
+                await self._google_search_console.add_site_for_onboarding(
+                    google_provider_request,
+                    request.site_url,
+                )
             completed_stages.append("google_search_console")
-            await self._bing.add_site_for_onboarding(
-                ProviderReadRequest(AccountId(request.bing_account_id), request.timeout_seconds),
-                request.site_url,
+            bing_provider_request = ProviderReadRequest(
+                AccountId(bing_account.id),
+                request.timeout_seconds,
             )
+            bing_sites = await self._bing.list_sites(bing_provider_request)
+            bing_added = request.site_url not in bing_sites
+            if bing_added:
+                await self._bing.add_site_for_onboarding(
+                    bing_provider_request,
+                    request.site_url,
+                )
             completed_stages.append("bing")
         except (ProviderOperationError, RankratError) as error:
             if completed_stages:
@@ -170,8 +192,8 @@ class SiteOnboardingOperator:
             raise
 
         self._persist_boundary_update(
-            request.google_account_id,
-            request.bing_account_id,
+            google_account.id,
+            bing_account.id,
             request.site_url,
             property_result,
         )
@@ -179,36 +201,68 @@ class SiteOnboardingOperator:
             site_url=request.site_url,
             ga4_property_id=property_result.property_id,
             ga4_measurement_id=property_result.measurement_id,
-            google_search_console_added=True,
-            bing_added=True,
+            google_search_console_added=google_search_console_added,
+            bing_added=bing_added,
             boundary_updated=True,
+            google_account_id=google_account.id,
+            bing_account_id=bing_account.id,
+            ga4_created=ga4_created,
         )
 
-    def validate_request(self, request: SiteOnboardingRequest) -> str:
-        """Validate one requested site before any provider write occurs."""
-
-        google_account = self._policy.require_google_onboarding_account(request.google_account_id)
-        bing_account = self._policy.require_bing_onboarding_account(request.bing_account_id)
-        self._assert_new_site(google_account, bing_account, request.site_url)
-        parent_account_id = request.google_analytics_parent_account_id
-        if parent_account_id is None:
-            raise ConfigurationError(
-                "Google onboarding requires google_analytics_parent_account_id"
-            )
-        return parent_account_id
-
-    @staticmethod
-    def _assert_new_site(
-        google_account: ConfiguredAccount,
-        bing_account: ConfiguredAccount,
-        site_url: str,
-    ) -> None:
-        if (
-            site_url in google_account.search_console_sites
-            or site_url in google_account.pagespeed_sites
-            or site_url in bing_account.bing_sites
-        ):
-            raise InputLimitError("site onboarding target is already configured")
+    async def _resolve_ga4_site(
+        self,
+        google_account_id: str,
+        request: SiteOnboardingRequest,
+        display_name: str,
+    ) -> tuple[Ga4SiteProperty, bool]:
+        provider_request = ProviderReadRequest(
+            AccountId(google_account_id),
+            request.timeout_seconds,
+        )
+        account_summaries = await self._google_analytics_inventory.list_account_summaries(
+            provider_request
+        )
+        parent_account_id = _select_analytics_parent_account(
+            account_summaries,
+            request.google_analytics_parent_account_id,
+        )
+        matches: list[Ga4SiteProperty] = []
+        for account_summary in account_summaries:
+            for property_summary in account_summary.properties:
+                streams = await self._google_analytics.list_data_streams(
+                    provider_request,
+                    property_summary.property_id,
+                )
+                for stream in streams:
+                    if stream.default_uri is None or stream.measurement_id is None:
+                        continue
+                    try:
+                        stream_url = normalize_public_https_root_url(
+                            stream.default_uri,
+                            "Google Analytics data stream URI",
+                        )
+                    except ValueError:
+                        continue
+                    if stream_url == request.site_url:
+                        matches.append(
+                            Ga4SiteProperty(property_summary.property_id, stream.measurement_id)
+                        )
+        if len(matches) > 1:
+            raise ConfigurationError("multiple GA4 web streams already target this site")
+        if matches:
+            return matches[0], False
+        property_result = await self._google_analytics.create_site_property(
+            provider_request,
+            Ga4SitePropertyCreateRequest(
+                account_id=google_account_id,
+                parent_account_id=parent_account_id,
+                display_name=display_name,
+                site_url=request.site_url,
+                time_zone=request.time_zone,
+                currency_code=request.currency_code,
+            ),
+        )
+        return property_result, True
 
     def _persist_boundary_update(
         self,
@@ -243,15 +297,40 @@ def _updated_account(
 ) -> ConfiguredAccount:
     if account.id == google_account_id:
         update: dict[str, object] = {
-            "search_console_sites": (*account.search_console_sites, site_url),
-            "ga4_properties": (*account.ga4_properties, property_id),
+            "search_console_sites": _append_unique(account.search_console_sites, site_url),
+            "ga4_properties": _append_unique(account.ga4_properties, property_id),
         }
         if account.pagespeed_api_key_file is not None:
-            update["pagespeed_sites"] = (*account.pagespeed_sites, site_url)
+            update["pagespeed_sites"] = _append_unique(account.pagespeed_sites, site_url)
         return account.model_copy(update=update)
     if account.id == bing_account_id:
-        return account.model_copy(update={"bing_sites": (*account.bing_sites, site_url)})
+        return account.model_copy(
+            update={"bing_sites": _append_unique(account.bing_sites, site_url)}
+        )
     return account
+
+
+def _select_analytics_parent_account(
+    account_summaries: tuple[Ga4AccountSummary, ...],
+    requested_account_id: str | None,
+) -> str:
+    if requested_account_id is not None:
+        if any(summary.account_id == requested_account_id for summary in account_summaries):
+            return requested_account_id
+        raise ConfigurationError("requested Google Analytics account is not reachable")
+    if len(account_summaries) == 1:
+        return account_summaries[0].account_id
+    if not account_summaries:
+        raise ConfigurationError("Google Analytics has no reachable account")
+    raise ConfigurationError(
+        "multiple Google Analytics accounts are reachable; parent account ID is required"
+    )
+
+
+def _append_unique(values: tuple[str, ...], value: str) -> tuple[str, ...]:
+    if value in values:
+        return values
+    return (*values, value)
 
 
 def _read_owner_writable_boundary_document(path: Path) -> BoundaryDocument:

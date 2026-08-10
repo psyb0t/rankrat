@@ -1,8 +1,8 @@
 # Ownership and onboarding
 
 Creating provider resources and proving ownership are separate workflows.
-Rankrat can create one GA4 property and stream, add Google Search Console and
-Bing properties, persist exact boundaries, and—with a supported DNS
+Rankrat can create or reuse one GA4 property and stream, add or reuse Google
+Search Console and Bing properties, persist discovered inventory, and—with a supported DNS
 adapter—publish/redeem provider-issued ownership proofs. It cannot create a GA4
 account, deploy the GA4 tag, or modify DNS through an unsupported provider.
 
@@ -41,7 +41,7 @@ For one HTTPS site root:
 2. A web data stream and returned `G-` measurement ID.
 3. An unverified Google Search Console URL-prefix property.
 4. An unverified Bing Webmaster site.
-5. Exact GA4/Search Console/Bing resource entries in `boundaries.json` after all
+5. GA4/Search Console/Bing inventory entries in `boundaries.json` after all
    preceding provider stages succeed.
 
 The GA4 tag is not deployed. Collection begins only after the operator installs
@@ -62,53 +62,37 @@ If the user has no account:
 4. Accept the Analytics Terms of Service.
 5. Run `google_analytics_account_inventory` and copy the numeric account ID.
 
-Pass that ID as `google_analytics_parent_account_id` during onboarding.
+When exactly one Analytics account is visible, Rankrat selects it automatically.
+When several are visible, pass the intended numeric ID as
+`google_analytics_parent_account_id` during onboarding.
 
 ## Operator-driven onboarding
 
-This is a human terminal command, so it does not depend on the agent-onboarding
-switch. It does require writes and a safely writable boundary directory:
+This terminal command requires writes and a safely writable config directory:
 
 ```sh
 RANKRAT_READ_ONLY=false rankrat.sh onboard-site \
-  --google-account-id google \
-  --bing-account-id bing \
-  --google-analytics-parent-account-id 123456789 \
   --site-url https://example.com/ \
   --display-name example \
   --time-zone Etc/UTC \
   --currency-code USD
 ```
 
-The wrapper refuses unsafe config ownership/modes and mounts the config
-directory writable only for this operator operation. Provider secrets stay
-read-only.
+When exactly one Google account and one Bing account are configured, those IDs
+are selected automatically. Pass explicit IDs only to resolve ambiguity. The
+wrapper refuses unsafe config ownership/modes. Provider secrets stay read-only.
 
 ## Agent-driven onboarding
 
 The MCP tool `site_onboarding_submit` and REST route
-`POST /v1/site-onboarding-submissions` appear only when both are set:
+`POST /v1/site-onboarding-submissions` are present in normal writable mode:
 
 ```dotenv
 RANKRAT_READ_ONLY=false
-RANKRAT_ALLOW_AGENT_ONBOARDING=true
 ```
 
-Ordinary writable mode is insufficient because onboarding is the one operation
-allowed to expand the boundary file the server later enforces. HTTP bearer auth
-still applies. Restrict access to a trusted caller.
-
-If the new site's resources are not yet allow-listed, a trusted bootstrap can
-also set:
-
-```dotenv
-RANKRAT_UNBOUNDED=true
-```
-
-Unbounded mode keeps credential account IDs/paths fixed, discovers or uses
-resources outside current per-resource lists, and permits the onboarding result
-to persist exact IDs. Restart with it disabled after onboarding. It can be
-enabled again for a later trusted bootstrap; it is not a one-use token.
+HTTP bearer auth still applies. `RANKRAT_READ_ONLY=true` removes this operation
+from both REST and MCP discovery; no other capability switch exists.
 
 ## Ownership status
 
@@ -190,18 +174,17 @@ After resource creation:
 
 ## Partial failure semantics
 
-Onboarding is sequential and not transactional. It creates GA4 first, then
-Search Console, then Bing, and persists the boundary only after all three
-succeed. If a later stage fails, earlier provider resources remain real but may
-not be in the boundary file. Re-running can create a duplicate GA4 property.
+Onboarding is sequential and not transactional. It resolves or creates GA4
+first, then Search Console, then Bing, and persists inventory only after all
+three succeed. If a later stage fails, earlier provider resources remain real
+but may not yet be in local inventory. The receipt names completed stages.
 
 Before retrying:
 
-1. Inspect `google_analytics_account_inventory` for the created property.
-2. Inspect Google/Bing consoles for accepted resources.
-3. Add/reconcile exact existing IDs manually if appropriate.
-4. Fix the failing permission/provider.
-5. Retry only after deciding how to handle prior resources.
+1. Inspect `google_analytics_account_inventory` and Google/Bing site lists.
+2. Fix the failing permission/provider.
+3. Retry the same request. Rankrat matches an existing GA4 stream by site URL
+   and reuses existing Search Console/Bing sites instead of duplicating them.
 
 There is no rollback or delete tool. Renaming an account/property is supported;
 deleting an Analytics container is deliberately not exposed.

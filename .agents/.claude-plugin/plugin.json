@@ -1,6 +1,6 @@
 {
   "name": "rankrat",
-  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse — persistent monitoring, internal-link and content opportunities, ownership, remediation, and multi-provider backlinks. Read-only and boundary-limited by default. MCP over stdio and Streamable HTTP, plus REST.",
+  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse — persistent monitoring, internal-link and content opportunities, ownership, remediation, onboarding, and multi-provider backlinks. Writable by default with one read-only switch. MCP over stdio and Streamable HTTP, plus REST.",
   "author": { "name": "psyb0t", "url": "https://github.com/psyb0t" },
   "homepage": "https://github.com/psyb0t/rankrat",
   "license": "WTFPL",

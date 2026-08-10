@@ -158,6 +158,7 @@ container_security_args=(
 	-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json
 	-e RANKRAT_SECRET_ROOT=/run/secrets
 	-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth
+	-e RANKRAT_READ_ONLY=true
 )
 readonly -a container_security_args
 
@@ -409,12 +410,12 @@ oversized_status=$(curl --silent --show-error --output /dev/null --write-out '%{
 	exit 1
 }
 
-log INFO "checking unbounded HTTP startup permits the persisted-boundary writer"
+log INFO "checking writable HTTP startup publishes every write surface"
 docker rm -f "$container_name" >/dev/null
 http_container_started=false
 chmod 700 "$config_directory"
 chmod 600 "$boundary_file"
-container_name="rankrat-final-image-unbounded-$$-${RANDOM}"
+container_name="rankrat-final-image-writable-$$-${RANDOM}"
 docker run -d --name "$container_name" --network bridge \
 	-p "127.0.0.1::${HTTP_PORT}" \
 	--init --user "$TEST_CONTAINER_UID_GID" --read-only --cap-drop=ALL \
@@ -431,59 +432,53 @@ docker run -d --name "$container_name" --network bridge \
 	-e RANKRAT_HTTP_PORT="$HTTP_PORT" \
 	-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/test-http-bearer \
 	-e RANKRAT_READ_ONLY=false \
-	-e RANKRAT_UNBOUNDED=true \
-	-e RANKRAT_ALLOW_AGENT_ONBOARDING=true \
 	-e RANKRAT_ENABLE_OPENAPI=true \
 	"$image_reference" http >/dev/null
 http_container_started=true
 
-unbounded_port_mapping=$(docker port "$container_name" "${HTTP_PORT}/tcp")
-unbounded_host_port="${unbounded_port_mapping##*:}"
-[[ "$unbounded_host_port" =~ ^[0-9]+$ ]] || {
-	log ERROR "Docker did not expose a numeric unbounded loopback port"
+writable_port_mapping=$(docker port "$container_name" "${HTTP_PORT}/tcp")
+writable_host_port="${writable_port_mapping##*:}"
+[[ "$writable_host_port" =~ ^[0-9]+$ ]] || {
+	log ERROR "Docker did not expose a numeric writable loopback port"
 	exit 1
 }
-readonly unbounded_health_url="http://127.0.0.1:${unbounded_host_port}/healthz"
-readonly unbounded_server_info_url="http://127.0.0.1:${unbounded_host_port}${SERVER_INFO_URL_PATH}"
-readonly unbounded_openapi_url="http://127.0.0.1:${unbounded_host_port}${OPENAPI_PATH}"
+readonly writable_health_url="http://127.0.0.1:${writable_host_port}/healthz"
+readonly writable_server_info_url="http://127.0.0.1:${writable_host_port}${SERVER_INFO_URL_PATH}"
+readonly writable_openapi_url="http://127.0.0.1:${writable_host_port}${OPENAPI_PATH}"
 
 for ((attempt = 1; attempt <= HTTP_RETRY_COUNT; attempt++)); do
 	if curl --silent --show-error --fail --noproxy '*' --proto '=http' \
 		--max-redirs 0 --connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
-		--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$unbounded_health_url" >/dev/null; then
+		--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$writable_health_url" >/dev/null; then
 		break
 	fi
 	if [[ "$attempt" -eq "$HTTP_RETRY_COUNT" ]]; then
-		log ERROR "unbounded HTTP health endpoint did not become ready"
+		log ERROR "writable HTTP health endpoint did not become ready"
 		log_http_container_output
 		exit 1
 	fi
 	sleep 1
 done
 
-unbounded_server_info=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
+writable_server_info=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
 	--noproxy '*' --proto '=http' --max-redirs 0 \
 	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
-	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$unbounded_server_info_url")
-grep -Fq '"read_only":false' <<<"$unbounded_server_info" || {
-	log ERROR "unbounded server did not expose writable capability"
-	exit 1
-}
-grep -Fq '"unbounded":true' <<<"$unbounded_server_info" || {
-	log ERROR "unbounded server did not report active unbounded capability"
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$writable_server_info_url")
+grep -Fq '"read_only":false' <<<"$writable_server_info" || {
+	log ERROR "writable server did not expose writable capability"
 	exit 1
 }
 
-unbounded_openapi=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
+writable_openapi=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
 	--noproxy '*' --proto '=http' --max-redirs 0 \
 	--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
-	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$unbounded_openapi_url")
-grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$unbounded_openapi" || {
-	log ERROR "unbounded server did not publish the site onboarding route"
+	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$writable_openapi_url")
+grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$writable_openapi" || {
+	log ERROR "writable server did not publish the site onboarding route"
 	exit 1
 }
 
-log INFO "checking writable HTTP startup withholds onboarding without its own switch"
+log INFO "checking writable HTTP startup needs no second write switch"
 docker rm -f "$container_name" >/dev/null
 http_container_started=false
 container_name="rankrat-final-image-no-onboarding-$$-${RANDOM}"
@@ -540,8 +535,8 @@ grep -Fq "\"${SCHEMA_VALIDATE_URL_PATH}\"" <<<"$no_onboarding_openapi" || {
 	log ERROR "writable server did not publish its normal routes"
 	exit 1
 }
-if grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$no_onboarding_openapi"; then
-	log ERROR "writable server published site onboarding without RANKRAT_ALLOW_AGENT_ONBOARDING"
+if ! grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$no_onboarding_openapi"; then
+	log ERROR "writable server did not publish site onboarding"
 	exit 1
 fi
 

@@ -17,12 +17,7 @@ from rankrat.services.site_onboarding import (
 
 class _Operator:
     def __init__(self) -> None:
-        self.validated: list[SiteOnboardingRequest] = []
         self.onboarded: list[SiteOnboardingRequest] = []
-
-    def validate_request(self, request: SiteOnboardingRequest) -> str:
-        self.validated.append(request)
-        return "123"
 
     async def onboard(self, request: SiteOnboardingRequest) -> SiteOnboardingReceipt:
         self.onboarded.append(request)
@@ -37,7 +32,7 @@ class _Operator:
 
 
 @pytest.mark.asyncio
-async def test_site_onboarding_validates_before_each_direct_provider_write() -> None:
+async def test_site_onboarding_delegates_one_typed_request_to_the_operator() -> None:
     operator = _Operator()
     service = SiteOnboardingService(cast(SiteOnboardingOperator, operator))
 
@@ -51,5 +46,4 @@ async def test_site_onboarding_validates_before_each_direct_provider_write() -> 
     )
 
     assert receipt.ga4_property_id == "456"
-    assert [request.site_url for request in operator.validated] == ["https://new.example.com/"]
     assert [request.site_url for request in operator.onboarded] == ["https://new.example.com/"]

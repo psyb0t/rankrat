@@ -177,14 +177,13 @@ class LiveHttpVerifier:
                 },
             )
             completed.append("google-search-analytics")
-        if account.google_account_discovery:
-            await self._request(
-                client,
-                "POST",
-                _GA4_ACCOUNT_INVENTORY_PATH,
-                json_body={"account_id": account.id},
-            )
-            completed.append("google-analytics-inventory")
+        await self._request(
+            client,
+            "POST",
+            _GA4_ACCOUNT_INVENTORY_PATH,
+            json_body={"account_id": account.id},
+        )
+        completed.append("google-analytics-inventory")
         for property_id in account.ga4_properties:
             await self._request(
                 client,

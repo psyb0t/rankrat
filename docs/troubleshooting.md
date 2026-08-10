@@ -46,7 +46,7 @@ Check:
   port;
 - every intended `RANKRAT_*` name matches `.env.example` (unknown/misspelled
   environment variables are ignored);
-- unbounded/agent-onboarding are not combined with read-only mode.
+- `RANKRAT_READ_ONLY` is exactly `true` or `false`.
 
 Use [`boundaries.json.example`](../config/boundaries.json.example) and
 [Configuration](configuration.md) as the field reference.
@@ -54,18 +54,21 @@ Use [`boundaries.json.example`](../config/boundaries.json.example) and
 ## A required config, secret, OAuth, or state path is missing
 
 The wrapper requires a boundary file plus real `secrets/`, `oauth/`, and
-`state/` directories. Create them in the current deployment directory:
+`state/` directories beneath one profile. Check which profile the caller uses,
+then create missing paths there:
 
 ```sh
-mkdir -p config oauth state secrets
-chmod 700 config oauth state secrets
+export RANKRAT_DATA_DIR="${RANKRAT_DATA_DIR:-$HOME/.config/rankrat}"
+mkdir -p "$RANKRAT_DATA_DIR"/{config,oauth,state,secrets}
+chmod 700 "$RANKRAT_DATA_DIR"/{config,oauth,state,secrets}
 ```
 
 From a checkout, `make init-config` creates the full tree without overwriting
 existing files and generates the HTTP bearer if missing.
 
-Do not replace a required directory with a symlink. Writable config/state paths
-must be owned by the current user and owner-only.
+`RANKRAT_DATA_DIR` must be absolute and canonical. Do not replace the profile,
+a required child, or the boundary file with a symlink. Writable config/state
+paths must be owned by the current user and owner-only.
 
 ## Boundary file permission denied inside Docker
 
@@ -155,9 +158,11 @@ polling; it cannot make Google fetch immediately.
 
 ## Bing returns no data or cannot access a site
 
-Verify the site in Bing Webmaster Tools, regenerate/check the API key, and match
-the exact HTTPS root in `sites`. Use `bing_url_information`, `bing_feeds`, and
-`bing_crawl_issues` to distinguish site visibility, sitemap, and URL status.
+Verify the site in Bing Webmaster Tools and regenerate/check the account API
+key. Use `bing_site_inventory` to confirm the credential can see the site, then
+use `bing_url_information`, `bing_feeds`, and `bing_crawl_issues` to distinguish
+site visibility, sitemap, and URL status. The `sites` array is persisted
+inventory, not a second permission list.
 
 ```sh
 make test-live-bing
@@ -167,12 +172,12 @@ make test-live-bing
 
 Confirm:
 
-- token has Zone Read;
-- selected zone is included in token resources;
-- boundary `provider_zone_id` is the real 32-character zone ID;
+- token has Zone Read across the intended account zones;
+- `dns_zone_inventory` can discover the selected zone and its 32-character
+  provider zone ID;
 - feature permission exists: DNS Edit, Analytics Read, Cache Purge, or Cache
   Rules Edit as appropriate;
-- account ID in the request selects the Cloudflare boundary account.
+- account ID in the request selects the intended Cloudflare credential.
 
 Rankrat will refuse arbitrary records, whole-zone purge, unknown templates, and
 ambiguous duplicate managed-rule markers even if Cloudflare would allow them.
@@ -210,9 +215,7 @@ Stdio never uses the bearer. `/healthz` remains public for liveness probes;
 ## REST write route or MCP write tool is missing
 
 That is expected in read-only mode. Restart with `RANKRAT_READ_ONLY=false`.
-`site_onboarding_submit` additionally requires
-`RANKRAT_ALLOW_AGENT_ONBOARDING=true`. Runtime `/openapi.json` and MCP
-`tools/list` reflect those choices.
+Runtime `/openapi.json` and MCP `tools/list` reflect that choice.
 
 ## Runtime OpenAPI is missing
 
@@ -245,12 +248,12 @@ a credential error may still affect an image whose registry is Docker Hub.
 
 ## Provider readiness passes but a report fails
 
-Readiness proves a minimal bounded call for the account, not every resource,
-date range, quota, product feature, or paid plan. Run the provider-specific live
-target with exact selectors, then inspect:
+Readiness proves a minimal account call, not every resource, date range, quota,
+product feature, or paid plan. Run the provider-specific live target with exact
+selectors, then inspect:
 
-- resource is in the boundary;
-- upstream account can access it;
+- provider inventory can discover the resource;
+- the upstream account can access it;
 - date range and pagination limits are valid;
 - quota/paid units remain;
 - requested feature exists on the provider plan;

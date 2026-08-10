@@ -220,20 +220,22 @@ async def test_cross_provider_correlation_returns_no_ga4_match_and_denies_before
     ga4_calls.clear()
     pagespeed_calls.clear()
 
-    with pytest.raises(BoundaryDeniedError):
-        await service.ga4_pagespeed_correlation(
-            Ga4PageSpeedCorrelationRequest(
-                "pagespeed-main",
-                "123456789",
-                "pagespeed-main",
-                "https://example.com/",
-                "https://example.com/article",
-                date(2026, 7, 1),
-                date(2026, 7, 2),
-            )
+    await service.ga4_pagespeed_correlation(
+        Ga4PageSpeedCorrelationRequest(
+            "pagespeed-main",
+            "123456789",
+            "pagespeed-main",
+            "https://example.com/",
+            "https://example.com/article",
+            date(2026, 7, 1),
+            date(2026, 7, 2),
         )
-    assert ga4_calls == []
-    assert pagespeed_calls == []
+    )
+    assert len(ga4_calls) == 1
+    assert len(pagespeed_calls) == 1
+
+    ga4_calls.clear()
+    pagespeed_calls.clear()
 
     with pytest.raises(BoundaryDeniedError):
         await service.ga4_pagespeed_correlation(_request("https://outside.example/article"))
@@ -527,17 +529,16 @@ async def test_ga4_search_console_comparison_denies_before_either_service_call(
         search_analytics_summary,
     )
 
-    with pytest.raises(BoundaryDeniedError):
-        await service.ga4_search_console_comparison(
-            Ga4SearchConsoleComparisonRequest(
-                google_analytics_account_id="pagespeed-main",
-                property_id="123456789",
-                google_search_console_account_id="pagespeed-main",
-                site_url="https://example.com/",
-                start_date=date(2026, 7, 1),
-                end_date=date(2026, 7, 2),
-            )
+    await service.ga4_search_console_comparison(
+        Ga4SearchConsoleComparisonRequest(
+            google_analytics_account_id="pagespeed-main",
+            property_id="123456789",
+            google_search_console_account_id="pagespeed-main",
+            site_url="https://example.com/",
+            start_date=date(2026, 7, 1),
+            end_date=date(2026, 7, 2),
         )
+    )
 
-    assert ga4_calls == []
-    assert google_calls == []
+    assert len(ga4_calls) == 1
+    assert len(google_calls) == 1

@@ -1,4 +1,4 @@
-"""Read-only guidance for automated and manual site onboarding steps."""
+"""Guidance for automated and manual site onboarding steps."""
 
 from __future__ import annotations
 
@@ -141,7 +141,7 @@ class OnboardingGuide:
 
     summary: str
     writes_enabled: bool
-    agent_onboarding_enabled: bool
+    site_onboarding_available: bool
     rankrat_performs: tuple[str, ...]
     rankrat_cannot_perform: tuple[str, ...]
     recommended_order: tuple[GuideStep, ...]
@@ -301,13 +301,13 @@ def _search_console_verification(
     return _URL_PREFIX_VERIFICATION
 
 
-def _recommended_order(agent_onboarding_enabled: bool) -> tuple[GuideStep, ...]:
+def _recommended_order(writes_enabled: bool) -> tuple[GuideStep, ...]:
     create_detail = (
         "Call site_onboarding_submit, or run the operator command rankrat onboard-site."
-        if agent_onboarding_enabled
+        if writes_enabled
         else (
-            "Agent onboarding is disabled on this server, so no tool performs this step. "
-            "The operator runs rankrat onboard-site themselves."
+            "This server is read-only, so no tool performs this step. Restart with "
+            "RANKRAT_READ_ONLY=false when the operator wants Rankrat to make changes."
         )
     )
     return (
@@ -364,24 +364,21 @@ class OnboardingGuideService:
     def __init__(self, policy: BoundaryPolicy) -> None:
         self._policy = policy
 
-    # The posture is passed in rather than held: the caller already owns those two
-    # flags, and a second copy here can disagree with the surface actually exposed.
     def render(
         self,
         request: OnboardingGuideRequest,
         *,
         writes_enabled: bool,
-        agent_onboarding_enabled: bool,
     ) -> OnboardingGuide:
         """Return the procedure, detailed for the requested or the configured sites."""
 
         return OnboardingGuide(
             summary=_SUMMARY,
             writes_enabled=writes_enabled,
-            agent_onboarding_enabled=agent_onboarding_enabled,
+            site_onboarding_available=writes_enabled,
             rankrat_performs=_RANKRAT_PERFORMS,
             rankrat_cannot_perform=_RANKRAT_CANNOT_PERFORM,
-            recommended_order=_recommended_order(agent_onboarding_enabled),
+            recommended_order=_recommended_order(writes_enabled),
             tell_the_user=_TELL_THE_USER,
             manual_provisioning=(_GOOGLE_ANALYTICS_ACCOUNT_PROVISIONING,),
             sites=self._site_guidance(request.site_url),

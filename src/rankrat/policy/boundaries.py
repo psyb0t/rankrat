@@ -25,11 +25,10 @@ from rankrat.policy.limits import require_boundary_file_size
 
 
 class BoundaryPolicy:
-    """Immutable authorization policy derived from one validated document."""
+    """Authorize operations through exact configured provider accounts."""
 
-    def __init__(self, document: BoundaryDocument, *, unbounded: bool = False) -> None:
+    def __init__(self, document: BoundaryDocument) -> None:
         self._document = document
-        self._unbounded = unbounded
 
     @classmethod
     def from_file(
@@ -37,10 +36,8 @@ class BoundaryPolicy:
         path: Path,
         secret_root: Path,
         oauth_token_root: Path | None = None,
-        *,
-        unbounded: bool = False,
     ) -> BoundaryPolicy:
-        """Read and validate a bounded JSON document once at startup."""
+        """Read and validate the provider-account document once at startup."""
         try:
             contents = require_boundary_file_size(path.read_bytes())
             raw_document = json.loads(contents)
@@ -79,17 +76,11 @@ class BoundaryPolicy:
                     raise ConfigurationError("IndexNow key path escapes the configured secret root")
         except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError) as error:
             raise ConfigurationError("invalid Rankrat boundary configuration") from error
-        return cls(document, unbounded=unbounded)
+        return cls(document)
 
     def accounts(self) -> tuple[ConfiguredAccount, ...]:
         """Return immutable accounts for safe read-only summaries."""
         return self._document.accounts
-
-    @property
-    def unbounded(self) -> bool:
-        """Return whether the operator deliberately disabled resource allowlists."""
-
-        return self._unbounded
 
     def resolve_account(
         self,
@@ -104,6 +95,26 @@ class BoundaryPolicy:
                 return account
             break
         raise BoundaryDeniedError("configured account boundary not found")
+
+    def select_account(
+        self,
+        provider: Provider,
+        account_id: str | None = None,
+    ) -> ConfiguredAccount:
+        """Select an explicit account or the sole account for one provider."""
+
+        if account_id is not None:
+            return self.resolve_account(account_id, provider)
+        candidates = tuple(
+            account for account in self._document.accounts if account.provider == provider
+        )
+        if len(candidates) == 1:
+            return candidates[0]
+        if not candidates:
+            raise ConfigurationError(f"no {provider.value} account is configured")
+        raise ConfigurationError(
+            f"multiple {provider.value} accounts are configured; account_id is required"
+        )
 
     def resolve_indexnow_target(self, target_id: str) -> IndexNowTarget:
         """Resolve one exact IndexNow target without an implicit host fallback."""
@@ -151,14 +162,9 @@ class BoundaryPolicy:
         resource_kind: ResourceKind,
         resource: str,
     ) -> ConfiguredAccount:
-        """Authorize an exact resource under a single configured account."""
-        account = self.resolve_account(account_id, provider)
-        if self._unbounded:
-            return account
-        resources = self._resources_for_kind(account, resource_kind)
-        if resource in resources:
-            return account
-        raise BoundaryDeniedError("configured resource boundary not found")
+        """Authorize any supported resource through an exact configured account."""
+        del resource_kind, resource
+        return self.resolve_account(account_id, provider)
 
     def require_google_read_resource(
         self,
@@ -166,26 +172,15 @@ class BoundaryPolicy:
         resource_kind: ResourceKind,
         resource: str,
     ) -> ConfiguredAccount:
-        """Authorize an explicit Google resource or an operator-enabled read discovery resource."""
+        """Authorize any Google read reachable through the configured OAuth account."""
 
-        account = self.resolve_account(account_id, Provider.GOOGLE)
-        if self._unbounded:
-            return account
-        if resource in self._resources_for_kind(account, resource_kind):
-            return account
-        if account.allows_google_read_discovery(resource_kind):
-            return account
-        raise BoundaryDeniedError("configured Google read resource boundary not found")
+        del resource_kind, resource
+        return self.resolve_account(account_id, Provider.GOOGLE)
 
-    def require_google_account_discovery(self, account_id: str) -> ConfiguredAccount:
-        """Authorize the account-wide Google inventory endpoint only when explicitly enabled."""
+    def require_google_account(self, account_id: str) -> ConfiguredAccount:
+        """Resolve one Google OAuth account for account-wide operations."""
 
-        account = self.resolve_account(account_id, Provider.GOOGLE)
-        if self._unbounded:
-            return account
-        if not account.google_account_discovery:
-            raise BoundaryDeniedError("Google account discovery is not enabled for this account")
-        return account
+        return self.resolve_account(account_id, Provider.GOOGLE)
 
     def require_google_onboarding_account(self, account_id: str) -> ConfiguredAccount:
         """Resolve the exact Google account for a local onboarding operation."""

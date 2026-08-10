@@ -218,13 +218,14 @@ justification.
 ## Local runtime
 
 ```sh
-make run                   # locally built stdio MCP
-make run-http              # locally built loopback HTTP
-make run-http-lighthouse   # Compose Rankrat + browser worker
+make run        # locally built stdio MCP
+make run-http   # Compose Rankrat + Lighthouse on loopback HTTP
 ```
 
 These targets call the same `rankrat.sh` wrapper used by published-image users.
-Configuration and credentials remain local/gitignored.
+Configuration and credentials remain local/gitignored. `make run-http` stays
+attached; use `rankrat.sh http -d` with the same profile for a detached
+restartable deployment.
 
 ## CI and release surface
 

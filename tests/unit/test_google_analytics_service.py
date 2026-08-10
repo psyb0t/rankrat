@@ -6,7 +6,7 @@ from typing import cast
 
 import pytest
 
-from rankrat.errors import BoundaryDeniedError, InputLimitError
+from rankrat.errors import InputLimitError
 from rankrat.models.boundaries import BoundaryDocument
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.google_analytics import (
@@ -108,7 +108,7 @@ async def test_service_builds_bounded_ga4_historical_and_realtime_payloads(
 
 
 @pytest.mark.asyncio
-async def test_service_lists_ga4_inventory_only_for_a_discovery_enabled_account(
+async def test_service_lists_ga4_inventory_for_any_configured_google_account(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     policy = BoundaryPolicy(
@@ -120,7 +120,6 @@ async def test_service_lists_ga4_inventory_only_for_a_discovery_enabled_account(
                         "provider": "google",
                         "credential": "/run/secrets/google.json",
                         "oauth_token_file": "/run/oauth/google-main.json",
-                        "google_account_discovery": True,
                     }
                 ]
             }
@@ -143,8 +142,17 @@ async def test_service_lists_ga4_inventory_only_for_a_discovery_enabled_account(
     assert await service.list_account_summaries(Ga4AccountDiscoveryRequest("google-main")) == ()
     assert len(captured) == 1
 
-    with pytest.raises(BoundaryDeniedError):
-        await _service().list_account_summaries(Ga4AccountDiscoveryRequest("google-main"))
+    configured_service = _service()
+    monkeypatch.setattr(
+        configured_service._client,
+        "list_account_summaries",
+        list_account_summaries,
+    )
+    assert (
+        await configured_service.list_account_summaries(Ga4AccountDiscoveryRequest("google-main"))
+        == ()
+    )
+    assert len(captured) == 2
 
 
 @pytest.mark.asyncio
@@ -379,32 +387,47 @@ async def test_fixed_report_rejects_an_unknown_internal_kind() -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_rejects_unconfigured_property_before_provider_call() -> None:
-    with pytest.raises(BoundaryDeniedError):
-        await _service().run_realtime_report(
-            Ga4RealtimeReportRequest(
-                "google-main",
-                "999999999",
-                ("country",),
-                ("activeUsers",),
-            )
+async def test_service_accepts_any_property_reachable_by_the_configured_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service()
+    calls: list[tuple[object, ...]] = []
+
+    async def empty_report(*arguments: object) -> Ga4ReportResult:
+        calls.append(arguments)
+        return Ga4ReportResult((), (), (), 0)
+
+    async def empty_funnel(*arguments: object) -> Ga4FunnelReport:
+        calls.append(arguments)
+        empty = Ga4ReportResult((), (), (), None)
+        return Ga4FunnelReport(empty, empty)
+
+    monkeypatch.setattr(service._client, "run_realtime_report", empty_report)
+    monkeypatch.setattr(service._client, "run_report", empty_report)
+    monkeypatch.setattr(service._client, "run_funnel_report", empty_funnel)
+    await service.run_realtime_report(
+        Ga4RealtimeReportRequest(
+            "google-main",
+            "999999999",
+            ("country",),
+            ("activeUsers",),
         )
-    with pytest.raises(BoundaryDeniedError):
-        await _service().content_performance(
-            Ga4FixedReportRequest(
-                "google-main",
-                "999999999",
-                date(2026, 7, 1),
-                date(2026, 7, 2),
-            )
+    )
+    await service.content_performance(
+        Ga4FixedReportRequest(
+            "google-main",
+            "999999999",
+            date(2026, 7, 1),
+            date(2026, 7, 2),
         )
-    with pytest.raises(BoundaryDeniedError):
-        await _service().conversion_funnel(
-            Ga4ConversionFunnelRequest(
-                "google-main",
-                "999999999",
-                date(2026, 7, 1),
-                date(2026, 7, 2),
-                ("view_item", "purchase"),
-            )
+    )
+    await service.conversion_funnel(
+        Ga4ConversionFunnelRequest(
+            "google-main",
+            "999999999",
+            date(2026, 7, 1),
+            date(2026, 7, 2),
+            ("view_item", "purchase"),
         )
+    )
+    assert len(calls) == 3

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 import pytest
 
 from rankrat.constants import DEFAULT_PAGESPEED_TIMEOUT_SECONDS
-from rankrat.errors import BoundaryDeniedError, InputLimitError
+from rankrat.errors import InputLimitError
 from rankrat.models.boundaries import BoundaryDocument
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.pagespeed import (
@@ -213,24 +213,52 @@ def test_service_rejects_duplicate_or_excessive_categories() -> None:
 
 
 @pytest.mark.asyncio
-async def test_service_denies_unconfigured_site_before_provider_call() -> None:
-    with pytest.raises(BoundaryDeniedError):
-        await _service().analyze(
-            PageSpeedAnalysisRequest(
-                "pagespeed-main",
-                "https://example.com/",
-                "https://example.com/blog/post",
-            )
+async def test_service_accepts_any_site_reachable_by_the_configured_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service()
+
+    async def analyze(*_: object) -> PageSpeedAnalysisResult:
+        return PageSpeedAnalysisResult(
+            analyzed_url="https://example.com/blog/post",
+            analysis_utc_timestamp=datetime(2026, 7, 30, 17, tzinfo=UTC),
+            categories=(),
+            loading_experience_category=None,
+            origin_loading_experience_category=None,
         )
+
+    monkeypatch.setattr(service._client, "analyze", analyze)
+    report = await service.analyze(
+        PageSpeedAnalysisRequest(
+            "pagespeed-main",
+            "https://example.com/",
+            "https://example.com/blog/post",
+        )
+    )
+    assert report.analyzed_url == "https://example.com/blog/post"
 
 
 @pytest.mark.asyncio
-async def test_core_web_vitals_denies_unconfigured_site_before_provider_call() -> None:
-    with pytest.raises(BoundaryDeniedError):
-        await _service().core_web_vitals(
-            PageSpeedAnalysisRequest(
-                "pagespeed-main",
-                "https://example.com/",
-                "https://example.com/blog/post",
-            )
+async def test_core_web_vitals_accepts_any_site_reachable_by_the_configured_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = _service()
+
+    async def analyze(*_: object) -> PageSpeedAnalysisResult:
+        return PageSpeedAnalysisResult(
+            analyzed_url="https://example.com/blog/post",
+            analysis_utc_timestamp=datetime(2026, 7, 30, 17, tzinfo=UTC),
+            categories=(),
+            loading_experience_category=None,
+            origin_loading_experience_category=None,
         )
+
+    monkeypatch.setattr(service._client, "analyze", analyze)
+    report = await service.core_web_vitals(
+        PageSpeedAnalysisRequest(
+            "pagespeed-main",
+            "https://example.com/",
+            "https://example.com/blog/post",
+        )
+    )
+    assert report.analyzed_url == "https://example.com/blog/post"

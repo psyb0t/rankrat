@@ -265,7 +265,7 @@ class GoogleAnalyticsAdminClient:
 
         # Renaming reaches an account-wide resource rather than a listed one, so
         # it rides the same explicit switch that permits account discovery.
-        account = self._boundary_policy.require_google_account_discovery(str(request.account_id))
+        account = self._boundary_policy.require_google_account(str(request.account_id))
         _require_ga4_resource_id(analytics_account_id, "account")
         token = await self._token_for_account(account.credential)
         payload = await self._request_json(

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: rankrat
-  version: "0.9.1"
+  version: "0.10.0"
   description: >-
     Boundary-limited SEO operations over REST and MCP. The source document lists
     the full writable contract; a read-only runtime removes write routes from
@@ -3973,9 +3973,11 @@ components:
       additionalProperties: false
       properties:
         bing_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          anyOf:
+          - pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+            type: string
+          - type: 'null'
           title: Bing Account Id
-          type: string
         currency_code:
           default: USD
           maxLength: 3
@@ -3989,9 +3991,11 @@ components:
           - type: 'null'
           title: Display Name
         google_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          anyOf:
+          - pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+            type: string
+          - type: 'null'
           title: Google Account Id
-          type: string
         google_analytics_parent_account_id:
           anyOf:
           - maxLength: 64
@@ -4016,8 +4020,6 @@ components:
           title: Timeout Seconds
           type: number
       required:
-      - google_account_id
-      - bing_account_id
       - site_url
       title: _SiteOnboardingSubmissionBody
       type: object

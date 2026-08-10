@@ -14,7 +14,7 @@ path. These guides carry the operational and contributor detail.
 | [Feature workflows](features.md) | Which operations answer common SEO, analytics, backlink, and indexing questions? |
 | [Lighthouse](lighthouse.md) | How does the browser worker run and what are its security limits? |
 | [Ownership and onboarding](ownership-and-onboarding.md) | How are Google/Bing properties created and verified through DNS? |
-| [Monitoring and remediation](monitoring-and-remediation.md) | How do persistent monitors and bounded writes behave? |
+| [Monitoring and remediation](monitoring-and-remediation.md) | How do persistent monitors and provider writes behave? |
 | [Security](security.md) | What are the trust boundaries and production rules? |
 | [MCP tool reference](tool-reference.md) | What does every discoverable MCP tool do? |
 | [Troubleshooting](troubleshooting.md) | Why did startup, OAuth, a provider call, sitemap, or browser audit fail? |
@@ -22,8 +22,8 @@ path. These guides carry the operational and contributor detail.
 
 ## Contract sources
 
-- MCP clients should use `tools/list` from the running process. Startup policy
-  determines whether write tools and agent onboarding are visible.
+- MCP clients should use `tools/list` from the running process.
+  `RANKRAT_READ_ONLY=true` removes every write tool, including onboarding.
 - REST clients should use runtime `/openapi.json` when
   `RANKRAT_ENABLE_OPENAPI=true` or the committed merged
   [`openapi.json`](../openapi.json).
@@ -31,7 +31,7 @@ path. These guides carry the operational and contributor detail.
   [`seo-openapi.yaml`](../src/rankrat/api/seo-openapi.yaml).
 - Runtime examples are [`.env.example`](../.env.example),
   [`boundaries.json.example`](../config/boundaries.json.example), and
-  [`docker-compose.yml.example`](../docker-compose.yml.example).
+  the runnable [`docker-compose.yml`](../docker-compose.yml).
 
 ## Suggested reading order
 

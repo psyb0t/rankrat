@@ -3,7 +3,7 @@
 Configure only providers you use. Store every secret in an owner-readable file
 under `secrets/`; never put credential values in `.env`, JSON examples,
 Compose, source, or chat. The boundary file contains container paths, account
-IDs, and allowed resources—not credential contents.
+IDs, and discovered resource inventory—not credential contents.
 
 ## Contents
 
@@ -37,6 +37,10 @@ IDs, and allowed resources—not credential contents.
 Use `chmod 700` on the directories and `chmod 600` on files. The wrapper mounts
 `secrets/` read-only and `oauth/` read/write because Google may rotate refresh
 material.
+
+From a checkout, `make setup` creates these paths, explains every provider-side
+step, accepts secrets without echoing them, and validates the configured
+account. Manual file creation remains available for automated deployments.
 
 ## Google OAuth
 
@@ -77,10 +81,9 @@ The usual Google account shape is:
   "credential": "/run/secrets/google/oauth-client.json",
   "oauth_token_file": "/run/oauth/google.json",
   "pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key",
-  "google_account_discovery": true,
-  "search_console_sites": ["sc-domain:example.com"],
-  "pagespeed_sites": ["https://example.com/"],
-  "ga4_properties": ["123456789"]
+  "search_console_sites": [],
+  "pagespeed_sites": [],
+  "ga4_properties": []
 }
 ```
 
@@ -112,14 +115,10 @@ rankrat.sh revoke-google --account-id google
 ### Google permissions and product limits
 
 OAuth can only exercise permissions the signed-in Google user already has.
-Search Console properties and GA4 properties not visible to that user remain
-unavailable. `google_account_discovery=true` authorizes read-only discovery and
-targeting of every Search Console site and GA4 property visible to that user,
-including resources not explicitly listed in the boundary. Set it to `false`
-for strict list-only reads. It never grants ownership and does not broaden
-Search Console writes or GA4 property writes. If writable mode is separately
-enabled, the flag is also the explicit authorization gate for renaming an
-OAuth-visible GA4 account by numeric ID.
+Rankrat discovers and can operate on every Search Console site, Analytics
+account, and GA4 property visible to that user. The resource arrays are cached
+inventory and URL-containment data, not a second permission gate. OAuth does
+not grant ownership of a property the user cannot already manage.
 
 The Google Analytics Admin API cannot create a GA4 **account**. It can create a
 property inside an existing account. If no Analytics account exists, create it
@@ -155,27 +154,28 @@ the key.
    "pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key"
    ```
 
-`pagespeed_sites` is also the authority for local Lighthouse requests. Every
-requested page must be a child of a configured site.
+`pagespeed_sites` supplies the public root used to contain local Lighthouse
+requests. Every requested page must be a child of the selected site.
 
 ## Bing Webmaster Tools
 
 1. Add and verify sites in [Bing Webmaster Tools](https://www.bing.com/webmasters/).
 2. Open **Settings → API Access** and create an API key.
 3. Save only the key at `secrets/bing/api-key`.
-4. Configure exact HTTPS roots:
+4. Let Rankrat discover the account's sites, or seed known roots:
 
    ```json
    {
      "id": "bing",
      "provider": "bing",
      "credential": "/run/secrets/bing/api-key",
-     "sites": ["https://example.com/"]
+     "sites": []
    }
    ```
 
-The Bing key sees what that Webmaster account can see. Rankrat still applies
-the explicit `sites` allow-list and child-URL containment.
+The Bing key sees what that Webmaster account can see. Rankrat can create and
+manage sites for that account, records discovered sites for reuse, and still
+applies child-URL containment within the selected site.
 
 ## Cloudflare
 
@@ -197,33 +197,29 @@ cache analytics, exact cache purges, and two finite cache templates.
    [API token permission reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
    and choose the zone-scoped permission matching the API operation above.
 
-4. Under Zone Resources, include only zones Rankrat may manage. Do not use the
-   Global API Key.
+4. Under Zone Resources, include **All zones** when one Rankrat account must
+   onboard multiple current and future domains. Do not use the Global API Key.
 5. Save the token at `secrets/cloudflare/api-token`.
-6. Copy each 32-character Zone ID from the zone Overview into the boundary:
+6. Start with empty zone inventory; Rankrat discovers visible zones:
 
    ```json
    {
      "id": "cloudflare",
      "provider": "cloudflare",
      "credential": "/run/secrets/cloudflare/api-token",
-     "dns_zones": [
-       {
-         "provider_zone_id": "00000000000000000000000000000000",
-         "name": "example.com"
-       }
-     ]
+     "dns_zones": []
    }
    ```
 
-Replace the all-zero ID. Rankrat exposes no generic DNS CRUD, arbitrary rule
-body, or whole-zone purge even if the token could perform them. Public ownership
-operations are provider-neutral so future DNS adapters need not change callers.
+Rankrat exposes provider-neutral ownership operations so future DNS adapters do
+not change callers. The current tool surface uses DNS for issued ownership
+proofs and separate Cloudflare tools for analytics/cache operations; it does
+not expose arbitrary record bodies or a whole-zone purge.
 
 ## Commercial backlink providers
 
-Every adapter needs its own paid provider account and exact allowed targets.
-Rankrat does not substitute one provider for another.
+Every adapter needs its own paid provider account. Rankrat does not substitute
+one provider for another.
 
 Credential consoles:
 
@@ -240,13 +236,15 @@ Example:
   "id": "ahrefs",
   "provider": "ahrefs",
   "credential": "/run/secrets/ahrefs/api-token",
-  "backlink_targets": ["https://example.com/"]
+  "backlink_targets": []
 }
 ```
 
 Use `ACCESS_ID:SECRET` for Moz and `LOGIN:PASSWORD` for DataForSEO. Ahrefs,
-Majestic, and Semrush files contain one token/key. Readiness performs a
-one-result query and may consume paid units.
+Majestic, and Semrush files contain one token/key. Target lists are reusable
+inventory/report defaults rather than credential permissions. Readiness
+performs a one-result query when a target is available and may consume paid
+units.
 
 Backlink reports have one whole-operation deadline and a shared ceiling of 20
 provider requests. Aggregates reject duplicate identical sources, return typed

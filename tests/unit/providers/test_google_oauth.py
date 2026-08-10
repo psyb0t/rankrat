@@ -556,7 +556,6 @@ async def test_operator_authorizes_and_revokes_exact_configured_account(tmp_path
     ).accounts[0]
     assert required_google_oauth_scopes(account, enable_writes=False) == (
         _SCOPE,
-        "https://www.googleapis.com/auth/indexing",
         "https://www.googleapis.com/auth/analytics.readonly",
     )
 
@@ -947,7 +946,11 @@ def test_oauth_pure_scope_and_filesystem_guards_are_bounded(
         }
     ).accounts[0]
     assert required_google_oauth_scopes(analytics_account, True) == (
+        oauth.GOOGLE_SEARCH_CONSOLE_READ_SCOPE,
         oauth.GOOGLE_ANALYTICS_READ_SCOPE,
+        oauth.GOOGLE_INDEXING_SCOPE,
+        oauth.GOOGLE_SEARCH_CONSOLE_WRITE_SCOPE,
+        oauth.GOOGLE_SITE_VERIFICATION_SCOPE,
         oauth.GOOGLE_ANALYTICS_EDIT_SCOPE,
     )
 

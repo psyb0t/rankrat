@@ -15,7 +15,7 @@ and [Troubleshooting](https://github.com/psyb0t/rankrat/blob/main/docs/troublesh
 - [Configuration](#configuration)
 - [The boundary file](#the-boundary-file)
 - [Write access](#write-access)
-- [Unbounded mode](#unbounded-mode)
+- [Guided setup](#guided-setup)
 - [Provider credentials](#provider-credentials)
 - [Running it](#running-it)
 - [Onboarding](#onboarding)
@@ -32,7 +32,7 @@ the ones in the settings model, not example values.
 |---|---|---|
 | `RANKRAT_HTTP_HOST` | `127.0.0.1` | Listen address in `http` mode. Loopback by default — bind wider only deliberately. |
 | `RANKRAT_HTTP_PORT` | `8080` | Listen port in `http` mode. |
-| `RANKRAT_BOUNDARY_FILE` | `/run/config/boundaries.json` | The accounts and sites this server is allowed to touch. |
+| `RANKRAT_BOUNDARY_FILE` | `/run/config/boundaries.json` | Provider accounts plus discovered resource inventory and URL-containment roots. |
 | `RANKRAT_SECRET_ROOT` | `/run/secrets` | Directory holding provider credentials. |
 | `RANKRAT_OAUTH_TOKEN_ROOT` | `/run/oauth` | Directory holding stored Google OAuth tokens. |
 | `RANKRAT_LOG_FILE` | `/tmp/rankrat/rankrat.log` | Log destination. |
@@ -42,9 +42,7 @@ the ones in the settings model, not example values.
 | `RANKRAT_SCHEDULER_INTERVAL_SECONDS` | `60` | How often the HTTP process claims due monitors; accepted range 10–3600 seconds. |
 | `RANKRAT_STATE_RETENTION_DAYS` | `180` | Snapshot/event retention after a monitor run; accepted range 1–3650 days. |
 | `RANKRAT_ENABLE_OPENAPI` | `false` | Serve the OpenAPI document. |
-| `RANKRAT_READ_ONLY` | `true` | See "Write access" below. |
-| `RANKRAT_UNBOUNDED` | `false` | Reusable trusted-onboarding mode; see "Unbounded mode". Requires `RANKRAT_READ_ONLY=false`. |
-| `RANKRAT_ALLOW_AGENT_ONBOARDING` | `false` | Expose agent-reachable onboarding when writes are enabled; see "Onboarding" below. |
+| `RANKRAT_READ_ONLY` | `false` | See "Write access" below. |
 | `RANKRAT_HTTP_BEARER_SECRET_FILE` | unset | File holding the bearer token required on HTTP requests. Unset means no auth, so only do that on loopback. |
 
 The supported names and safe defaults are in `.env.example`. Invalid values for
@@ -52,76 +50,92 @@ supported settings fail startup instead of being silently accepted.
 `make run-http` always supplies a bearer-secret file, including for loopback
 use; a custom loopback launch may deliberately omit it.
 
+`RANKRAT_DATA_DIR` is different: it is consumed by the host wrapper/launcher,
+not by the Python process. Set it to one absolute profile directory containing
+`config/boundaries.json`, `secrets/`, `oauth/`, `state/`, and `.env`. HTTP also
+uses `docker-compose.yml` there, generating the reviewed default when missing.
+With no override, the wrapper and OpenClaw launcher use
+`$HOME/.config/rankrat`. They derive every host mount from that one root and
+never mount the root wholesale.
+
 The `RANKRAT_LIVE_*` variables select the deeper provider-specific live suites
 that `make setup` runs after the image's setup check. They are blank in
 `.env.example`: set them only for providers you configured and leave all
 unused-provider selectors blank so those extra live suites skip. The image's
 `setup` command itself checks every account represented in the boundary file.
 For Ahrefs, Majestic, Moz, Semrush, and DataForSEO this is a real one-result
-query against the account's first allowed target, so it can consume paid API
+query against the account's first inventoried target, so it can consume paid API
 units.
 
 ## The boundary file
 
-`boundaries.json` fixes credential accounts and normal resource scope. One
-explicit exception is `google_account_discovery=true`: read-only inventory and
-report/query tools may then target every Search Console site and GA4 property
-visible to that OAuth user, including resources not listed in the file. Set it
-to `false` for strict list-only reads. It does not broaden Search Console writes
-or GA4 property writes; with writable mode separately enabled, it also
-authorizes renaming an OAuth-visible GA4 account by numeric ID. Separately gated
-agent onboarding can persist only the exact resources it creates when
-`RANKRAT_ALLOW_AGENT_ONBOARDING=true` and the config mount passes its ownership
-and mode checks.
-
-Keep it to the properties you actually want an agent reading.
+`boundaries.json` fixes credential accounts and records resource inventory.
+Each credential authorizes every supported operation and resource that its
+provider account can reach. Resource arrays cache discovered sites, properties,
+zones, and targets; they are not per-resource permission lists. Fixed provider
+origins, public-URL validation, and child-URL containment remain enforced.
+Writable discovery and onboarding persist inventory only after the config mount
+passes ownership and mode checks.
 
 ## Write access
 
-`RANKRAT_READ_ONLY` defaults to `true`, and the effect is stronger than a
-refusal at call time: the tool catalog is built from that setting, so the write
-tools are absent from `tools/list` and the REST write routes are not mounted. An
-agent cannot discover them, let alone call them.
+`RANKRAT_READ_ONLY` defaults to `false`. The trusted caller gets direct access
+to every supported operation permitted by each configured provider account.
+This is the only capability switch. HTTP uses its normal bearer for transport
+authentication; stdio access is controlled by who can start the process and
+read its mounts.
 
-Set it to `false` and they appear. There is no approval ID, admin API, or second
-bearer token — the trusted caller gets direct access, with writes still confined
-to the configured boundaries and to what the provider account itself permits.
+Set it to `true` and the effect is stronger than a refusal at call time: write
+tools are absent from `tools/list` and REST write routes are not mounted. An
+agent cannot discover them, let alone call them.
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
 Indexing notifications, Search Console site/sitemap changes, DNS-provider-backed
 ownership verification, discovery remediation, and new-site onboarding, and
 monitor lifecycle operations plus finite Cloudflare cache purges/templates, and
-are marked as writes in MCP.
+are marked as writes in MCP. The human may operate Rankrat interactively or
+delegate fully autonomous work; use read-only mode when that caller must not
+mutate provider or local state.
 
-## Unbounded mode
+## Guided setup
 
-`RANKRAT_UNBOUNDED=true` is a bootstrap escape hatch for onboarding a resource
-that is not in the boundary file yet. It requires `RANKRAT_READ_ONLY=false`;
-setting it alone is a startup error.
+From a checkout, the human runs one command:
 
-What it changes: authorization still resolves the credential **account** from
-the boundary file, so accounts stay fixed, but resource allow-list checks are
-skipped — including Google resource/account discovery and the GA4
-  parent-account pin and DNS zone allow-list.
+```bash
+make setup
+```
 
-What it does *not* change is worth knowing, because it is narrower than "the
-boundary is off":
+The command initializes owner-only `config/`, `secrets/`, `oauth/`, and
+`state/` paths without replacing existing values. It asks for a comma-separated
+provider set, prints each provider's credential console and account-wide
+permissions, then accepts secrets through non-echoing prompts. Standard paths
+are used automatically:
 
-- **URL containment still applies.** A candidate page URL must still normalize
-  as public HTTPS and sit beneath the property or site it was requested under,
-  so naming an unlisted property does not let a caller reach a URL outside that
-  property.
-- **IndexNow targets stay resolved from the boundary file**, so no new key
-  target appears.
-- **The OAuth credential path stays resolved from the boundary file**, so no new
-  credential becomes reachable.
-- Non-loopback HTTP still requires the bearer secret.
+Reruns are additive. Selected providers are added or refreshed in place;
+unselected provider accounts and their inventory are preserved. When a
+selected provider has multiple account entries, setup rejects the ambiguous
+refresh before asking for a secret; edit `config/boundaries.json` to identify
+the intended account first.
 
-Use it for a trusted discovery/onboarding session: start unbounded, discover
-and onboard, let onboarding write the discovered IDs back into the boundary
-file, then restart without it so the now-expanded allow-list is enforced again.
-It is reusable: enable it again later when a trusted agent needs to expand the
-boundary. A server left running unbounded is a trusted-caller deployment; treat
-it that way.
+| Provider | Host credential path |
+|---|---|
+| Google | `secrets/google/oauth-client.json` |
+| Bing | `secrets/bing/api-key` |
+| Cloudflare | `secrets/cloudflare/api-token` |
+| Ahrefs | `secrets/ahrefs/api-token` |
+| Majestic | `secrets/majestic/api-key` |
+| Moz | `secrets/moz/credentials` |
+| Semrush | `secrets/semrush/api-key` |
+| DataForSEO | `secrets/dataforseo/credentials` |
+
+Google accepts only an installed/Desktop OAuth client JSON. The same setup
+command prints the consent URL, waits for the loopback callback, and stores the
+full Rankrat grant under `oauth/`. PageSpeed's separate API key is prompted at
+the same time because that API does not use OAuth.
+
+After storage, setup runs account readiness, provider-specific live checks for
+configured selectors, and the shipped authenticated HTTP/MCP image smoke. It
+does not create site properties, submit sitemaps/URLs, or send IndexNow
+notifications. Secret values are never printed or written into `.env`.
 
 ## Provider credentials
 
@@ -138,11 +152,12 @@ exception: they are absent unless writable mode enables them.
   what the account can do.
 - **Bing Webmaster Tools** — an API key from the Bing Webmaster dashboard,
   placed under `RANKRAT_SECRET_ROOT`.
-- **Cloudflare** — a zone-scoped token stored at the boundary account's
-  credential path. Grant Zone Read plus only what is used: DNS Edit for
+- **Cloudflare** — an account token stored at the configured account's
+  credential path. Grant Zone Read plus the features used: DNS Edit for
   ownership, Analytics Read for reports, Cache Purge for exact URL purges, and
-  Cache Rules Edit/Cache Settings Write for the two named templates. Put each
-  zone in `dns_zones` with its Zone ID in `provider_zone_id`. Rankrat exposes no
+  Cache Rules Edit/Cache Settings Write for the two named templates. Select all
+  zones when the credential must onboard current and future domains; Rankrat
+  discovers zone IDs. Rankrat exposes no
   arbitrary DNS record, whole-zone purge, or arbitrary cache-rule body.
 - **PageSpeed Insights** — an API key, same location, and the one Google surface
   that does not use OAuth: the key goes on the query string, so the Google
@@ -151,9 +166,10 @@ exception: they are absent unless writable mode enables them.
   `crux_history` uses the same file and requires the key.
 - **Ahrefs / Majestic / Semrush** — one API token/key line in the credential
   file. **Moz** uses `ACCESS_ID:SECRET`; **DataForSEO** uses `LOGIN:PASSWORD`.
-  Each account must list exact absolute HTTPS `backlink_targets`. All five are
-  optional paid data sources with provider-specific quotas and costs. Setup
-  validates each configured credential with one result from the first target.
+  `backlink_targets` stores known report targets rather than authorization. All
+  five are optional paid data sources with provider-specific quotas and costs.
+  Setup validates each configured credential with one result when a target is
+  available.
   Each report or aggregate has one `timeout_seconds` deadline and shares a
   20-request upstream budget; aggregate sources must be unique.
 - **Local Lighthouse** — no credential. The optional companion image receives
@@ -173,17 +189,31 @@ and the Google authorization are created by a human beforehand. This skill
 includes [`rankrat.sh`](rankrat.sh), a byte-identical copy of the repository
 wrapper around these same invocations. Run it from its installed skill path with
 `bash references/rankrat.sh` when the wrapper is more convenient than the plain
-Docker commands below; no system-wide installation is required.
+Docker commands below; no system-wide installation is required:
+
+```bash
+export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
+bash references/rankrat.sh stdio
+bash references/rankrat.sh http       # attached Rankrat + Lighthouse
+bash references/rankrat.sh http -d    # detached, restart unless stopped
+```
+
+HTTP treats the profile as its Compose project directory. It atomically creates
+the embedded reviewed `docker-compose.yml` when absent, preserves an existing
+safe regular file, rejects symlinked/non-regular paths, and exports the chosen
+image, port, UID/GID, and read-only values ahead of profile `.env`. The project
+directory and Compose file must be owned by the current UID and not group/world
+writable. Only the four fixed children below are mounted into containers.
 
 Both transports take the same four mounts. Container-side paths are the
 server's defaults, so only the host side changes:
 
 | Host | Container | Access | Holds |
 |---|---|---|---|
-| `./config` | `/run/config` | read-only normally; validated writable mount for unbounded mode or agent onboarding | `boundaries.json` |
-| `./secrets` | `/run/secrets` | read-only | provider credentials, HTTP bearer secret |
-| `./oauth` | `/run/oauth` | writable | stored Google OAuth token; refresh may rotate it |
-| `./state` | `/run/state` | writable, owner-only | SQLite monitor definitions, snapshots, issues, and events |
+| `$RANKRAT_DATA_DIR/config` | `/run/config` | writable normally; read-only with `RANKRAT_READ_ONLY=true` | account registry and inventory |
+| `$RANKRAT_DATA_DIR/secrets` | `/run/secrets` | read-only | provider credentials, HTTP bearer secret |
+| `$RANKRAT_DATA_DIR/oauth` | `/run/oauth` | writable | stored Google OAuth token; refresh may rotate it |
+| `$RANKRAT_DATA_DIR/state` | `/run/state` | writable, owner-only | SQLite monitor definitions, snapshots, issues, and events |
 
 **stdio** — the default mode, for a client that owns the process:
 
@@ -193,16 +223,16 @@ docker run -i --rm --init --read-only \
   --cap-drop=ALL --security-opt no-new-privileges:true \
   --pids-limit 128 --memory 512m --cpus 1 \
   --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-  --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
-  --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
-  --mount type=bind,src="$PWD/state",dst=/run/state \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/config",dst=/run/config \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/secrets",dst=/run/secrets,readonly \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/oauth",dst=/run/oauth \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/state",dst=/run/state \
   -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
   psyb0t/rankrat stdio
 ```
 
-**Streamable HTTP** — for a shared server. MCP lands at `/mcp` and the REST API
-shares the port:
+**Manual single-container Streamable HTTP** — for a shared server that does not
+need local Lighthouse. MCP lands at `/mcp` and the REST API shares the port:
 
 ```bash
 docker run --rm --init --read-only \
@@ -213,10 +243,10 @@ docker run --rm --init --read-only \
   -p 127.0.0.1:8080:8080 \
   -e RANKRAT_HTTP_HOST=0.0.0.0 \
   -e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token \
-  --mount type=bind,src="$PWD/config",dst=/run/config,readonly \
-  --mount type=bind,src="$PWD/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$PWD/oauth",dst=/run/oauth \
-  --mount type=bind,src="$PWD/state",dst=/run/state \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/config",dst=/run/config \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/secrets",dst=/run/secrets,readonly \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/oauth",dst=/run/oauth \
+  --mount type=bind,src="$RANKRAT_DATA_DIR/state",dst=/run/state \
   -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
   psyb0t/rankrat http
 ```
@@ -225,16 +255,13 @@ docker run --rm --init --read-only \
 loopback. MCP is then at `http://127.0.0.1:8080/mcp`; send
 `Authorization: Bearer <token>` whenever a bearer secret is configured.
 
-The commands above are bounded and read-only. In unbounded mode, set
-`RANKRAT_READ_ONLY=false` and `RANKRAT_UNBOUNDED=true`; for agent onboarding,
-set `RANKRAT_READ_ONLY=false` and `RANKRAT_ALLOW_AGENT_ONBOARDING=true`. Either
-case needs `readonly` removed only from `/run/config`, after verifying that the
-resolved config directory is owner-only, that `boundaries.json` itself is not a
-symlink, that both are owned by the current UID, and that the file is not group-
-or world-writable. The bundled `rankrat.sh` resolves the directory path, checks
-that resulting target, and applies the mount change automatically. The OpenClaw
-launcher is stricter and rejects any symlinked path component. Do not make the
-secret mount writable.
+The commands above use the writable default. Before mounting config writable,
+verify that the resolved directory is owner-only, `boundaries.json` is not a
+symlink, both are owned by the current UID, and the file is not group- or
+world-writable. The bundled `rankrat.sh` performs those checks. The OpenClaw
+launcher additionally rejects symlinked path components. For a read-only
+caller, set `RANKRAT_READ_ONLY=true` and make only `/run/config` read-only.
+Never make the provider-secret mount writable during normal service operation.
 
 Local Lighthouse audits require the separate published browser image. Start it
 once against a private named volume:
@@ -300,13 +327,11 @@ findings.
 
 ## Onboarding
 
-`RANKRAT_READ_ONLY=false` does not by itself expose onboarding. It is the only
-operation that rewrites the boundary file the server enforces, so it needs
-`RANKRAT_ALLOW_AGENT_ONBOARDING=true` as well; without that,
-`site_onboarding_submit` is absent from `tools/list` and its REST route is not
-mounted. The config directory must be writable for the enabled operation; the
-bundled wrapper validates its ownership/mode and changes only that mount. The
-operator's own `rankrat onboard-site` command is unaffected.
+`site_onboarding_submit` is part of normal writable mode. It creates or reuses
+GA4, Search Console, and Bing resources, then records discovered IDs in the
+config file. It is absent from `tools/list` and REST when
+`RANKRAT_READ_ONLY=true`. The config directory must be safely writable; the
+bundled wrapper validates its ownership/mode.
 
 The guidance is available either way, read-only, on every server:
 
@@ -424,10 +449,7 @@ These appear only when `RANKRAT_READ_ONLY=false`:
   `monitor_delete`, `monitor_run`, `issue_status_update`.
 - **Cloudflare performance:** `cloudflare_cache_purge`,
   `cloudflare_cache_template_apply`.
-
-`site_onboarding_submit` is the additional writable tool exposed only when
-`RANKRAT_ALLOW_AGENT_ONBOARDING=true`. It is kept separate because it persists
-the exact resources it creates into the boundary file.
+- **Site onboarding:** `site_onboarding_submit`.
 
 ## Checking it works
 

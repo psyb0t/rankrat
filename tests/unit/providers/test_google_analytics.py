@@ -65,7 +65,6 @@ def _discovery_policy() -> BoundaryPolicy:
                         "provider": "google",
                         "credential": "/run/secrets/google.json",
                         "oauth_token_file": "/run/oauth/google-main.json",
-                        "google_account_discovery": True,
                     }
                 ]
             }
@@ -220,7 +219,7 @@ async def test_ga4_account_discovery_reads_fixed_origin_pages_and_validates_reso
 
 
 @pytest.mark.asyncio
-async def test_ga4_account_discovery_rejects_unconfigured_account_before_token_or_network() -> None:
+async def test_ga4_account_discovery_rejects_unknown_account_before_token_or_network() -> None:
     token_called = False
 
     async def token(credential_path: Path) -> str:
@@ -236,7 +235,9 @@ async def test_ga4_account_discovery_rejects_unconfigured_account_before_token_o
     )
 
     with pytest.raises(BoundaryDeniedError):
-        await client.list_account_summaries(_request())
+        await client.list_account_summaries(
+            ProviderReadRequest(AccountId("missing"), timeout_seconds=1.0)
+        )
     assert token_called is False
 
 
@@ -614,7 +615,7 @@ async def test_ga4_rejects_header_aligned_row_integrity_failures(
 
 
 @pytest.mark.asyncio
-async def test_ga4_rejects_unconfigured_property_before_token_or_network() -> None:
+async def test_ga4_account_scope_accepts_an_unlisted_property() -> None:
     token_called = False
 
     async def token(credential_path: Path) -> str:
@@ -626,12 +627,17 @@ async def test_ga4_rejects_unconfigured_property_before_token_or_network() -> No
     client = GoogleAnalyticsDataClient(
         _policy(),
         token,
-        transport_factory=lambda: pytest.fail("network must not be reached"),
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _: httpx.Response(
+                200,
+                json={"dimensionHeaders": [], "metricHeaders": [], "rows": []},
+            )
+        ),
     )
 
-    with pytest.raises(BoundaryDeniedError):
-        await client.run_report(_request(), "999999999", _query())
-    assert token_called is False
+    result = await client.run_report(_request(), "999999999", _query())
+    assert result.rows == ()
+    assert token_called is True
 
 
 @pytest.mark.asyncio

@@ -210,8 +210,9 @@ Read [Lighthouse](lighthouse.md) before enabling its browser worker.
 provider verification tokens. `site_ownership_verify` creates only the exact
 provider-issued DNS proofs through a supported adapter and redeems them after
 propagation. Site onboarding creates GA4/Search Console/Bing resources under
-explicit gates. Read [Ownership and onboarding](ownership-and-onboarding.md)
-before using either write flow.
+the configured provider accounts in normal writable mode. Read
+[Ownership and onboarding](ownership-and-onboarding.md) before using either
+write flow.
 
 ## Monitoring and writes
 

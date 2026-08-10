@@ -393,7 +393,7 @@ class GoogleAnalyticsDataClient:
     ) -> tuple[Ga4AccountSummary, ...]:
         """List every bounded GA4 account/property summary visible to this OAuth account."""
 
-        account = self._boundary_policy.require_google_account_discovery(str(request.account_id))
+        account = self._boundary_policy.require_google_account(str(request.account_id))
         token = await self._token_for_account(account.credential)
         account_summaries: list[Ga4AccountSummary] = []
         seen_account_ids: set[str] = set()

@@ -101,17 +101,12 @@ async def test_live_google_search_console_matches_mocked_contract() -> None:
         settings.secret_root,
         settings.oauth_token_root,
     )
-    account = policy.resolve_account(account_id)
+    policy.require_google_account(account_id)
     client = GoogleSearchConsoleClient(policy, GoogleConfiguredTokenProvider(policy))
     sites = await client.list_sites(
         ProviderReadRequest(AccountId(account_id), timeout_seconds=10.0)
     )
 
-    if account.google_account_discovery:
-        assert all(site.startswith(("https://", "sc-domain:")) for site in sites)
-        return
-
-    assert set(sites).issubset(account.search_console_sites)
     assert all(site.startswith(("https://", "sc-domain:")) for site in sites)
 
 
@@ -129,9 +124,7 @@ async def test_live_google_analytics_account_discovery_matches_mocked_contract()
         settings.secret_root,
         settings.oauth_token_root,
     )
-    account = policy.resolve_account(account_id)
-    if not account.google_account_discovery:
-        pytest.skip("the live Google account has not enabled account discovery")
+    policy.require_google_account(account_id)
 
     service = GoogleAnalyticsDataService(
         policy,

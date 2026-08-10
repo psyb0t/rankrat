@@ -1,8 +1,9 @@
 # MCP tool reference
 
 MCP `tools/list` from the running process is authoritative. Read-only mode
-exposes 83 read tools. Writable mode adds 19 ordinary write tools; enabling
-agent onboarding adds `site_onboarding_submit` for 103 total tools.
+exposes only read tools. Writable mode adds every supported mutation, including
+site onboarding. Counts are deliberately not duplicated here because the
+catalog evolves and runtime discovery is exact.
 
 REST uses the same services and schemas, but route names are defined by the
 generated [`openapi.json`](../openapi.json). Use that document rather than
@@ -20,7 +21,6 @@ deriving REST paths from MCP names.
 - [SEO intelligence reads](#seo-intelligence-reads)
 - [Monitoring reads](#monitoring-reads)
 - [Ordinary write tools](#ordinary-write-tools)
-- [Separately gated onboarding tool](#separately-gated-onboarding-tool)
 - [MCP resources](#mcp-resources)
 - [Tool annotations](#tool-annotations)
 
@@ -177,6 +177,7 @@ These appear only with `RANKRAT_READ_ONLY=false`.
 | --- | --- |
 | `site_ownership_verify` | Publish provider-issued DNS proofs and redeem ownership |
 | `site_remediation_apply` | Resubmit a bounded sitemap and changed URLs to Google/Bing |
+| `site_onboarding_submit` | Create/reuse GA4, Search Console, and Bing resources and persist discovered inventory |
 
 ### Monitoring writes
 
@@ -194,13 +195,6 @@ These appear only with `RANKRAT_READ_ONLY=false`.
 | --- | --- |
 | `cloudflare_cache_purge` | Purge exact configured-site URLs |
 | `cloudflare_cache_template_apply` | Apply `cache_static_assets` or `bypass_html` |
-
-## Separately gated onboarding tool
-
-`site_onboarding_submit` appears only with both writable mode and
-`RANKRAT_ALLOW_AGENT_ONBOARDING=true`. It creates one GA4 property/data stream,
-one Search Console property, and one Bing site, then persists their exact
-boundaries after all stages succeed.
 
 ## MCP resources
 

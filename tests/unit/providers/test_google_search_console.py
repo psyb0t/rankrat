@@ -43,10 +43,7 @@ async def _token(credential_path: Path) -> str:
     return "test-token"
 
 
-def _policy(
-    provider: Provider = Provider.GOOGLE,
-    google_account_discovery: bool = False,
-) -> BoundaryPolicy:
+def _policy(provider: Provider = Provider.GOOGLE) -> BoundaryPolicy:
     account: dict[str, object] = {
         "id": "google-main" if provider is Provider.GOOGLE else "bing-main",
         "provider": provider,
@@ -54,9 +51,6 @@ def _policy(
     }
     if provider is Provider.GOOGLE:
         account["search_console_sites"] = ["https://example.com/"]
-        account["google_account_discovery"] = google_account_discovery
-        if google_account_discovery:
-            account["oauth_token_file"] = "/run/oauth/google-main.json"
     else:
         account["sites"] = ["https://example.com/"]
     return BoundaryPolicy(BoundaryDocument.model_validate({"accounts": [account]}))
@@ -99,7 +93,7 @@ _MALFORMED_SEARCH_ANALYTICS_PAYLOADS = cast(
 
 
 @pytest.mark.asyncio
-async def test_list_sites_uses_fixed_origin_and_filters_unconfigured_sites() -> None:
+async def test_list_sites_uses_fixed_origin_and_returns_account_inventory() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url == httpx.URL("https://www.googleapis.com/webmasters/v3/sites")
         assert request.headers["Authorization"] == "Bearer test-token"
@@ -129,11 +123,11 @@ async def test_list_sites_uses_fixed_origin_and_filters_unconfigured_sites() -> 
         ProviderReadRequest(AccountId("google-main"), timeout_seconds=1.0)
     )
 
-    assert sites == ("https://example.com/",)
+    assert sites == ("https://example.com/", "https://unconfigured.example/")
 
 
 @pytest.mark.asyncio
-async def test_google_account_discovery_allows_reads_but_not_writes() -> None:
+async def test_account_scoped_google_credential_allows_reachable_reads_and_writes() -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         if request.method == "GET" and request.url.path.endswith("/sites"):
             return httpx.Response(
@@ -153,10 +147,12 @@ async def test_google_account_discovery_allows_reads_but_not_writes() -> None:
             )
         if request.method == "POST":
             return httpx.Response(200, json={"rows": []})
+        if request.method == "PUT":
+            return httpx.Response(204)
         pytest.fail(f"unexpected Google request: {request.method} {request.url}")
 
     client = GoogleSearchConsoleClient(
-        _policy(google_account_discovery=True),
+        _policy(),
         _token,
         transport_factory=lambda: httpx.MockTransport(handler),
     )
@@ -171,8 +167,7 @@ async def test_google_account_discovery_allows_reads_but_not_writes() -> None:
         "https://other.example/",
         _search_analytics_query(),
     ) == SearchAnalyticsReport((), None)
-    with pytest.raises(BoundaryDeniedError):
-        await client.add_site(request, "https://other.example/")
+    await client.add_site(request, "https://other.example/")
 
 
 @pytest.mark.asyncio
@@ -670,7 +665,7 @@ async def test_search_console_rejects_mismatched_or_invalid_typed_resources(
 
 
 @pytest.mark.asyncio
-async def test_other_google_reads_reject_unconfigured_property_before_token_or_network() -> None:
+async def test_account_scoped_google_reads_accept_unlisted_property() -> None:
     called = False
 
     async def token(credential_path: Path) -> str:
@@ -682,24 +677,17 @@ async def test_other_google_reads_reject_unconfigured_property_before_token_or_n
     client = GoogleSearchConsoleClient(
         _policy(),
         token,
-        transport_factory=lambda: pytest.fail("network must not be reached"),
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"rows": []})
+        ),
     )
     request = ProviderReadRequest(AccountId("google-main"), timeout_seconds=1.0)
-    with pytest.raises(BoundaryDeniedError):
-        await client.search_analytics(request, "https://other.example/", _search_analytics_query())
-    with pytest.raises(BoundaryDeniedError):
-        await client.get_site(request, "https://other.example/")
-    with pytest.raises(BoundaryDeniedError):
-        await client.list_sitemaps(request, "https://other.example/")
-    with pytest.raises(BoundaryDeniedError):
-        await client.get_sitemap(
-            request,
-            "https://other.example/",
-            "https://other.example/sitemap.xml",
-        )
-    with pytest.raises(BoundaryDeniedError):
-        await client.inspect_url(request, "https://other.example/", "https://other.example/page")
-    assert called is False
+    assert await client.search_analytics(
+        request,
+        "https://other.example/",
+        _search_analytics_query(),
+    ) == SearchAnalyticsReport((), None)
+    assert called is True
 
 
 @pytest.mark.asyncio

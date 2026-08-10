@@ -1,7 +1,14 @@
+import os
+import shutil
+import subprocess
+import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 _SOURCE_MAKEFILE = Path("Makefile")
 _SOURCE_WRAPPER = Path("rankrat.sh")
+_BASH_EXECUTABLE = "/bin/bash"
 _READ_ONLY_MOUNT_ASSIGNMENT = (
     'readonly_boundary_mount="type=bind,src=$boundary_directory,'
     'dst=$CONTAINER_CONFIG_DIRECTORY,readonly"'
@@ -14,13 +21,10 @@ _WRITABLE_MOUNT_ASSIGNMENT = (
 def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
     source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
 
-    assert "RANKRAT_READ_ONLY ?= true" in source
-    assert "RANKRAT_UNBOUNDED ?= false" in source
-    assert "RANKRAT_ALLOW_AGENT_ONBOARDING ?= false" in source
+    assert "RANKRAT_READ_ONLY ?= false" in source
     assert "RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY)" in source
-    assert "RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED)" in source
-    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=$(RANKRAT_ALLOW_AGENT_ONBOARDING)" in source
-    assert "RANKRAT_STATE=$(STATE)" in source
+    assert "RANKRAT_DATA_DIR=$(PWD)" in source
+    assert "RANKRAT_STATE=$(STATE)" not in source
     assert "./rankrat.sh" in source
     assert "$(WRAPPER) stdio" in _target(source, "run")
     assert "$(WRAPPER) http" in _target(source, "run-http")
@@ -41,20 +45,28 @@ def test_local_dev_image_mode_is_an_explicit_checked_fallback() -> None:
     assert "RANKRAT_DEV_IMAGE_SOURCE=local test" in _target(source, "test-local")
 
 
-def test_wrapper_allows_only_explicit_boundary_persistence() -> None:
+def test_wrapper_mounts_config_writable_exactly_when_writes_are_enabled() -> None:
     source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
 
-    assert 'read_only="${RANKRAT_READ_ONLY:-true}"' in source
-    assert 'unbounded="${RANKRAT_UNBOUNDED:-false}"' in source
-    assert 'allow_agent_onboarding="${RANKRAT_ALLOW_AGENT_ONBOARDING:-false}"' in source
-    assert "Writable boundary persistence requires RANKRAT_READ_ONLY=false" in source
-    assert "RANKRAT_ALLOW_AGENT_ONBOARDING=$allow_agent_onboarding" in source
+    assert 'read_only="${RANKRAT_READ_ONLY:-false}"' in source
     assert _READ_ONLY_MOUNT_ASSIGNMENT in source
     assert _WRITABLE_MOUNT_ASSIGNMENT in source
     assert 'serve_boundary_mount="$readonly_boundary_mount"' in source
     assert 'serve_boundary_mount="$writable_boundary_mount"' in source
-    assert '[[ "$unbounded" == "true" || "$allow_agent_onboarding" == "true" ]]' in source
     assert 'require_writable_boundary_is_safe "$boundary_file" "$boundary_directory"' in source
+
+
+def test_wrapper_runs_setup_interactively_with_owner_only_writable_paths() -> None:
+    source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
+    target = source.split("\nsetup)\n", maxsplit=1)[1].split("\n\t;;", maxsplit=1)[0]
+
+    assert "-i" in target
+    assert '--mount "$writable_boundary_mount"' in target
+    assert '--mount "$secret_mount"' in source
+    assert 'require_owner_only_directory "$secrets_directory"' in source
+    assert "--interactive-setup" in target
+    assert '--callback-port "$oauth_callback_port"' in target
+    assert "--docker-loopback-proxy" in target
 
 
 def test_wrapper_never_bind_mounts_the_boundary_file_on_its_own() -> None:
@@ -66,11 +78,308 @@ def test_wrapper_never_bind_mounts_the_boundary_file_on_its_own() -> None:
     assert "src=$boundary_file" not in source
 
 
-def test_compose_example_mounts_the_boundary_directory() -> None:
-    source = Path("docker-compose.yml.example").read_text(encoding="utf-8")
+def test_wrapper_uses_one_shared_profile_independently_of_cwd(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "shared profile")
+    docker_arguments = tmp_path / "docker-arguments"
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
+            "RANKRAT_BOUNDARIES": "/ignored/old/boundaries.json",
+            "RANKRAT_SECRETS": "/ignored/old/secrets",
+        }
+        invocations: list[list[str]] = []
 
-    assert "- ./config:/run/config:ro" in source
+        for site_name in ("site-a", "site-b"):
+            site_directory = tmp_path / site_name
+            site_directory.mkdir()
+            result = _run_wrapper(environment, site_directory)
+            assert result.returncode == 0, result.stderr
+            invocations.append(docker_arguments.read_text(encoding="utf-8").splitlines())
+
+    assert invocations[0] == invocations[1]
+    arguments = invocations[0]
+    expected_mounts = {
+        f"type=bind,src={data_directory}/config,dst=/run/config,readonly",
+        f"type=bind,src={data_directory}/secrets,dst=/run/secrets,readonly",
+        f"type=bind,src={data_directory}/oauth,dst=/run/oauth",
+        f"type=bind,src={data_directory}/state,dst=/run/state",
+    }
+    assert expected_mounts.issubset(set(arguments))
+    assert not any(str(data_directory) == argument for argument in arguments)
+    assert not any("/ignored/old/" in argument for argument in arguments)
+
+
+def test_wrapper_rejects_unsafe_data_directories_before_docker(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    docker_marker = tmp_path / "docker-was-called"
+    linked_directory = tmp_path / "linked-profile"
+    linked_directory.symlink_to(data_directory, target_is_directory=True)
+    invalid_directories = (
+        "relative/profile",
+        "/",
+        f"{data_directory},readonly",
+        f"{data_directory}\nforged-log-line",
+        f"{data_directory}/../profile",
+        str(linked_directory),
+    )
+
+    with _fake_bin_directory() as fake_bin:
+        base_environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+        }
+        for invalid_directory in invalid_directories:
+            result = _run_wrapper(
+                {**base_environment, "RANKRAT_DATA_DIR": invalid_directory},
+                tmp_path,
+            )
+            assert result.returncode != 0
+            assert result.stdout == ""
+
+    assert not docker_marker.exists()
+
+
+def test_compose_deployment_mounts_one_shared_profile() -> None:
+    source = Path("docker-compose.yml").read_text(encoding="utf-8")
+
+    assert "source: ${RANKRAT_DATA_DIR:-.}/config" in source
+    assert "target: /run/config" in source
+    assert "read_only: ${RANKRAT_READ_ONLY:-false}" in source
+    assert "- ${RANKRAT_DATA_DIR:-.}/secrets:/run/secrets:ro" in source
+    assert "- ${RANKRAT_DATA_DIR:-.}/oauth:/run/oauth:rw" in source
+    assert "- ${RANKRAT_DATA_DIR:-.}/state:/run/state:rw" in source
     assert "./config/boundaries.json:/run/config/boundaries.json" not in source
+    assert "source: ${RANKRAT_DATA_DIR:-.}\n        target: /" not in source
+
+
+def test_wrapper_generates_profile_compose_and_runs_http_foreground(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "shared profile")
+    docker_arguments = tmp_path / "docker-arguments"
+    docker_environment = tmp_path / "docker-environment"
+    environment = {
+        **os.environ,
+        "RANKRAT_DATA_DIR": str(data_directory),
+        "RANKRAT_HTTP_PORT": "18080",
+        "RANKRAT_IMAGE": "example/rankrat:test",
+        "RANKRAT_LIGHTHOUSE_IMAGE": "example/lighthouse:test",
+        "RANKRAT_READ_ONLY": "true",
+        "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
+        "RANKRAT_TEST_DOCKER_ENV": str(docker_environment),
+    }
+
+    with _fake_bin_directory() as fake_bin:
+        environment["PATH"] = f"{fake_bin}:{os.environ['PATH']}"
+        result = _run_wrapper(environment, tmp_path, mode="http")
+
+    assert result.returncode == 0, result.stderr
+    compose_file = data_directory / "docker-compose.yml"
+    assert compose_file.read_bytes() == Path("docker-compose.yml").read_bytes()
+    assert compose_file.stat().st_mode & 0o777 == 0o600
+    assert not tuple(data_directory.glob(".rankrat-compose.*"))
+    assert docker_arguments.read_text(encoding="utf-8").splitlines() == [
+        "compose",
+        "--project-directory",
+        str(data_directory),
+        "--file",
+        str(compose_file),
+        "up",
+        "--remove-orphans",
+    ]
+    assert docker_environment.read_text(encoding="utf-8").splitlines() == [
+        str(data_directory),
+        "example/rankrat:test",
+        "example/lighthouse:test",
+        "18080",
+        "true",
+    ]
+
+
+def test_wrapper_runs_http_detached_with_both_supported_flags(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    (data_directory / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+
+    for flag in ("-d", "--detach"):
+        docker_arguments = tmp_path / f"docker-arguments-{flag.lstrip('-')}"
+        with _fake_bin_directory() as fake_bin:
+            environment = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "RANKRAT_DATA_DIR": str(data_directory),
+                "RANKRAT_READ_ONLY": "true",
+                "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
+            }
+            result = _run_wrapper(
+                environment,
+                tmp_path,
+                mode="http",
+                arguments=(flag,),
+            )
+
+        assert result.returncode == 0, result.stderr
+        assert docker_arguments.read_text(encoding="utf-8").splitlines()[-3:] == [
+            "up",
+            "--detach",
+            "--remove-orphans",
+        ]
+
+
+def test_wrapper_preserves_existing_profile_compose(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    compose_file = data_directory / "docker-compose.yml"
+    custom_compose = "services:\n  custom-service:\n    image: example/custom:1\n"
+    compose_file.write_text(custom_compose, encoding="utf-8")
+    docker_arguments = tmp_path / "docker-arguments"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
+        }
+        result = _run_wrapper(environment, tmp_path, mode="http")
+
+    assert result.returncode == 0, result.stderr
+    assert compose_file.read_text(encoding="utf-8") == custom_compose
+    assert str(compose_file) in docker_arguments.read_text(encoding="utf-8").splitlines()
+
+
+def test_wrapper_rejects_symlinked_profile_compose_before_docker(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    custom_compose = tmp_path / "custom-compose.yml"
+    custom_compose.write_text("services: {}\n", encoding="utf-8")
+    (data_directory / "docker-compose.yml").symlink_to(custom_compose)
+    docker_marker = tmp_path / "docker-was-called"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+        }
+        result = _run_wrapper(environment, tmp_path, mode="http")
+
+    assert result.returncode != 0
+    assert "must be a regular file" in result.stderr
+    assert not docker_marker.exists()
+
+
+def test_wrapper_rejects_directory_at_profile_compose_path(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    (data_directory / "docker-compose.yml").mkdir()
+    docker_marker = tmp_path / "docker-was-called"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+        }
+        result = _run_wrapper(environment, tmp_path, mode="http")
+
+    assert result.returncode != 0
+    assert "must be a regular file" in result.stderr
+    assert not docker_marker.exists()
+
+
+def test_wrapper_rejects_unsafe_profile_before_compose_generation(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    data_directory.chmod(0o770)
+    docker_marker = tmp_path / "docker-was-called"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+        }
+        result = _run_wrapper(environment, tmp_path, mode="http")
+
+    assert result.returncode != 0
+    assert "must not be group- or world-writable" in result.stderr
+    assert not (data_directory / "docker-compose.yml").exists()
+    assert not docker_marker.exists()
+
+
+def test_wrapper_rejects_group_writable_existing_compose(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    compose_file = data_directory / "docker-compose.yml"
+    compose_file.write_text("services: {}\n", encoding="utf-8")
+    compose_file.chmod(0o660)
+    docker_marker = tmp_path / "docker-was-called"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+        }
+        result = _run_wrapper(environment, tmp_path, mode="http")
+
+    assert result.returncode != 0
+    assert "must not be group- or world-writable" in result.stderr
+    assert not docker_marker.exists()
+
+
+def test_wrapper_rejects_unknown_http_arguments_before_docker(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    docker_marker = tmp_path / "docker-was-called"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+        }
+        for arguments in (("--project-name",), ("-d", "extra")):
+            result = _run_wrapper(
+                environment,
+                tmp_path,
+                mode="http",
+                arguments=arguments,
+            )
+            assert result.returncode != 0
+            assert "http accepts only -d or --detach" in result.stderr
+
+    assert not docker_marker.exists()
+
+
+def test_wrapper_requires_http_bearer_before_compose_generation(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    (data_directory / "secrets/rankrat/http-bearer-token").unlink()
+    docker_marker = tmp_path / "docker-was-called"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+        }
+        result = _run_wrapper(environment, tmp_path, mode="http")
+
+    assert result.returncode != 0
+    assert "Rankrat HTTP bearer secret must be a regular file" in result.stderr
+    assert not (data_directory / "docker-compose.yml").exists()
+    assert not docker_marker.exists()
 
 
 def test_init_config_creates_and_preserves_a_safe_http_bearer_secret() -> None:
@@ -188,7 +497,7 @@ def test_reusable_workflows_are_pinned_to_one_reviewed_commit() -> None:
 def test_public_docs_describe_the_initializer_as_a_one_shot_service() -> None:
     readme = Path("README.md").read_text(encoding="utf-8")
 
-    assert "two\nlong-lived services plus two one-shot volume initializers" in readme
+    assert "two\nlong-lived services plus one one-shot volume initializer" in readme
     assert "two-service Compose" not in readme
     assert "two-service deployment" not in readme
 
@@ -268,3 +577,66 @@ def test_coverage_target_also_runs_the_lighthouse_worker_suite() -> None:
 
 def _target(source: str, name: str) -> str:
     return source.split(f"\n{name}:", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
+
+
+def _create_data_directory(path: Path) -> Path:
+    path.mkdir(mode=0o700)
+    config = path / "config"
+    config.mkdir(mode=0o700)
+    for name in ("secrets", "oauth", "state"):
+        (path / name).mkdir(mode=0o700)
+    rankrat_secrets = path / "secrets/rankrat"
+    rankrat_secrets.mkdir(mode=0o700)
+    bearer_secret = rankrat_secrets / "http-bearer-token"
+    bearer_secret.write_text("test-http-bearer-token\n", encoding="utf-8")
+    bearer_secret.chmod(0o600)
+    boundary = config / "boundaries.json"
+    boundary.write_text("{}", encoding="utf-8")
+    boundary.chmod(0o600)
+    return path
+
+
+def _create_fake_docker(path: Path) -> None:
+    path.write_text(
+        """#!/bin/sh
+printf '%s\\n' "$@" > "$RANKRAT_TEST_DOCKER_ARGS"
+if [ -n "${RANKRAT_TEST_DOCKER_ENV:-}" ]; then
+    printf '%s\\n' \\
+        "$RANKRAT_DATA_DIR" \\
+        "$RANKRAT_IMAGE" \\
+        "$RANKRAT_LIGHTHOUSE_IMAGE" \\
+        "$RANKRAT_HTTP_PORT" \\
+        "$RANKRAT_READ_ONLY" > "$RANKRAT_TEST_DOCKER_ENV"
+fi
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o700)
+
+
+@contextmanager
+def _fake_bin_directory() -> Iterator[Path]:
+    scratch_root = Path(".testing/runtime-fixtures").resolve()
+    scratch_root.mkdir(parents=True, exist_ok=True)
+    directory = Path(tempfile.mkdtemp(prefix="rankrat-wrapper-", dir=scratch_root))
+    try:
+        _create_fake_docker(directory / "docker")
+        yield directory
+    finally:
+        shutil.rmtree(directory)
+
+
+def _run_wrapper(
+    environment: dict[str, str],
+    working_directory: Path,
+    mode: str = "stdio",
+    arguments: tuple[str, ...] = (),
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(  # noqa: S603
+        [_BASH_EXECUTABLE, str(_SOURCE_WRAPPER.resolve()), mode, *arguments],
+        capture_output=True,
+        check=False,
+        cwd=working_directory,
+        encoding="utf-8",
+        env=environment,
+    )

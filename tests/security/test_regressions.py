@@ -64,7 +64,7 @@ def test_runtime_image_precreates_every_documented_secret_mount_parent() -> None
 
 def test_lighthouse_runtime_volume_supports_the_shared_configured_uid() -> None:
     dockerfile = Path("Dockerfile.lighthouse").read_text(encoding="utf-8")
-    compose = Path("docker-compose.yml.example").read_text(encoding="utf-8")
+    compose = Path("docker-compose.yml").read_text(encoding="utf-8")
 
     assert "--mode=0750 /run/lighthouse" in dockerfile
     assert "lighthouse_runtime:/run/lighthouse:ro" in compose

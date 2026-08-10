@@ -1,9 +1,10 @@
 # Security
 
 Rankrat is designed for an operator's own accounts and sites. It is not a
-public arbitrary-URL proxy, competitor crawler, generic DNS API, or unattended
-write gateway. Its safety depends on boundaries, least-privilege provider
-credentials, controlled transport access, and hardened mounts working together.
+public arbitrary-URL proxy, competitor crawler, generic DNS API, or public
+multi-tenant gateway. Its safety depends on intentional account-wide provider
+credentials, controlled transport access, validated input, fixed provider
+origins, and hardened mounts working together.
 
 ## Contents
 
@@ -39,15 +40,15 @@ Untrusted:
 
 ## Boundary enforcement
 
-The strict startup document fixes credential accounts and allowed resources.
-Rankrat validates account IDs, provider-specific fields, URLs, child
+The strict startup document fixes credential accounts and records discovered
+resource inventory. Rankrat validates account IDs, provider-specific fields, URLs, child
 containment, DNS zones, GA4 IDs, IndexNow hosts/key locations, and duplicate
 ownership. Unknown fields fail startup.
 
-Normal callers cannot choose provider origins or credential paths. Unbounded
-mode relaxes per-resource lists for a trusted bootstrap but keeps accounts and
-credential roots fixed. Agent onboarding is a second explicit gate because it
-can persist newly created exact resources.
+Normal callers cannot choose provider origins or credential paths. A configured
+account credential deliberately authorizes every supported operation and every
+resource that provider account can reach. Inventory arrays are not per-site
+permission lists. Onboarding may persist newly discovered resource IDs.
 
 Read [Configuration](configuration.md) for the field and mode matrix.
 
@@ -57,9 +58,9 @@ Read [Configuration](configuration.md) for the field and mode matrix.
 MCP tools, and REST routes are not mounted or listed. Agents cannot discover a
 write schema on that process.
 
-Writable mode trusts its caller to invoke boundary-limited provider actions.
-There is no approval ID or second admin bearer. If you do not trust a caller
-with every visible write tool, give it a read-only process instead.
+Writable mode trusts its caller to invoke account-authorized provider actions.
+If you do not trust a caller with every visible write tool, give it a read-only
+process instead.
 
 ## HTTP exposure
 
@@ -83,7 +84,9 @@ real bearer in a URL, tracked file, shell example, or child-process argument.
 - Monitoring state uses a separate writable owner-only mount.
 - Credential paths must be absolute, within configured roots, and cannot be
   shared in ways the boundary model forbids.
-- `make setup` rejects symlinked config/OAuth/secret trees and normalizes modes.
+- `make setup` temporarily mounts the secret/config trees writable, rejects
+  symlinks, stores credentials with owner-only modes, then normal runtime mounts
+  provider secrets read-only.
 - Provider credential values, refresh records, raw bodies, and key-bearing URLs
   are not returned or logged.
 
@@ -136,14 +139,16 @@ the same narrow proof-only behavior rather than expose generic DNS CRUD.
 
 ## Provider write limits
 
-- Search Console/Bing sites, sitemaps, and URLs must match boundaries.
+- Search Console/Bing sites are resolved through the selected account; child
+  URLs and sitemaps must remain inside the selected site/property.
 - Google Indexing submissions must pass supported eligibility checks.
 - IndexNow URLs must belong to the fixed target host and key location.
 - Cloudflare purges are exact URLs; no whole-zone purge.
 - Cache writes choose one of two named templates; no arbitrary ruleset body.
-- GA4 writes rename resources or create a property during separately gated
+- GA4 writes rename account-visible resources or create/reuse a property during
   onboarding; no Analytics deletion.
-- Backlink providers are read-only and target-limited.
+- Backlink providers are read-only; target inventory supplies report inputs and
+  containment rather than credential authorization.
 
 Upstream acceptance may be asynchronous and does not guarantee indexing,
 ownership completion, or ranking.
@@ -184,9 +189,12 @@ bounded provider call and returns typed state rather than raw responses.
 - [ ] Config, secrets, OAuth, and state are owner-only real paths without
   symlinks.
 - [ ] Unused example provider accounts are removed.
-- [ ] Provider tokens are scoped to only required APIs/resources.
-- [ ] Read-only remains enabled unless writes are required.
-- [ ] Unbounded and agent onboarding are disabled outside a trusted bootstrap.
+- [ ] Provider tokens cover the intended account and every Rankrat feature the
+  operator expects; unrelated provider products remain excluded where the
+  provider supports that distinction.
+- [ ] `RANKRAT_READ_ONLY=true` is set for any caller that must not mutate state.
+- [ ] Writable callers are intentionally trusted with all visible Rankrat
+  mutations, including onboarding.
 - [ ] HTTP is loopback/private, bearer-protected, and TLS-proxied if remote.
 - [ ] Provider secrets are never mounted into Lighthouse.
 - [ ] State and the boundary are backed up before onboarding.

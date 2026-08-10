@@ -23,7 +23,7 @@ async def test_read_only_runtime_still_serves_the_onboarding_resource(
     """Knowing the procedure is not a privilege — a read-only server still explains it."""
 
     _, services = deployment
-    assert services.agent_onboarding_enabled is False
+    assert services.writes_enabled is False
     server = build_mcp_server(services)
 
     async with create_connected_server_and_client_session(server) as client:
@@ -38,7 +38,7 @@ async def test_read_only_runtime_still_serves_the_onboarding_resource(
         contents = await client.read_resource(AnyUrl(_ONBOARDING_URI))
         guide = json.loads(contents.contents[0].text)  # type: ignore[union-attr]
 
-    assert guide["agent_onboarding_enabled"] is False
+    assert guide["site_onboarding_available"] is False
     assert any(
         "no tool performs this step" in step["detail"] for step in guide["recommended_order"]
     )
@@ -179,27 +179,20 @@ async def test_unknown_resource_uri_is_refused(
 
 
 @pytest.mark.asyncio
-async def test_onboarding_tool_needs_its_own_switch_not_just_writable_mode(
+async def test_writable_mode_exposes_onboarding_without_a_second_switch(
     indexnow_deployment: tuple[Settings, ApplicationServices],
 ) -> None:
-    """Writable mode alone must not hand an agent the boundary-rewriting tool."""
-
-    from dataclasses import replace
-
     _, services = indexnow_deployment
     assert services.writes_enabled is True
-    assert services.agent_onboarding_enabled is True
-
-    withheld = replace(services, agent_onboarding_enabled=False, site_onboarding=None)
-    server = build_mcp_server(withheld)
+    server = build_mcp_server(services)
 
     async with create_connected_server_and_client_session(server) as client:
         tools = {tool.name for tool in (await client.list_tools()).tools}
         contents = await client.read_resource(AnyUrl(_ONBOARDING_URI))
         guide = json.loads(contents.contents[0].text)  # type: ignore[union-attr]
 
-    assert "site_onboarding_submit" not in tools
+    assert "site_onboarding_submit" in tools
     assert "indexnow_submit" in tools
     assert "onboarding_guide" in tools
     assert guide["writes_enabled"] is True
-    assert guide["agent_onboarding_enabled"] is False
+    assert guide["site_onboarding_available"] is True

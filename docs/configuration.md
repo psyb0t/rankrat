@@ -26,19 +26,27 @@ These are consumed by `rankrat.sh`, not the Python process:
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `RANKRAT_IMAGE` | `psyb0t/rankrat:latest` | Image reference |
-| `RANKRAT_BOUNDARIES` | `./config/boundaries.json` | Host boundary file |
-| `RANKRAT_SECRETS` | `./secrets` | Host secret directory |
-| `RANKRAT_OAUTH` | `./oauth` | Host OAuth directory |
-| `RANKRAT_STATE` | `./state` | Host state directory |
-| `RANKRAT_ENV_FILE` | `./.env` | Setup-only env file |
+| `RANKRAT_LIGHTHOUSE_IMAGE` | `psyb0t/rankrat-lighthouse:latest` | HTTP companion image reference |
+| `RANKRAT_DATA_DIR` | `$HOME/.config/rankrat` | Absolute persistent profile root |
 | `RANKRAT_HTTP_PORT` | `8080` | Published loopback port |
 | `RANKRAT_OAUTH_CALLBACK_PORT` | `49152` | Published OAuth callback |
-| `RANKRAT_READ_ONLY` | `true` | Tool and route write policy |
-| `RANKRAT_UNBOUNDED` | `false` | Trusted discovery bootstrap |
-| `RANKRAT_ALLOW_AGENT_ONBOARDING` | `false` | Expose agent onboarding |
+| `RANKRAT_READ_ONLY` | `false` | Set true to remove every write tool and route |
 
-Keep host paths out of `.env`; setup passes that file into the container, where
-unsupported names fail fast.
+The wrapper derives exactly six paths from that root:
+`config/boundaries.json`, `secrets/`, `oauth/`, `state/`, `.env`, and
+`docker-compose.yml`. It does
+not accept separate path overrides, so one process cannot accidentally combine
+credentials, OAuth records, and inventory from different profiles. The root
+must be absolute, canonical, non-symlinked, and safe for Docker's `--mount`
+syntax. Only the fixed children are mounted; the profile root is not.
+
+The wrapper reads `RANKRAT_DATA_DIR` from its host environment. HTTP uses it as
+the Compose project directory, creates the reviewed Compose file there when
+missing, and preserves an existing regular file. The project directory and
+Compose file must be owned by the current UID and not group/world writable.
+Explicit wrapper image, port, UID/GID, and read-only values override profile `.env` interpolation. Direct
+Docker Compose can instead read those values from `.env` or `--env-file`. The
+Python process ignores the host-only data-directory and image selectors.
 
 ## Process settings
 
@@ -57,9 +65,7 @@ unsupported names fail fast.
 | `RANKRAT_HTTP_PORT` | `8080` | HTTP listen port |
 | `RANKRAT_HTTP_BEARER_SECRET_FILE` | unset on loopback | Bearer-secret file |
 | `RANKRAT_ENABLE_OPENAPI` | `false` | Serve `/openapi.json` and API docs |
-| `RANKRAT_READ_ONLY` | `true` | Remove writes when true |
-| `RANKRAT_UNBOUNDED` | `false` | Relax per-resource allow-lists |
-| `RANKRAT_ALLOW_AGENT_ONBOARDING` | `false` | Add agent onboarding when writable |
+| `RANKRAT_READ_ONLY` | `false` | Remove every write tool and route when true |
 
 Transport is a command (`stdio` or `http`), not an environment mode. See the
 complete process example in [`.env.example`](../.env.example).
@@ -88,9 +94,9 @@ Every account has:
 
 | Field | Meaning |
 | --- | --- |
-| `id` | Caller-facing stable account ID |
+| `id` | Caller-facing stable local account ID |
 | `provider` | `google`, `bing`, `cloudflare`, `ahrefs`, `majestic`, `moz`, `semrush`, or `dataforseo` |
-| `credential` | Absolute mounted credential path |
+| `credential` | Absolute mounted account-wide credential path |
 
 Provider fields:
 
@@ -98,16 +104,18 @@ Provider fields:
 | --- | --- | --- |
 | `oauth_token_file` | Google | Dedicated writable token path |
 | `pagespeed_api_key_file` | Google | Optional PageSpeed/CrUX key |
-| `google_account_discovery` | Google | Authorize read-only discovery and targeting of OAuth-visible Search Console/GA4 resources |
-| `search_console_sites` | Google | Exact `sc-domain:` or HTTPS prefix properties |
-| `pagespeed_sites` | Google | HTTPS boundaries for PageSpeed/Lighthouse |
-| `ga4_properties` | Google | Numeric GA4 property IDs |
-| `sites` | Bing | Exact HTTPS site roots |
-| `dns_zones` | Cloudflare | Exact provider zone ID/name pairs |
-| `backlink_targets` | Commercial backlink providers | Exact HTTPS targets or domains |
+| `search_console_sites` | Google | Discovered/cached `sc-domain:` or HTTPS properties |
+| `pagespeed_sites` | Google | Known HTTPS roots used for public-page containment |
+| `ga4_properties` | Google | Discovered/cached numeric GA4 property IDs |
+| `sites` | Bing | Discovered/cached HTTPS site roots |
+| `dns_zones` | Cloudflare | Discovered/cached provider zone ID/name pairs |
+| `backlink_targets` | Commercial backlink providers | Known targets used for report defaults and containment |
 
 Fields from another provider are rejected. Cloudflare accounts contain only DNS
-zones; backlink accounts contain only backlink targets.
+zone inventory; backlink accounts contain only target inventory. These arrays
+do not narrow the configured credential's authority. Rankrat discovers or
+records resources as operations need them, while the provider remains the
+source of truth for what the credential may access.
 
 ## URL containment
 
@@ -119,14 +127,12 @@ authorizes each child URL by origin and path.
 `sc-domain:example.com` includes the domain and subdomains. A Search Console
 URL-prefix property includes only its scheme, host, and path subtree.
 
-`google_account_discovery=true` deliberately broadens Google **read** scope:
-inventory and report/query operations may target any Search Console site or GA4
-property visible to that OAuth user, even when the resource is not listed.
-Set it to `false` when reads must remain strictly list-only. It does not broaden
-Search Console writes or GA4 property writes. One narrow exception exists when
-writable mode is separately enabled: the same flag authorizes renaming an
-OAuth-visible GA4 account by numeric ID. It never exposes a new credential
-account or makes OAuth files caller-selectable.
+For provider-backed operations, the configured account ID selects a fixed
+credential and fixed provider origin. The requested property/site is then
+validated against inventory returned by that account. URL-bearing operations
+also apply the public-HTTPS and child-containment rules above. This prevents a
+caller from selecting another credential or using Rankrat as an arbitrary URL
+proxy without turning cached resource arrays into a second authorization layer.
 
 ## DNS zones
 
@@ -139,8 +145,9 @@ account or makes OAuth files caller-selectable.
 ]
 ```
 
-Replace the all-zero example. Public ownership operations accept a neutral
-`dns_account_id`; Cloudflare is the shipped adapter.
+Public ownership operations accept a neutral `dns_account_id`; Cloudflare is
+the shipped adapter. Rankrat can discover zones visible to the configured
+Cloudflare account, so an empty list is valid before first discovery.
 
 ## IndexNow targets
 
@@ -169,18 +176,16 @@ Publish the generated key file before verification. This does not submit URLs.
 
 ## Runtime policies
 
-| Read only | Unbounded | Agent onboarding | Result |
-| --- | --- | --- | --- |
-| `true` | `false` | `false` | Default read tools with fixed resources |
-| `false` | `false` | `false` | Ordinary bounded writes added |
-| `false` | `true` | `false` | Trusted resource discovery; onboarding tool absent |
-| `false` | either | `true` | Agent onboarding added; safe writable config required |
+| `RANKRAT_READ_ONLY` | Result |
+| --- | --- |
+| `false` (default) | All supported reads and writes, including site onboarding |
+| `true` | Read tools only; write REST routes and MCP tools are not mounted or listed |
 
-Unbounded and agent onboarding require writes. Before mounting config writable,
-the wrapper requires owner-only, host-owned, non-symlink paths. Unbounded mode
-does not expose arbitrary credential paths, provider origins, DNS record bodies,
-or IndexNow targets. It is reusable: enable it for a trusted bootstrap, persist
-exact resources, then restart bounded.
+This is the only capability switch. Provider credentials are the authority.
+The wrapper still requires an owner-only, host-owned, non-symlink config
+directory before a writable process may persist discovered resources. Fixed
+provider origins, typed request validation, public-URL checks, and HTTP bearer
+authentication remain enforced in either operator style.
 
 ## Monitoring state
 

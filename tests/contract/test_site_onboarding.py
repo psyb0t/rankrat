@@ -8,7 +8,7 @@ import pytest
 from mcp.shared.memory import create_connected_server_and_client_session
 
 from rankrat.config import Settings
-from rankrat.operator.site_onboarding import SiteOnboardingReceipt
+from rankrat.operator.site_onboarding import SiteOnboardingReceipt, SiteOnboardingRequest
 from rankrat.transports.http import create_http_app
 from rankrat.transports.mcp import build_mcp_server
 from rankrat.transports.runtime import ApplicationServices
@@ -67,10 +67,15 @@ async def test_writable_runtime_submits_site_onboarding_directly_over_http_and_m
     settings, services = indexnow_deployment
     assert services.site_onboarding is not None
     assert services.writes_enabled is True
-    calls: list[str] = []
+    calls: list[tuple[str | None, str | None]] = []
 
-    async def mock_onboard(*_: object) -> SiteOnboardingReceipt:
-        calls.append("onboard")
+    async def mock_onboard(request: SiteOnboardingRequest) -> SiteOnboardingReceipt:
+        calls.append(
+            (
+                request.google_account_id,
+                request.bing_account_id,
+            )
+        )
         return _receipt()
 
     monkeypatch.setattr(services.site_onboarding._operator, "onboard", mock_onboard)
@@ -89,6 +94,11 @@ async def test_writable_runtime_submits_site_onboarding_directly_over_http_and_m
         submission = await client.post("/v1/site-onboarding-submissions", json=_REQUEST)
         assert submission.status_code == 200
         assert submission.json()["ga4_property_id"] == "456"
+        automatic = await client.post(
+            "/v1/site-onboarding-submissions",
+            json={"site_url": "https://new.example.com/"},
+        )
+        assert automatic.status_code == 200
 
     server = build_mcp_server(services)
     async with create_connected_server_and_client_session(server) as client:
@@ -104,4 +114,14 @@ async def test_writable_runtime_submits_site_onboarding_directly_over_http_and_m
         content = response.content[0]
         assert isinstance(content, types.TextContent)
         assert json.loads(content.text)["ga4_property_id"] == "456"
-    assert calls == ["onboard", "onboard"]
+        automatic_response = await client.call_tool(
+            "site_onboarding_submit",
+            {"site_url": "https://new.example.com/"},
+        )
+        assert automatic_response.isError is False
+    assert calls == [
+        ("google-main", "bing-main"),
+        (None, None),
+        ("google-main", "bing-main"),
+        (None, None),
+    ]

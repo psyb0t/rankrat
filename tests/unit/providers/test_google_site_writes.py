@@ -5,7 +5,6 @@ from pathlib import Path
 import httpx
 import pytest
 
-from rankrat.errors import BoundaryDeniedError
 from rankrat.models.boundaries import BoundaryDocument
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import (
@@ -107,8 +106,9 @@ async def test_site_writes_map_transport_errors(
 
 
 @pytest.mark.asyncio
-async def test_site_writes_reject_unconfigured_property_before_token_or_network() -> None:
+async def test_site_writes_accept_any_property_reachable_by_the_configured_account() -> None:
     called = False
+    requests: list[httpx.Request] = []
 
     async def token(credential_path: Path) -> str:
         del credential_path
@@ -116,14 +116,18 @@ async def test_site_writes_reject_unconfigured_property_before_token_or_network(
         called = True
         return "test-token"
 
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(204)
+
     client = GoogleSearchConsoleClient(
         _policy(),
         token,
-        transport_factory=lambda: pytest.fail("network must not be reached"),
+        transport_factory=lambda: httpx.MockTransport(handler),
     )
-    with pytest.raises(BoundaryDeniedError):
-        await client.add_site(
-            ProviderReadRequest(AccountId("google-main"), 1.0),
-            "sc-domain:outside.example.com",
-        )
-    assert called is False
+    await client.add_site(
+        ProviderReadRequest(AccountId("google-main"), 1.0),
+        "sc-domain:outside.example.com",
+    )
+    assert called is True
+    assert str(requests[0].url).endswith("sc-domain%3Aoutside.example.com")

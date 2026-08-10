@@ -14,20 +14,18 @@ SHFMT_IMAGE := mirror.gcr.io/mvdan/shfmt:v3.13.1@sha256:f22f3936140be1ba02d493b5
 GITLEAKS_IMAGE := ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
 SYFT_IMAGE := ghcr.io/anchore/syft:v1.49.0@sha256:9a9f85314017f1ea798fb012edfa7fe9259923910f82c8d4bc983ab5c765e60b
 GRYPE_IMAGE := ghcr.io/anchore/grype:v0.116.0@sha256:fd4ab4d1042b522c896e73bdf09ab8bf384fa417df99d6dd0d6e1008c7e7c821
-BOUNDARIES ?= $(PWD)/config/boundaries.json
-ENV_FILE ?= $(PWD)/.env
-SECRETS ?= $(PWD)/secrets
-OAUTH ?= $(PWD)/oauth
-STATE ?= $(PWD)/state
+BOUNDARIES := $(PWD)/config/boundaries.json
+ENV_FILE := $(PWD)/.env
+SECRETS := $(PWD)/secrets
+OAUTH := $(PWD)/oauth
+STATE := $(PWD)/state
 OAUTH_ACCOUNT_ID ?= google
 OAUTH_CALLBACK_PORT ?= 49152
 HTTP_PORT ?= 8080
 HTTP_BEARER_SECRET_FILE ?= $(SECRETS)/rankrat/http-bearer-token
-RANKRAT_READ_ONLY ?= true
-RANKRAT_UNBOUNDED ?= false
-RANKRAT_ALLOW_AGENT_ONBOARDING ?= false
-ONBOARD_GOOGLE_ACCOUNT_ID ?= google
-ONBOARD_BING_ACCOUNT_ID ?= bing
+RANKRAT_READ_ONLY ?= false
+ONBOARD_GOOGLE_ACCOUNT_ID ?=
+ONBOARD_BING_ACCOUNT_ID ?=
 ONBOARD_SITE_URL ?=
 ONBOARD_DISPLAY_NAME ?=
 ONBOARD_TIME_ZONE ?= Etc/UTC
@@ -64,16 +62,11 @@ GID := $(shell id -g)
 # so `make run` exercises the path they actually take and the docker run flags
 # exist in exactly one place. The wrapper reads all of this from the environment.
 WRAPPER := RANKRAT_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG) \
-	RANKRAT_BOUNDARIES=$(BOUNDARIES) \
-	RANKRAT_SECRETS=$(SECRETS) \
-	RANKRAT_OAUTH=$(OAUTH) \
-	RANKRAT_STATE=$(STATE) \
-	RANKRAT_ENV_FILE=$(ENV_FILE) \
+	RANKRAT_LIGHTHOUSE_IMAGE=$(LIGHTHOUSE_IMAGE) \
+	RANKRAT_DATA_DIR=$(PWD) \
 	RANKRAT_HTTP_PORT=$(HTTP_PORT) \
 	RANKRAT_OAUTH_CALLBACK_PORT=$(OAUTH_CALLBACK_PORT) \
 	RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY) \
-	RANKRAT_UNBOUNDED=$(RANKRAT_UNBOUNDED) \
-	RANKRAT_ALLOW_AGENT_ONBOARDING=$(RANKRAT_ALLOW_AGENT_ONBOARDING) \
 	./rankrat.sh
 
 DEV_RUN := docker run --rm --init \
@@ -149,7 +142,7 @@ LIGHTHOUSE_MUTATE_RUN := docker run --rm --init \
 .PHONY: help version dev-image lighthouse-dev-image lighthouse-lock-image lighthouse-image lock-image init-config setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove lighthouse-pkg-lock lighthouse-pkg-add lighthouse-pkg-update lighthouse-pkg-upgrade lighthouse-pkg-remove \
 	lint lighthouse-lint lint-fix format lighthouse-format test lighthouse-test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-cloudflare test-live-bing test-live-indexnow test-live-http test-image test-lighthouse-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
-	run-http-lighthouse auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
+	auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
 
 help: ## Show supported Rankrat commands
 	@awk 'BEGIN {FS = ":.*##"}; /^[a-zA-Z0-9_.-]+:.*##/ {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -179,7 +172,7 @@ lock-image: ## Build the minimal, sandboxed Python-version-transition lock image
 init-config: dev-image ## Create gitignored local configuration and state paths without overwriting
 	$(DEV_RUN) sh -ec 'for path in config oauth secrets state; do if test -L "$$path" || { test -e "$$path" && test ! -d "$$path"; }; then echo "$$path must be a real directory" >&2; exit 1; fi; done; mkdir -p config oauth state secrets/google secrets/bing secrets/cloudflare secrets/indexnow secrets/rankrat secrets/ahrefs secrets/majestic secrets/moz secrets/semrush secrets/dataforseo; if find config oauth secrets state -type l -print -quit | grep -q .; then echo "config, OAuth, secret, and state paths must not contain symlinks" >&2; exit 1; fi; cp -n config/boundaries.json.example config/boundaries.json; cp -n .env.example .env; for file in config/boundaries.json .env; do test -f "$$file" && test ! -L "$$file" || { echo "$$file must be a regular file" >&2; exit 1; }; done; token=secrets/rankrat/http-bearer-token; if test -e "$$token" || test -L "$$token"; then test -f "$$token" && test ! -L "$$token" || { echo "$$token must be a regular file" >&2; exit 1; }; else umask 077; python -c "import secrets; print(secrets.token_urlsafe(32))" > "$$token"; fi; find config oauth secrets state -type d -exec chmod 700 {} +; find oauth secrets state -type f -exec chmod 600 {} +; chmod 600 config/boundaries.json .env'
 
-setup: init-config build ## Check configured provider access, then verify the shipped HTTP/MCP transport
+setup: init-config build ## Guide credentials/OAuth, validate providers, and verify HTTP/MCP
 	$(WRAPPER) setup
 	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-google-analytics RANKRAT_DEV_IMAGE_SOURCE=local
@@ -308,7 +301,7 @@ test-security: dev-image ## Run security regression tests in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync pytest -p no:cacheprovider tests/security
 
 test-tooling: dev-image ## Exercise dependency age-gate tooling in container-local scratch
-	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; test -s bump.log || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "ENV_FILE ?="; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat.sh "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat.sh "CONTAINER_HTTP_HOST=\"0.0.0.0\""; require_fragment rankrat.sh "CONTAINER_HTTP_BEARER_SECRET_FILE=\"/run/secrets/rankrat/http-bearer-token\""; grep -Fq "pagespeed_api_key_file" /work/config/boundaries.json.example; grep -Fq "/run/secrets/google/pagespeed-api-key" /work/config/boundaries.json.example; grep -Fq "target: /run/secrets/google/oauth-client.json" /work/docker-compose.yml.example'
+	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; test -s bump.log || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "RANKRAT_DATA_DIR=\$$(PWD)"; require_fragment Makefile "RANKRAT_LIGHTHOUSE_IMAGE=\$$(LIGHTHOUSE_IMAGE)"; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat.sh "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat.sh "COMPOSE_FILE_RELATIVE_PATH=\"docker-compose.yml\""; require_fragment rankrat.sh "--project-directory \"\$$profile_directory\""; require_fragment rankrat.sh "--detach"; grep -Fq "pagespeed_api_key_file" /work/config/boundaries.json.example; grep -Fq "/run/secrets/google/pagespeed-api-key" /work/config/boundaries.json.example; grep -Fq "\$${RANKRAT_DATA_DIR:-.}/secrets:/run/secrets:ro" /work/docker-compose.yml'
 	$(DEV_RUN) sh -ec 'scratch=$$(mktemp -d); mkdir -p "$$scratch/lighthouse-worker"; cp scripts/bump_lighthouse_minimum_release_age.sh "$$scratch"; cp lighthouse-worker/pnpm-workspace.yaml "$$scratch/lighthouse-worker"; cd "$$scratch"; LOG_FILE="$$scratch/bump-lighthouse.log" bash bump_lighthouse_minimum_release_age.sh; test -s bump-lighthouse.log || { echo "Lighthouse dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^minimumReleaseAge: 10080$$" lighthouse-worker/pnpm-workspace.yaml)" -eq 1 || { echo "Lighthouse dependency age gate is not exact" >&2; exit 1; }; grep -Fq -- "- brace-expansion@5.0.9" lighthouse-worker/pnpm-workspace.yaml; grep -Fq "brace-expansion: 5.0.9" lighthouse-worker/pnpm-workspace.yaml'
 
 test-live: dev-image ## Run every configured provider and shipped transport check
@@ -396,11 +389,11 @@ audit: lighthouse-lock-image dev-image ## Audit locked Python and Lighthouse dep
 	$(LIGHTHOUSE_MUTATE_RUN) pnpm audit --audit-level high
 
 audit-secrets: ## Scan Rankrat-owned files for credentials with pinned Gitleaks
-	@bash -euo pipefail -c 'scan_root=$$(mktemp -d "$(PWD)/.gitleaks-scan.XXXXXX"); trap '\''rm -rf "$$scan_root"'\'' EXIT; git ls-files -co --exclude-standard -z | tar --null --files-from=- --create | tar --extract --directory "$$scan_root"; docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL --security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 --mount type=bind,src="$$scan_root",dst=/repo,readonly $(GITLEAKS_IMAGE) dir --no-banner --no-color --redact --config=/repo/.gitleaks.toml /repo'
+	@bash -euo pipefail -c 'scan_root=$$(mktemp -d "$(PWD)/.gitleaks-scan.XXXXXX"); trap '\''rm -rf "$$scan_root"'\'' EXIT; git ls-files -co --exclude-standard -z | while IFS= read -r -d "" path; do if [[ -e "$$path" || -L "$$path" ]]; then printf "%s\0" "$$path"; fi; done | tar --null --files-from=- --create | tar --extract --directory "$$scan_root"; docker run --rm --init --user $(UID):$(GID) --network none --cap-drop=ALL --security-opt no-new-privileges:true --pids-limit 64 --memory 128m --cpus 0.5 --mount type=bind,src="$$scan_root",dst=/repo,readonly $(GITLEAKS_IMAGE) dir --no-banner --no-color --redact --config=/repo/.gitleaks.toml /repo'
 
 audit-compose: dev-image ## Reject banned Docker Compose settings
-	docker compose -f docker-compose.yml.example config --quiet
-	$(DEV_RUN) sh -ec 'if grep -nE "privileged:[[:space:]]*true|pid:[[:space:]]*host|ipc:[[:space:]]*host|network:[[:space:]]*host|userns_mode:[[:space:]]*host|/var/run/docker\\.sock|[[:space:]]- ./secrets:/run/secrets" docker-compose.yml.example; then exit 1; fi; grep -q "^secrets:" docker-compose.yml.example'
+	docker compose config --quiet
+	$(DEV_RUN) sh -ec 'if grep -nE "privileged:[[:space:]]*true|pid:[[:space:]]*host|ipc:[[:space:]]*host|network:[[:space:]]*host|userns_mode:[[:space:]]*host|/var/run/docker\\.sock" docker-compose.yml; then exit 1; fi; grep -Fq "\$${RANKRAT_DATA_DIR:-.}/secrets:/run/secrets:ro" docker-compose.yml'
 
 sbom: build ## Generate Syft and CycloneDX SBOMs from both production images
 	mkdir -p "$(SBOM_DIR)" "$(SBOM_TMP_DIR)"
@@ -465,11 +458,8 @@ build-test: dev-image ## Build the development image used by tests and linting
 run: build ## Run the production image as a stdio MCP server
 	$(WRAPPER) stdio
 
-run-http: build ## Run REST and Streamable HTTP MCP on a loopback port
+run-http: build ## Run Rankrat, HTTP MCP, and Lighthouse through Docker Compose
 	$(WRAPPER) http
-
-run-http-lighthouse: ## Build and run REST, Streamable HTTP MCP, and the Lighthouse worker
-	docker compose -f docker-compose.yml.example up --build
 
 auth-google: build ## Authorize every Rankrat Google OAuth scope through one host-loopback callback
 	$(WRAPPER) auth-google --account-id "$(OAUTH_ACCOUNT_ID)" --print-authorization-url

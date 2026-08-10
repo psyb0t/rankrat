@@ -36,7 +36,6 @@ def _policy(tmp_path: Path) -> BoundaryPolicy:
                     "credential": str(credential),
                     "oauth_token_file": str(tmp_path / "token.json"),
                     "ga4_properties": [_PROPERTY_ID],
-                    "google_account_discovery": True,
                 },
                 {
                     "id": "google-closed",
@@ -137,12 +136,11 @@ async def test_data_streams_rejects_a_stream_belonging_to_another_property(
 
 
 @pytest.mark.asyncio
-async def test_data_streams_refuses_a_property_outside_the_boundary(tmp_path: Path) -> None:
-    def handler(_: httpx.Request) -> httpx.Response:  # pragma: no cover - must not be reached
-        raise AssertionError("the boundary check must run before any request")
+async def test_data_streams_accepts_an_unlisted_property_in_the_account(tmp_path: Path) -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"dataStreams": []})
 
-    with pytest.raises(Exception, match="configured"):
-        await _client(tmp_path, handler).list_data_streams(_request(), "999")
+    assert await _client(tmp_path, handler).list_data_streams(_request(), "999") == ()
 
 
 @pytest.mark.asyncio
@@ -188,18 +186,19 @@ async def test_account_rename_rejects_a_response_naming_another_account(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_account_rename_requires_the_account_discovery_switch(tmp_path: Path) -> None:
-    """Renaming reaches an account-wide resource, so it rides the discovery switch."""
-
-    def handler(_: httpx.Request) -> httpx.Response:  # pragma: no cover - must not be reached
-        raise AssertionError("the discovery check must run before any request")
-
-    with pytest.raises(Exception, match="discovery"):
-        await _client(tmp_path, handler).update_account_display_name(
-            _request("google-closed"),
-            _ANALYTICS_ACCOUNT_ID,
-            "psyb0t",
+async def test_account_rename_uses_any_configured_google_account(tmp_path: Path) -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"name": f"accounts/{_ANALYTICS_ACCOUNT_ID}", "displayName": "psyb0t"},
         )
+
+    renamed = await _client(tmp_path, handler).update_account_display_name(
+        _request("google-closed"),
+        _ANALYTICS_ACCOUNT_ID,
+        "psyb0t",
+    )
+    assert renamed.resource_id == _ANALYTICS_ACCOUNT_ID
 
 
 @pytest.mark.asyncio
@@ -240,13 +239,18 @@ async def test_property_rename_patches_the_configured_property(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_property_rename_refuses_a_property_outside_the_boundary(tmp_path: Path) -> None:
-    def handler(_: httpx.Request) -> httpx.Response:  # pragma: no cover - must not be reached
-        raise AssertionError("the boundary check must run before any request")
-
-    with pytest.raises(Exception, match="configured"):
-        await _client(tmp_path, handler).update_property_display_name(
-            _request(),
-            "999",
-            "whatever",
+async def test_property_rename_accepts_an_unlisted_property_in_the_account(
+    tmp_path: Path,
+) -> None:
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"name": "properties/999", "displayName": "whatever"},
         )
+
+    renamed = await _client(tmp_path, handler).update_property_display_name(
+        _request(),
+        "999",
+        "whatever",
+    )
+    assert renamed.resource_id == "999"

@@ -8,6 +8,7 @@ import json
 import logging
 import sys
 import webbrowser
+from pathlib import Path
 from typing import cast
 
 import uvicorn
@@ -22,6 +23,7 @@ from rankrat.constants import (
 from rankrat.errors import ConfigurationError, RankratError
 from rankrat.logging import configure_logging, log_event
 from rankrat.models.boundaries import Provider
+from rankrat.operator.guided_setup import configure_interactively
 from rankrat.operator.site_onboarding import (
     SiteOnboardingOperator,
     SiteOnboardingPartialError,
@@ -30,6 +32,10 @@ from rankrat.operator.site_onboarding import (
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import ProviderFailureCode, ProviderOperationError
 from rankrat.providers.bing import BingWebmasterClient
+from rankrat.providers.google_analytics import (
+    GOOGLE_ANALYTICS_READ_SCOPE,
+    GoogleAnalyticsDataClient,
+)
 from rankrat.providers.google_analytics_admin import (
     GOOGLE_ANALYTICS_EDIT_SCOPE,
     GoogleAnalyticsAdminClient,
@@ -90,6 +96,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--callback-port", type=int)
     parser.add_argument("--docker-loopback-proxy", action="store_true")
     parser.add_argument("--print-authorization-url", action="store_true")
+    parser.add_argument("--interactive-setup", action="store_true")
     parser.add_argument("--google-account-id")
     parser.add_argument("--bing-account-id")
     parser.add_argument("--site-url")
@@ -111,7 +118,7 @@ def main() -> int:
             return _run_google_oauth_operator(arguments, settings)
         if arguments.mode in _OPERATOR_MODES:
             if arguments.mode == "setup":
-                return _run_setup_operator(settings)
+                return _run_setup_operator(arguments, settings)
             return _run_site_onboarding_operator(arguments, settings)
         settings = settings.model_copy(update={"mode": cast(RuntimeMode, arguments.mode)})
         services = build_services(settings)
@@ -193,16 +200,11 @@ def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Setti
 
     if settings.read_only:
         raise ConfigurationError("site onboarding requires RANKRAT_READ_ONLY=false")
-    google_account_id = _required_operator_argument(
-        arguments.google_account_id, "--google-account-id"
-    )
-    bing_account_id = _required_operator_argument(arguments.bing_account_id, "--bing-account-id")
     site_url = _required_operator_argument(arguments.site_url, "--site-url")
     policy = BoundaryPolicy.from_file(
         settings.boundary_file,
         settings.secret_root,
         settings.oauth_token_root,
-        unbounded=settings.unbounded,
     )
     operator = SiteOnboardingOperator(
         settings.boundary_file,
@@ -210,6 +212,10 @@ def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Setti
         GoogleAnalyticsAdminClient(
             policy,
             GoogleConfiguredTokenProvider(policy, (GOOGLE_ANALYTICS_EDIT_SCOPE,)),
+        ),
+        GoogleAnalyticsDataClient(
+            policy,
+            GoogleConfiguredTokenProvider(policy, (GOOGLE_ANALYTICS_READ_SCOPE,)),
         ),
         GoogleSearchConsoleClient(
             policy,
@@ -220,8 +226,8 @@ def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Setti
     receipt = asyncio.run(
         operator.onboard(
             SiteOnboardingRequest(
-                google_account_id=google_account_id,
-                bing_account_id=bing_account_id,
+                google_account_id=arguments.google_account_id or None,
+                bing_account_id=arguments.bing_account_id or None,
                 site_url=site_url,
                 google_analytics_parent_account_id=(
                     arguments.google_analytics_parent_account_id or None
@@ -239,6 +245,9 @@ def _run_site_onboarding_operator(arguments: argparse.Namespace, settings: Setti
         "google_search_console_added": receipt.google_search_console_added,
         "bing_added": receipt.bing_added,
         "boundary_updated": receipt.boundary_updated,
+        "google_account_id": receipt.google_account_id,
+        "bing_account_id": receipt.bing_account_id,
+        "ga4_created": receipt.ga4_created,
     }
     sys.stdout.write(f"{json.dumps(payload, separators=(',', ':'))}\n")
     _write_onboarding_next_steps(policy, settings, receipt.site_url)
@@ -255,7 +264,6 @@ def _write_onboarding_next_steps(
     guide = OnboardingGuideService(policy).render(
         OnboardingGuideRequest(site_url=site_url),
         writes_enabled=settings.writes_enabled,
-        agent_onboarding_enabled=settings.agent_onboarding_enabled,
     )
     sys.stdout.write(f"\n{_ONBOARDING_NEXT_STEPS_HEADING}\n")
     for step in guide.recommended_order:
@@ -270,8 +278,14 @@ def _write_onboarding_next_steps(
     sys.stdout.write(f"\n{_ONBOARDING_GUIDE_POINTER}\n")
 
 
-def _run_setup_operator(settings: Settings) -> int:
-    """Check configured local files and live provider access without mutations."""
+def _run_setup_operator(arguments: argparse.Namespace, settings: Settings) -> int:
+    """Configure selected providers, authorize Google, then validate live access."""
+    if arguments.interactive_setup:
+        configure_interactively(
+            settings.boundary_file,
+            settings.secret_root,
+            settings.oauth_token_root,
+        )
     policy = BoundaryPolicy.from_file(
         settings.boundary_file,
         settings.secret_root,
@@ -294,6 +308,14 @@ def _run_setup_operator(settings: Settings) -> int:
         and account.oauth_token_file is not None
         and not account.oauth_token_file.is_file()
     )
+    if missing_tokens and arguments.interactive_setup:
+        _authorize_setup_google_accounts(arguments, policy, missing_tokens)
+        policy = BoundaryPolicy.from_file(
+            settings.boundary_file,
+            settings.secret_root,
+            settings.oauth_token_root,
+        )
+        missing_tokens = ()
     if missing_tokens:
         account_ids = ", ".join(
             account.id
@@ -322,6 +344,33 @@ def _run_setup_operator(settings: Settings) -> int:
             sys.stdout.write(_SETUP_GA4_CONFIGURATION_ACTION.format(account_id=account.id) + "\n")
     sys.stdout.write(_SETUP_READY_MESSAGE + "\n")
     return 0
+
+
+def _authorize_setup_google_accounts(
+    arguments: argparse.Namespace,
+    policy: BoundaryPolicy,
+    missing_tokens: tuple[Path, ...],
+) -> None:
+    callback_port = arguments.callback_port or OAUTH_DYNAMIC_CALLBACK_PORT
+    for account in policy.accounts():
+        if account.oauth_token_file not in missing_tokens:
+            continue
+        sys.stdout.write(f"Authorize Google account '{account.id}' using this browser URL:\n")
+        asyncio.run(
+            authorize_google_oauth_account(
+                account,
+                True,
+                None,
+                _stdout_authorization_url,
+                listener_host=(
+                    OAUTH_CONTAINER_LISTENER_HOST
+                    if arguments.docker_loopback_proxy
+                    else OAUTH_LOOPBACK_HOST
+                ),
+                callback_port=callback_port,
+            )
+        )
+        sys.stdout.write(f"Google OAuth authorization stored for {account.id}.\n")
 
 
 def _required_operator_argument(value: object, flag: str) -> str:

@@ -75,7 +75,7 @@ def _feed_payload(**overrides: object) -> dict[str, object]:
 
 
 @pytest.mark.asyncio
-async def test_list_sites_uses_fixed_origin_and_filters_unconfigured_sites(tmp_path: Path) -> None:
+async def test_list_sites_uses_fixed_origin_and_returns_account_inventory(tmp_path: Path) -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.method == "GET"
         assert request.url == httpx.URL(
@@ -91,7 +91,10 @@ async def test_list_sites_uses_fixed_origin_and_filters_unconfigured_sites(tmp_p
         transport_factory=lambda: httpx.MockTransport(handler),
     )
 
-    assert await client.list_sites(_request()) == ("https://example.com/",)
+    assert await client.list_sites(_request()) == (
+        "https://example.com/",
+        "https://other.example/",
+    )
 
 
 @pytest.mark.asyncio
@@ -453,7 +456,7 @@ async def test_query_and_page_stats_reject_non_finite_metrics_and_boundary_escap
         _policy(tmp_path / "missing-key"),
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await no_network.read_query_stats(_request(), "https://other.example/")
 
 
@@ -537,7 +540,7 @@ async def test_url_submission_quota_uses_fixed_operation_and_returns_typed_value
         _policy(tmp_path / "missing-key"),
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await no_network.read_url_submission_quota(_request(), "https://other.example/")
 
 
@@ -771,13 +774,13 @@ async def test_related_keywords_reject_malformed_upstream_rows(
 
 
 @pytest.mark.asyncio
-async def test_reads_reject_unconfigured_site_before_key_or_network(tmp_path: Path) -> None:
+async def test_account_scoped_reads_still_require_a_valid_api_key(tmp_path: Path) -> None:
     client = BingWebmasterClient(
         _policy(tmp_path / "missing-key"),
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
 
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.read_site_data(
             _request(),
             "https://other.example/",
@@ -813,7 +816,7 @@ async def test_submit_url_batch_uses_fixed_post_origin_and_exact_configured_site
 
 
 @pytest.mark.asyncio
-async def test_submit_url_batch_rejects_unconfigured_site_before_key_or_network(
+async def test_submit_url_batch_on_account_scope_still_requires_a_valid_api_key(
     tmp_path: Path,
 ) -> None:
     client = BingWebmasterClient(
@@ -821,7 +824,7 @@ async def test_submit_url_batch_rejects_unconfigured_site_before_key_or_network(
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
 
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.submit_url_batch(
             _request(),
             "https://other.example/",
@@ -873,7 +876,7 @@ async def test_feed_mutations_use_only_fixed_post_operations_and_configured_site
 
 
 @pytest.mark.asyncio
-async def test_feed_mutations_reject_unconfigured_site_before_key_or_network(
+async def test_feed_mutations_on_account_scope_still_require_a_valid_api_key(
     tmp_path: Path,
 ) -> None:
     client = BingWebmasterClient(
@@ -881,7 +884,7 @@ async def test_feed_mutations_reject_unconfigured_site_before_key_or_network(
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
 
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.submit_feed(
             _request(),
             "https://other.example/",
@@ -919,7 +922,7 @@ async def test_site_mutations_use_only_fixed_post_operations_and_configured_site
 
 
 @pytest.mark.asyncio
-async def test_site_mutations_reject_bad_response_and_unconfigured_site_before_key_or_network(
+async def test_site_mutations_reject_bad_response_and_missing_api_key(
     tmp_path: Path,
 ) -> None:
     invalid_response = BingWebmasterClient(
@@ -936,7 +939,7 @@ async def test_site_mutations_reject_bad_response_and_unconfigured_site_before_k
         _policy(tmp_path / "missing-key"),
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await no_network.remove_site(_request(), "https://other.example/")
 
 
@@ -1292,15 +1295,17 @@ async def test_crawl_reports_reject_malformed_or_duplicate_upstream_payloads(
 
 
 @pytest.mark.asyncio
-async def test_crawl_reports_reject_unconfigured_site_before_key_or_network(tmp_path: Path) -> None:
+async def test_crawl_reports_on_account_scope_still_require_a_valid_api_key(
+    tmp_path: Path,
+) -> None:
     client = BingWebmasterClient(
         _policy(tmp_path / "missing-key"),
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
 
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.read_crawl_issues(_request(), "https://other.example/")
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.read_crawl_stats(_request(), "https://other.example/")
 
 
@@ -1364,13 +1369,13 @@ async def test_feeds_reject_malformed_duplicate_or_oversized_payloads(
 
 
 @pytest.mark.asyncio
-async def test_feeds_reject_unconfigured_site_before_key_or_network(tmp_path: Path) -> None:
+async def test_feeds_on_account_scope_still_require_a_valid_api_key(tmp_path: Path) -> None:
     client = BingWebmasterClient(
         _policy(tmp_path / "missing-key"),
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
 
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.read_feeds(_request(), "https://other.example/")
 
 
@@ -1444,13 +1449,15 @@ async def test_link_counts_reject_malformed_duplicate_or_oversized_payloads(
 
 
 @pytest.mark.asyncio
-async def test_link_counts_reject_unconfigured_site_before_key_or_network(tmp_path: Path) -> None:
+async def test_link_counts_on_account_scope_still_require_a_valid_api_key(
+    tmp_path: Path,
+) -> None:
     client = BingWebmasterClient(
         _policy(tmp_path / "missing-key"),
         transport_factory=lambda: pytest.fail("network must not be reached"),
     )
 
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(ProviderOperationError):
         await client.read_link_counts(_request(), "https://other.example/", 0)
 
 

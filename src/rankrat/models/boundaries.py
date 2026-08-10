@@ -178,7 +178,7 @@ class ResourceKind(StrEnum):
 
 
 class DnsZone(BaseModel):
-    """One exact provider DNS zone the operator permits Rankrat to modify."""
+    """One cached provider DNS zone associated with a configured account."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -192,7 +192,7 @@ class DnsZone(BaseModel):
 
 
 class ConfiguredAccount(BaseModel):
-    """One operator-owned account with explicit resources or Google read discovery."""
+    """One provider account whose credential defines the reachable authority."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -204,7 +204,6 @@ class ConfiguredAccount(BaseModel):
     pagespeed_sites: tuple[str, ...] = ()
     search_console_sites: tuple[str, ...] = ()
     ga4_properties: tuple[str, ...] = ()
-    google_account_discovery: bool = Field(default=False, strict=True)
     dns_zones: tuple[DnsZone, ...] = ()
     backlink_targets: tuple[str, ...] = ()
     bing_sites: tuple[str, ...] = Field(
@@ -320,7 +319,6 @@ class ConfiguredAccount(BaseModel):
             or self.bing_sites
             or self.oauth_token_file is not None
             or self.pagespeed_api_key_file is not None
-            or self.google_account_discovery
             or self.backlink_targets
         ):
             raise ValueError("DNS provider accounts can configure only DNS zones")
@@ -332,11 +330,7 @@ class ConfiguredAccount(BaseModel):
             raise ValueError("only Google accounts can configure pagespeed_api_key_file")
         if self.provider != Provider.GOOGLE and self.pagespeed_sites:
             raise ValueError("only Google accounts can configure pagespeed_sites")
-        if self.provider != Provider.GOOGLE and self.google_account_discovery:
-            raise ValueError("only Google accounts can enable google_account_discovery")
         if self.provider in BACKLINK_PROVIDERS:
-            if not self.backlink_targets:
-                raise ValueError("backlink provider accounts require backlink_targets")
             if (
                 self.search_console_sites
                 or self.pagespeed_sites
@@ -345,31 +339,15 @@ class ConfiguredAccount(BaseModel):
                 or self.dns_zones
                 or self.oauth_token_file is not None
                 or self.pagespeed_api_key_file is not None
-                or self.google_account_discovery
             ):
                 raise ValueError("backlink provider accounts can configure only backlink targets")
         elif self.backlink_targets:
             raise ValueError("only backlink provider accounts can configure backlink_targets")
-        if self.google_account_discovery and self.oauth_token_file is None:
-            raise ValueError("Google account discovery requires oauth_token_file")
         zone_ids = tuple(zone.provider_zone_id for zone in self.dns_zones)
         zone_names = tuple(zone.name for zone in self.dns_zones)
         if len(set(zone_ids)) != len(zone_ids) or len(set(zone_names)) != len(zone_names):
             raise ValueError("DNS zones must not contain duplicates")
         return self
-
-    def allows_google_read_discovery(self, resource_kind: ResourceKind) -> bool:
-        """Return whether this account can read any OAuth-accessible Google resource kind."""
-
-        return (
-            self.provider == Provider.GOOGLE
-            and self.google_account_discovery
-            and resource_kind
-            in {
-                ResourceKind.SEARCH_CONSOLE_SITE,
-                ResourceKind.GA4_PROPERTY,
-            }
-        )
 
 
 class IndexNowTarget(BaseModel):

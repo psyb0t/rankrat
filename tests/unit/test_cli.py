@@ -571,7 +571,6 @@ def test_setup_explains_ga4_property_and_tag_prerequisites(
                         "id": "google-main",
                         "provider": "google",
                         "credential": str(credential),
-                        "google_account_discovery": False,
                     }
                 ]
             }

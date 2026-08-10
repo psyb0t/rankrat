@@ -66,7 +66,6 @@ async def test_runtime_uses_oauth_for_google_analytics_and_api_key_for_pagespeed
                         "credential": str(client_file),
                         "oauth_token_file": str(token_file),
                         "pagespeed_api_key_file": str(pagespeed_api_key_file),
-                        "google_account_discovery": True,
                         "pagespeed_sites": ["https://example.com/"],
                     }
                 ]

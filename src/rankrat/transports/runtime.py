@@ -98,7 +98,6 @@ class ApplicationServices:
     backlinks: BacklinkService
     content_opportunities: ContentOpportunityOperator
     writes_enabled: bool = False
-    agent_onboarding_enabled: bool = False
     indexnow: IndexNowService | None = None
     google_indexing: GoogleIndexingService | None = None
     google_sites: GoogleSiteService | None = None
@@ -115,7 +114,6 @@ def build_services(settings: Settings) -> ApplicationServices:
         settings.boundary_file,
         settings.secret_root,
         settings.oauth_token_root,
-        unbounded=settings.unbounded,
     )
     google_client = GoogleSearchConsoleClient(
         policy,
@@ -204,11 +202,7 @@ def build_services(settings: Settings) -> ApplicationServices:
             sitemap_client,
             bing_client,
         )
-    # Its own switch rather than the writes_enabled block above: onboarding is
-    # the only operation that rewrites the boundary file this server enforces, so
-    # writable mode by itself must not expose it. agent_onboarding_enabled
-    # already requires writes_enabled, so this stays a subset.
-    if settings.agent_onboarding_enabled:
+    if settings.writes_enabled:
         site_onboarding = SiteOnboardingService(
             SiteOnboardingOperator(
                 settings.boundary_file,
@@ -217,6 +211,7 @@ def build_services(settings: Settings) -> ApplicationServices:
                     policy,
                     GoogleConfiguredTokenProvider(policy, (GOOGLE_ANALYTICS_EDIT_SCOPE,)),
                 ),
+                google_analytics_client,
                 GoogleSearchConsoleClient(
                     policy,
                     GoogleConfiguredTokenProvider(policy, (SEARCH_CONSOLE_WRITE_SCOPE,)),
@@ -295,7 +290,6 @@ def build_services(settings: Settings) -> ApplicationServices:
             site_audit,
         ),
         writes_enabled=settings.writes_enabled,
-        agent_onboarding_enabled=settings.agent_onboarding_enabled,
         indexnow=indexnow,
         google_indexing=google_indexing,
         google_sites=google_sites,

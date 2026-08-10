@@ -391,8 +391,8 @@ class _OnboardingGuideArguments(BaseModel):
 class _SiteOnboardingSubmissionArguments(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
-    bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    google_account_id: str | None = Field(default=None, pattern=ACCOUNT_ID_PATTERN)
+    bing_account_id: str | None = Field(default=None, pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     google_analytics_parent_account_id: str | None = Field(default=None, max_length=64)
     display_name: str | None = Field(
@@ -1388,10 +1388,7 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                 inputSchema=_tool_input_schema(contract.name),
                 annotations=_tool_annotations(contract.annotations),
             )
-            for contract in tool_catalog(
-                services.writes_enabled,
-                services.agent_onboarding_enabled,
-            )
+            for contract in tool_catalog(services.writes_enabled)
         ]
         return established_tools + seo_mcp_tools(services.writes_enabled)
 
@@ -1423,7 +1420,6 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
         guide = services.onboarding_guide.render(
             OnboardingGuideRequest(site_url=site_url),
             writes_enabled=services.writes_enabled,
-            agent_onboarding_enabled=services.agent_onboarding_enabled,
         )
         return json.dumps(to_json_value(guide), separators=(",", ":"))
 
@@ -1487,7 +1483,6 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
                     services.onboarding_guide.render(
                         OnboardingGuideRequest(site_url=guide_arguments.site_url),
                         writes_enabled=services.writes_enabled,
-                        agent_onboarding_enabled=services.agent_onboarding_enabled,
                     ),
                 )
             if name == "server_info":

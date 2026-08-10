@@ -584,7 +584,7 @@ class GoogleSearchConsoleClient:
         )
 
     async def list_sites(self, request: ProviderReadRequest) -> tuple[str, ...]:
-        """Return configured sites or the complete OAuth-visible inventory in discovery mode."""
+        """Return the complete Search Console inventory visible to the OAuth account."""
 
         account = self._boundary_policy.resolve_account(
             str(request.account_id),
@@ -606,22 +606,7 @@ class GoogleSearchConsoleClient:
             token,
             request.timeout_seconds,
         )
-        sites = _search_console_site_list(payload)
-        if account.google_account_discovery:
-            return tuple(site.site_url for site in sites)
-
-        allowed = set(account.search_console_sites)
-        visible: list[str] = []
-        for site in sites:
-            if site.site_url not in allowed:
-                continue
-            self._boundary_policy.require_google_read_resource(
-                str(request.account_id),
-                ResourceKind.SEARCH_CONSOLE_SITE,
-                site.site_url,
-            )
-            visible.append(site.site_url)
-        return tuple(visible)
+        return tuple(site.site_url for site in _search_console_site_list(payload))
 
     async def search_analytics(
         self,

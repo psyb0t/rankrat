@@ -52,7 +52,6 @@ lighthouse-worker/dist/
 # Container / local tooling
 compose.yml
 compose.override.yml
-docker-compose.yml
 docker-compose.override.yml
 .dockerignore.local
 .test-image.*/

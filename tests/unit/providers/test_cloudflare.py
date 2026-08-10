@@ -162,7 +162,7 @@ async def test_cloudflare_refuses_to_overwrite_a_conflicting_cname(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_cloudflare_unbounded_mode_discovers_the_most_specific_zone(
+async def test_cloudflare_account_scope_discovers_the_most_specific_zone(
     tmp_path: Path,
 ) -> None:
     token_file = tmp_path / "token"
@@ -178,8 +178,7 @@ async def test_cloudflare_unbounded_mode_discovers_the_most_specific_zone(
                     }
                 ]
             }
-        ),
-        unbounded=True,
+        )
     )
     requested_names: list[str] = []
 
@@ -242,8 +241,7 @@ async def test_cloudflare_rejects_duplicate_discovered_zones(tmp_path: Path) -> 
                     }
                 ]
             }
-        ),
-        unbounded=True,
+        )
     )
     duplicate = {"id": "a" * 32, "name": "example.com"}
     client = CloudflareDnsClient(

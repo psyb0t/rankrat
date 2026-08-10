@@ -158,7 +158,7 @@ async def test_bing_site_write_propagates_provider_failures(
                 BingSiteOperation.ADD,
             )
         )
-    with pytest.raises(BoundaryDeniedError):
+    with pytest.raises(RuntimeError, match="upstream failure"):
         await service.submit_site(
             BingSiteSubmissionRequest(
                 "bing-main",

@@ -6,7 +6,6 @@
       "credential": "/run/secrets/google/oauth-client.json",
       "oauth_token_file": "/run/oauth/google.json",
       "pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key",
-      "google_account_discovery": true,
       "search_console_sites": [
         "sc-domain:example.com"
       ],

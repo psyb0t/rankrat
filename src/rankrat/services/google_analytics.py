@@ -198,7 +198,7 @@ class GoogleAnalyticsDataService:
     ) -> tuple[Ga4AccountSummary, ...]:
         """Return the GA4 accounts and properties reachable by this OAuth account."""
 
-        self._policy.require_google_account_discovery(request.account_id)
+        self._policy.require_google_account(request.account_id)
         return await self._client.list_account_summaries(
             ProviderReadRequest(AccountId(request.account_id), request.timeout_seconds)
         )

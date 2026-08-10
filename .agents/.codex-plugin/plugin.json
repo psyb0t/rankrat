@@ -1,15 +1,15 @@
 {
   "name": "rankrat",
-  "version": "0.9.1",
-  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse — persistent monitoring, internal-link and content opportunities, ownership, remediation, and multi-provider backlinks. Read-only and boundary-limited by default. MCP over stdio and Streamable HTTP, plus REST.",
+  "version": "0.10.0",
+  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse — persistent monitoring, internal-link and content opportunities, ownership, remediation, onboarding, and multi-provider backlinks. Writable by default with one read-only switch. MCP over stdio and Streamable HTTP, plus REST.",
   "author": { "name": "psyb0t", "url": "https://github.com/psyb0t" },
   "homepage": "https://github.com/psyb0t/rankrat",
   "repository": "https://github.com/psyb0t/rankrat",
   "license": "WTFPL",
   "interface": {
     "displayName": "Rankrat",
-    "shortDescription": "Self-hosted, boundary-limited SEO intelligence",
-    "longDescription": "Audit and monitor owned sites, inspect search and analytics evidence, and apply bounded SEO remediation through Rankrat's MCP and REST transports.",
+    "shortDescription": "Self-hosted, account-authorized SEO control plane",
+    "longDescription": "Audit, onboard, and monitor owned sites, inspect search and analytics evidence, and apply provider-account-authorized SEO remediation through Rankrat's MCP and REST transports.",
     "developerName": "psyb0t",
     "category": "Developer Tools",
     "capabilities": [
@@ -17,10 +17,10 @@
       "MCP Streamable HTTP",
       "SEO monitoring",
       "Search analytics",
-      "Bounded remediation"
+      "Provider-account remediation"
     ],
     "websiteURL": "https://github.com/psyb0t/rankrat",
-    "defaultPrompt": "Use Rankrat to inspect the configured site's current SEO state, explain the evidence, and propose only boundary-safe actions."
+    "defaultPrompt": "Use Rankrat to inspect the configured provider accounts and sites, explain current SEO evidence, and carry out the requested supported actions."
   },
   "keywords": [
     "seo",

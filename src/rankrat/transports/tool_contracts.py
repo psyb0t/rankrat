@@ -1106,7 +1106,6 @@ SITE_REMEDIATION_APPLY_TOOL_CONTRACT = cast(
 
 def tool_catalog(
     writes_enabled: bool,
-    agent_onboarding_enabled: bool = False,
 ) -> tuple[ToolContract[object, object], ...]:
     """Expose write tools only when the immutable startup settings permit them."""
     if writes_enabled:
@@ -1124,8 +1123,7 @@ def tool_catalog(
             GOOGLE_ANALYTICS_PROPERTY_RENAME_TOOL_CONTRACT,
             SITE_OWNERSHIP_VERIFY_TOOL_CONTRACT,
             SITE_REMEDIATION_APPLY_TOOL_CONTRACT,
+            SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT,
         )
-        if agent_onboarding_enabled:
-            return (*write_catalog, SITE_ONBOARDING_SUBMIT_TOOL_CONTRACT)
         return write_catalog
     return READ_ONLY_TOOL_CATALOG

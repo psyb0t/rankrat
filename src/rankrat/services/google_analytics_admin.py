@@ -1,6 +1,7 @@
 """Read and rename GA4 containers the configured credential can administer.
 
-Reads are bounded by the same per-property allow-list as every other GA4 read.
+Reads use the same account credential and discovered property inventory as the
+other GA4 tools.
 Renames are the only mutation here: the Admin API also exposes account and
 property deletion, which is deliberately not wrapped — `accounts.delete`
 soft-deletes an entire container and everything beneath it, and no report this
