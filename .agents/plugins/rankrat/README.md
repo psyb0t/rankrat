@@ -7,6 +7,11 @@ CrUX, and IndexNow, plus bounded whole-site, internal-link, backlink, content
 opportunity, persistent monitoring, and optional isolated local Lighthouse
 audits.
 
+The topic-based [operator manual](https://github.com/psyb0t/rankrat/tree/main/docs)
+covers credentials, boundaries, all three transports, feature workflows,
+security, and troubleshooting. This README covers only OpenClaw-specific
+behavior.
+
 rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin has
 no OpenClaw runtime extension; its static MCP definition executes the bundled
 stdio launcher, which starts the published Rankrat image. Local
@@ -54,13 +59,15 @@ definition with OpenClaw's native Streamable HTTP client. There is no proxy
 process and the bearer token never appears in a child-process argument.
 
 ```bash
-export RANKRAT_AUTH_TOKEN=REPLACE_ME
+export RANKRAT_AUTH_TOKEN="$(<"$HOME/.config/rankrat/secrets/rankrat/http-bearer-token")"
 openclaw mcp set rankrat '{"url":"http://127.0.0.1:8080/mcp","transport":"streamable-http","headers":{"Authorization":"Bearer ${RANKRAT_AUTH_TOKEN}"}}'
 openclaw mcp doctor rankrat --probe
 ```
 
-The single quotes preserve `${RANKRAT_AUTH_TOKEN}` for OpenClaw to resolve at
-runtime. If the Rankrat server has no bearer secret, omit the `headers` object.
+The first command loads the secret from its owner-readable file without placing
+the value in shell history. The single quotes preserve
+`${RANKRAT_AUTH_TOKEN}` for OpenClaw to resolve at runtime. If the Rankrat
+server has no bearer secret, omit the `headers` object.
 `openclaw mcp unset rankrat` removes the override and returns to the plugin's
 default stdio server.
 

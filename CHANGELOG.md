@@ -2,6 +2,23 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.9.1 — 2026-08-10
+
+Reorganizes Rankrat's public documentation into a concise entry point and a
+complete task-oriented manual without changing its runtime API.
+
+- Replaces the oversized root README with a 150-line overview and adds a
+  documentation index plus focused guides for setup, configuration, providers,
+  transports, features, Lighthouse, ownership and onboarding, monitoring and
+  remediation, security, tools, troubleshooting, and development.
+- Documents the complete REST and MCP surfaces, credential and provider setup,
+  boundary behavior, write gates, deployment paths, and operator workflows with
+  source-verified commands and cross-links.
+- Synchronizes the Codex skill, OpenClaw plugin guide, embedded setup reference,
+  and launcher documentation across stdio and Streamable HTTP MCP.
+- Corrects the documented Google discovery, GA4 mutation, HTTP bearer, OAuth
+  failure-log, and unknown-environment-variable behavior.
+
 ## v0.9.0 — 2026-08-08
 
 Adds a persistent SEO intelligence layer while preserving the same strict

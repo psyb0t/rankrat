@@ -3,6 +3,25 @@
 Everything the [skill](../SKILL.md) needs but does not need loaded up front:
 configuration, credentials, and how to run it.
 
+This file is the self-contained agent reference shipped with the skill. Human
+operators can use the topic-based
+[public manual](https://github.com/psyb0t/rankrat/tree/main/docs), especially
+[Getting started](https://github.com/psyb0t/rankrat/blob/main/docs/getting-started.md),
+[Providers and credentials](https://github.com/psyb0t/rankrat/blob/main/docs/providers.md),
+and [Troubleshooting](https://github.com/psyb0t/rankrat/blob/main/docs/troubleshooting.md).
+
+## Contents
+
+- [Configuration](#configuration)
+- [The boundary file](#the-boundary-file)
+- [Write access](#write-access)
+- [Unbounded mode](#unbounded-mode)
+- [Provider credentials](#provider-credentials)
+- [Running it](#running-it)
+- [Onboarding](#onboarding)
+- [Complete MCP tool catalog](#complete-mcp-tool-catalog)
+- [Checking it works](#checking-it-works)
+
 ## Configuration
 
 All settings are read from the environment with the `RANKRAT_` prefix, so a
@@ -44,12 +63,14 @@ units.
 
 ## The boundary file
 
-`boundaries.json` is what fixes the scope. It lists the accounts and the sites
-or properties within them that this server may read. Ordinary bounded tools
-cannot add to it, and nothing in the normal tool surface enumerates properties
-outside it — a site that is not listed is not reachable, whatever the underlying
-account can see. The sole exception is separately gated agent onboarding, which
-can persist only the exact resources it creates when
+`boundaries.json` fixes credential accounts and normal resource scope. One
+explicit exception is `google_account_discovery=true`: read-only inventory and
+report/query tools may then target every Search Console site and GA4 property
+visible to that OAuth user, including resources not listed in the file. Set it
+to `false` for strict list-only reads. It does not broaden Search Console writes
+or GA4 property writes; with writable mode separately enabled, it also
+authorizes renaming an OAuth-visible GA4 account by numeric ID. Separately gated
+agent onboarding can persist only the exact resources it creates when
 `RANKRAT_ALLOW_AGENT_ONBOARDING=true` and the config mount passes its ownership
 and mode checks.
 

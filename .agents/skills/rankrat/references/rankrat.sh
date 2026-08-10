@@ -22,9 +22,9 @@
 #   RANKRAT_HTTP_PORT             published loopback port  8080
 #   RANKRAT_OAUTH_CALLBACK_PORT   published OAuth port     49152
 #
-# Do NOT put those in `.env`. The server parses its own RANKRAT_* namespace with
-# extra="forbid", so an unrecognized RANKRAT_* variable is a hard startup error,
-# and `.env` goes straight to the container in setup mode.
+# Do NOT put those in `.env`: `.env` goes straight to the container in setup
+# mode, where only recognized server settings are consumed. Unknown environment
+# names are ignored, so a misspelled host-side override there would do nothing.
 #
 # RANKRAT_READ_ONLY, RANKRAT_UNBOUNDED and RANKRAT_ALLOW_AGENT_ONBOARDING are
 # the server's own settings, read here as well because they decide which tools

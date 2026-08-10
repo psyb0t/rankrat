@@ -23,15 +23,28 @@ browser session or a service-account key.
 
 Install, credentials and the full environment reference:
 [`references/setup.md`](references/setup.md).
+For a human-readable operator manual organized by topic, use the public
+[Rankrat documentation](https://github.com/psyb0t/rankrat/tree/main/docs).
 
-## Security & safety
+## Contents
 
-In normal bounded mode, the operator fixes the boundary at startup and rankrat
-serves only the accounts, sites and properties listed in it. Ordinary provider
-tools cannot widen that scope. The only exception is the separately gated
-`site_onboarding_submit` tool: it can add the exact resources it creates when
-`RANKRAT_ALLOW_AGENT_ONBOARDING=true` and the config mount passes the ownership
-and mode checks described below.
+- [Security and safety](#security-and-safety)
+- [When to use](#when-to-use)
+- [When NOT to use](#when-not-to-use)
+- [Usage](#usage)
+
+## Security and safety
+
+In normal bounded mode, the operator fixes credential accounts and resource
+scope at startup. Explicitly setting `google_account_discovery=true` on a
+Google account authorizes read-only targeting of every OAuth-visible Search
+Console site and GA4 property for that account, including unlisted resources;
+set it to `false` for strict list-only reads. Search Console writes and GA4
+property writes do not inherit that scope. When writable mode is separately
+enabled, the flag also authorizes renaming an OAuth-visible GA4 account by
+numeric ID. The separately gated `site_onboarding_submit` tool can add only the
+exact resources it creates when `RANKRAT_ALLOW_AGENT_ONBOARDING=true` and the
+config mount passes the ownership and mode checks described below.
 
 It is **read-only by default** — `RANKRAT_READ_ONLY` defaults to `true`, and the
 write tools are not merely rejected but absent from `tools/list` entirely, so an
@@ -202,8 +215,8 @@ perfectly installed and reports into a property nobody is reading.
 `google_analytics_account_rename` and `google_analytics_property_rename` exist in
 writable mode. Account names are cosmetic — the numeric ID is what boundaries,
 measurement IDs and reports bind to — so renaming is safe and is the usual fix
-for a misfiled property. There is no create and no delete: GA4 has no account
-create API at all, and deletion is deliberately not wrapped.
+for a misfiled property. There is no GA4 account-creation or Analytics deletion
+tool. Property creation exists only through separately gated site onboarding.
 
 ### Onboarding a site
 
