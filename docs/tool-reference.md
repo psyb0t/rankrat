@@ -139,8 +139,6 @@ deriving REST paths from MCP names.
 | `internal_link_opportunities` | Deterministic lexical missing-link suggestions |
 | `crux_history` | Bounded Chrome UX history for URL/origin |
 | `cloudflare_analytics` | Hourly traffic/cache aggregates |
-| `backlink_report` | One normalized configured backlink source |
-| `backlink_aggregate` | Deduplicated multi-source backlink evidence |
 | `content_opportunities` | Joined Search Console/Bing/GA4/crawl opportunities |
 
 ## Monitoring reads

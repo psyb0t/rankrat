@@ -14,9 +14,6 @@ from rankrat.constants import (
     DEFAULT_SITE_AUDIT_DEPTH,
     DEFAULT_SITE_AUDIT_PAGES,
     DEFAULT_STATE_PAGE_SIZE,
-    MAX_BACKLINK_OFFSET,
-    MAX_BACKLINK_RESULTS,
-    MAX_BACKLINK_TARGETS,
     MAX_CLOUDFLARE_ANALYTICS_GROUPS,
     MAX_CLOUDFLARE_PURGE_URLS,
     MAX_CONTENT_OPPORTUNITIES,
@@ -32,7 +29,7 @@ from rankrat.constants import (
     MIN_MONITOR_INTERVAL_SECONDS,
     MIN_PROVIDER_TIMEOUT_SECONDS,
 )
-from rankrat.models.boundaries import ACCOUNT_ID_PATTERN, Provider
+from rankrat.models.boundaries import ACCOUNT_ID_PATTERN
 from rankrat.providers.cloudflare_performance import CloudflareCacheTemplate
 from rankrat.providers.crux import CruxFormFactor, CruxMetric
 from rankrat.state.sqlite import IssueStatus
@@ -118,32 +115,6 @@ class CloudflareCacheTemplateInput(StrictInput):
     account_id: AccountId
     zone_id: str = Field(pattern=_ZONE_ID_PATTERN)
     template: CloudflareCacheTemplate
-    timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
-
-
-class BacklinkReadInput(StrictInput):
-    account_id: AccountId
-    provider: Provider
-    target: WebUrl
-    site_url: WebUrl | None = None
-    limit: int = Field(default=100, ge=1, le=MAX_BACKLINK_RESULTS)
-    offset: int = Field(default=0, ge=0, le=MAX_BACKLINK_OFFSET)
-    timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
-
-
-class BacklinkAggregateSourceInput(StrictInput):
-    account_id: AccountId
-    provider: Provider
-    target: WebUrl
-    site_url: WebUrl | None = None
-
-
-class BacklinkAggregateInput(StrictInput):
-    sources: tuple[BacklinkAggregateSourceInput, ...] = Field(
-        min_length=1,
-        max_length=MAX_BACKLINK_TARGETS,
-    )
-    limit_per_source: int = Field(default=100, ge=1, le=MAX_BACKLINK_RESULTS)
     timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
 

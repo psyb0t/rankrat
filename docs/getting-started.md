@@ -43,7 +43,7 @@ Without access to `/usr/local/bin`, keep it locally and use `./rankrat.sh`.
 ```sh
 export RANKRAT_DATA_DIR="${RANKRAT_DATA_DIR:-$HOME/.config/rankrat}"
 mkdir -p "$RANKRAT_DATA_DIR"/{config,oauth,state} \
-  "$RANKRAT_DATA_DIR"/secrets/{google,bing,cloudflare,indexnow,rankrat,ahrefs,majestic,moz,semrush,dataforseo}
+  "$RANKRAT_DATA_DIR"/secrets/{google,bing,cloudflare,indexnow,rankrat}
 chmod 700 "$RANKRAT_DATA_DIR"/{config,oauth,state,secrets} \
   "$RANKRAT_DATA_DIR"/secrets/*
 
@@ -103,8 +103,7 @@ account in `config/boundaries.json`.
 
 After credentials are present, setup runs provider readiness, selected deep
 live checks, and the production HTTP/MCP image smoke. It does not create site
-properties, submit URLs/sitemaps, or send IndexNow notifications. Commercial
-backlink readiness may consume a paid API unit.
+properties, submit URLs/sitemaps, or send IndexNow notifications.
 
 The standalone wrapper provides the same guided setup plus an explicit Google
 OAuth reauthorization command for operators who do not use a checkout:

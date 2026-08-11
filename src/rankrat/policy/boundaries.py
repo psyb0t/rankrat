@@ -260,28 +260,6 @@ class BoundaryPolicy:
             raise BoundaryDeniedError("URL is outside the configured Bing site")
         return normalized_url
 
-    def require_backlink_target(
-        self,
-        account_id: str,
-        provider: Provider,
-        target: str,
-    ) -> tuple[ConfiguredAccount, str]:
-        """Normalize and authorize one exact provider-neutral backlink target."""
-
-        stripped = target.strip()
-        normalized = (
-            normalize_public_https_url(stripped, "backlink_target")
-            if "://" in stripped
-            else normalize_indexnow_host(stripped)
-        )
-        account = self.require_resource(
-            account_id,
-            provider,
-            ResourceKind.BACKLINK_TARGET,
-            normalized,
-        )
-        return account, normalized
-
     @staticmethod
     def _resources_for_kind(
         account: ConfiguredAccount,
@@ -297,6 +275,4 @@ class BoundaryPolicy:
             return account.bing_sites
         if resource_kind == ResourceKind.DNS_ZONE:
             return tuple(zone.provider_zone_id for zone in account.dns_zones)
-        if resource_kind == ResourceKind.BACKLINK_TARGET:
-            return account.backlink_targets
         raise BoundaryDeniedError("unsupported configured resource kind")

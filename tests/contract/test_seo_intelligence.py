@@ -14,7 +14,6 @@ from rankrat.config import Settings
 from rankrat.operator.content_opportunities import ContentOpportunityOperator
 from rankrat.operator.internal_links import InternalLinkOperator
 from rankrat.operator.monitoring import MonitoringOperator
-from rankrat.services.backlinks import BacklinkService
 from rankrat.services.cloudflare_performance import CloudflarePerformanceService
 from rankrat.services.crux import CruxHistoryService
 from rankrat.transports.http import create_http_app
@@ -139,24 +138,6 @@ class _CloudflareFake:
         }
 
 
-class _BacklinksFake:
-    async def read(self, _: object) -> dict[str, object]:
-        return {
-            "provider": "ahrefs",
-            "target": "https://example.com/",
-            "links": [],
-            "has_more": False,
-        }
-
-    async def aggregate(self, _: object) -> dict[str, object]:
-        return {
-            "links": [],
-            "referring_domains": [],
-            "successful_sources": ["ahrefs"],
-            "failures": [],
-        }
-
-
 class _ContentFake:
     async def report(self, _: object) -> dict[str, object]:
         return {
@@ -218,7 +199,6 @@ def _services(
         internal_links=cast(InternalLinkOperator, _InternalLinksFake()),
         crux=cast(CruxHistoryService, _CruxFake()),
         cloudflare_performance=cast(CloudflarePerformanceService, _CloudflareFake()),
-        backlinks=cast(BacklinkService, _BacklinksFake()),
         content_opportunities=cast(ContentOpportunityOperator, _ContentFake()),
         writes_enabled=writes_enabled,
     )
@@ -263,28 +243,6 @@ def _read_calls() -> tuple[tuple[str, str, Mapping[str, object] | None], ...]:
                 "zone_id": _ZONE_ID,
                 "start": "2025-01-01T00:00:00Z",
                 "end": "2025-01-02T00:00:00Z",
-            },
-        ),
-        (
-            "POST",
-            "/v1/backlink-reports",
-            {
-                "account_id": "ahrefs-main",
-                "provider": "ahrefs",
-                "target": "https://example.com/",
-            },
-        ),
-        (
-            "POST",
-            "/v1/backlink-aggregate-reports",
-            {
-                "sources": [
-                    {
-                        "account_id": "ahrefs-main",
-                        "provider": "ahrefs",
-                        "target": "https://example.com/",
-                    }
-                ]
             },
         ),
         (
@@ -411,26 +369,6 @@ def _mcp_calls() -> tuple[tuple[str, Mapping[str, object]], ...]:
             },
         ),
         (
-            "backlink_report",
-            {
-                "account_id": "ahrefs-main",
-                "provider": "ahrefs",
-                "target": "https://example.com/",
-            },
-        ),
-        (
-            "backlink_aggregate",
-            {
-                "sources": [
-                    {
-                        "account_id": "ahrefs-main",
-                        "provider": "ahrefs",
-                        "target": "https://example.com/",
-                    }
-                ]
-            },
-        ),
-        (
             "content_opportunities",
             {
                 "google_account_id": "google-main",
@@ -524,16 +462,8 @@ async def test_all_seo_intelligence_rest_routes_and_read_only_hiding(
             "code": "VALIDATION_FAILED",
             "message": "request validation failed",
         }
-        oversized_offset = await client.post(
-            "/v1/backlink-reports",
-            json={
-                "account_id": "ahrefs-main",
-                "provider": "ahrefs",
-                "target": "https://example.com/",
-                "offset": 20_001,
-            },
-        )
-        assert oversized_offset.status_code == 422
+        removed_route = await client.post("/v1/backlink-reports", json={})
+        assert removed_route.status_code == 404
 
 
 @pytest.mark.asyncio
@@ -560,8 +490,6 @@ async def test_all_seo_intelligence_write_routes_and_mcp_tool_visibility(
             "internal_link_opportunities",
             "crux_history",
             "cloudflare_analytics",
-            "backlink_report",
-            "backlink_aggregate",
             "content_opportunities",
             "monitors_list",
             "monitor_snapshots_list",
@@ -576,6 +504,7 @@ async def test_all_seo_intelligence_write_routes_and_mcp_tool_visibility(
             "cloudflare_cache_template_apply",
         }
         assert expected <= set(catalog)
+        assert {"backlink_report", "backlink_aggregate"}.isdisjoint(catalog)
         delete_annotations = catalog["monitor_delete"].annotations
         list_annotations = catalog["monitors_list"].annotations
         assert delete_annotations is not None
@@ -638,7 +567,7 @@ async def test_new_seo_tools_are_callable_over_streamable_http_mcp(
                     ),
                 )
             )
-        invalid = await client.post(
+        removed = await client.post(
             "/mcp/",
             headers=headers,
             json={
@@ -647,12 +576,7 @@ async def test_new_seo_tools_are_callable_over_streamable_http_mcp(
                 "method": "tools/call",
                 "params": {
                     "name": "backlink_report",
-                    "arguments": {
-                        "account_id": "ahrefs-main",
-                        "provider": "ahrefs",
-                        "target": "https://example.com/",
-                        "offset": 20_001,
-                    },
+                    "arguments": {},
                 },
             },
         )
@@ -668,8 +592,8 @@ async def test_new_seo_tools_are_callable_over_streamable_http_mcp(
         "edges": [],
         "truncated": False,
     }
-    assert invalid.status_code == 200
-    assert invalid.json()["result"]["isError"] is True
+    assert removed.status_code == 200
+    assert removed.json()["result"]["isError"] is True
 
 
 @pytest.mark.asyncio

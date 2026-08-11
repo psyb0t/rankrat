@@ -2,7 +2,7 @@
   "id": "@psyb0t/rankrat",
   "name": "rankrat",
   "version": "0.0.0",
-  "description": "Self-hosted, account-authorized SEO audits, monitoring, internal links, CrUX, ownership, remediation, backlinks, analytics, Cloudflare performance, PageSpeed, and optional local Lighthouse tools. The default server starts the published Rankrat image over MCP stdio.",
+  "description": "Self-hosted, account-authorized SEO audits, monitoring, internal links, Bing backlink intelligence, CrUX, ownership, remediation, analytics, Cloudflare performance, PageSpeed, and optional local Lighthouse tools. The default server starts the published Rankrat image over MCP stdio.",
   "mcpServers": {
     "rankrat": {
       "transport": "stdio",

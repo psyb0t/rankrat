@@ -147,8 +147,8 @@ the same narrow proof-only behavior rather than expose generic DNS CRUD.
 - Cache writes choose one of two named templates; no arbitrary ruleset body.
 - GA4 writes rename account-visible resources or create/reuse a property during
   onboarding; no Analytics deletion.
-- Backlink providers are read-only; target inventory supplies report inputs and
-  containment rather than credential authorization.
+- Bing backlink intelligence is read-only and operates on a selected Bing
+  Webmaster site; it has no separate backlink-provider credential surface.
 
 Upstream acceptance may be asynchronous and does not guarantee indexing,
 ownership completion, or ranking.

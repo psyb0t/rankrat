@@ -386,8 +386,6 @@ async def test_mcp_tool_catalog_annotations_and_calls(
             "internal_link_opportunities",
             "crux_history",
             "cloudflare_analytics",
-            "backlink_report",
-            "backlink_aggregate",
             "content_opportunities",
             "monitors_list",
             "monitor_snapshots_list",
@@ -400,8 +398,6 @@ async def test_mcp_tool_catalog_annotations_and_calls(
             "internal_link_opportunities",
             "crux_history",
             "cloudflare_analytics",
-            "backlink_report",
-            "backlink_aggregate",
             "content_opportunities",
         }
         for tool in tools.tools:
@@ -411,6 +407,9 @@ async def test_mcp_tool_catalog_annotations_and_calls(
             assert tool.annotations.openWorldHint is (
                 tool.name.startswith("lighthouse_") or tool.name in new_open_world_tools
             )
+        assert {"backlink_report", "backlink_aggregate"}.isdisjoint(
+            tool.name for tool in tools.tools
+        )
 
         accounts = await client.call_tool("accounts_list", {"provider": "google"})
         accounts_payload = json.loads(accounts.content[0].text)  # type: ignore[union-attr]

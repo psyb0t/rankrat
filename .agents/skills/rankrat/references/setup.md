@@ -58,14 +58,11 @@ With no override, the wrapper and OpenClaw launcher use
 `$HOME/.config/rankrat`. They derive every host mount from that one root and
 never mount the root wholesale.
 
-The `RANKRAT_LIVE_*` variables select the deeper provider-specific live suites
-that `make setup` runs after the image's setup check. They are blank in
-`.env.example`: set them only for providers you configured and leave all
-unused-provider selectors blank so those extra live suites skip. The image's
-`setup` command itself checks every account represented in the boundary file.
-For Ahrefs, Majestic, Moz, Semrush, and DataForSEO this is a real one-result
-query against the account's first inventoried target, so it can consume paid API
-units.
+The `RANKRAT_LIVE_*` variables select deeper provider-specific live suites that
+`make setup` runs after the image's setup check. They are blank in
+`.env.example`: set them only for providers you configured and leave unused
+provider selectors blank so those extra live suites skip. The image's `setup`
+command itself checks every account represented in the boundary file.
 
 ## The boundary file
 
@@ -121,11 +118,6 @@ the intended account first.
 | Google | `secrets/google/oauth-client.json` |
 | Bing | `secrets/bing/api-key` |
 | Cloudflare | `secrets/cloudflare/api-token` |
-| Ahrefs | `secrets/ahrefs/api-token` |
-| Majestic | `secrets/majestic/api-key` |
-| Moz | `secrets/moz/credentials` |
-| Semrush | `secrets/semrush/api-key` |
-| DataForSEO | `secrets/dataforseo/credentials` |
 
 Google accepts only an installed/Desktop OAuth client JSON. The same setup
 command prints the consent URL, waits for the loopback callback, and stores the
@@ -164,14 +156,6 @@ exception: they are absent unless writable mode enables them.
   consent flow grants it nothing. It is optional — with no key configured the
   call still goes out, unauthenticated, under a much tighter quota.
   `crux_history` uses the same file and requires the key.
-- **Ahrefs / Majestic / Semrush** — one API token/key line in the credential
-  file. **Moz** uses `ACCESS_ID:SECRET`; **DataForSEO** uses `LOGIN:PASSWORD`.
-  `backlink_targets` stores known report targets rather than authorization. All
-  five are optional paid data sources with provider-specific quotas and costs.
-  Setup validates each configured credential with one result when a target is
-  available.
-  Each report or aggregate has one `timeout_seconds` deadline and shares a
-  20-request upstream budget; aggregate sources must be unique.
 - **Local Lighthouse** — no credential. The optional companion image receives
   only a shared Unix socket and outbound browser network access. Rankrat accepts
   only requested URLs beneath the account's `pagespeed_sites` and rejects a
@@ -364,8 +348,6 @@ The SEO expansion has the same names over stdio and Streamable HTTP MCP:
 | `internal_link_opportunities` | `POST /v1/internal-link-opportunity-reports` |
 | `crux_history` | `POST /v1/crux/history-reports` |
 | `cloudflare_analytics` | `POST /v1/cloudflare/analytics-reports` |
-| `backlink_report` | `POST /v1/backlink-reports` |
-| `backlink_aggregate` | `POST /v1/backlink-aggregate-reports` |
 | `content_opportunities` | `POST /v1/content-opportunity-reports` |
 
 ## Complete MCP tool catalog
@@ -387,8 +369,8 @@ from a read-only server.
   `sites_list`, `diagnostics`, `provider_readiness`, `onboarding_guide`.
 - **Site, ownership, schema, links, and opportunities:** `site_audit`,
   `site_ownership_check`, `schema_validate_url`, `schema_validate_html`,
-  `schema_validate_json_ld`, `bing_backlink_intelligence`, `backlink_report`,
-  `backlink_aggregate`, `internal_link_graph`, `orphan_page_report`,
+  `schema_validate_json_ld`, `bing_backlink_intelligence`,
+  `internal_link_graph`, `orphan_page_report`,
   `internal_link_opportunities`, `content_opportunities`.
 - **Persistent monitoring:** `monitors_list`, `monitor_snapshots_list`,
   `monitor_issues_list`, `issue_events_list`.

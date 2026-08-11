@@ -9,9 +9,10 @@
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
 
 Search Console, Bing Webmaster Tools, GA4, PageSpeed, Cloudflare, CrUX, and
-backlink providers each have their own view of a site. Rankrat puts them behind
-one self-hosted service so a human can tell an agent what outcome they want and
-let the agent inspect, create, update, or remove supported provider resources.
+Bing's backlink data each have their own view of a site. Rankrat puts them
+behind one self-hosted service so a human can tell an agent what outcome they
+want and let the agent inspect, create, update, or remove supported provider
+resources.
 
 It is a rat, not a burglar. You provide the provider accounts; those credentials
 are Rankrat's authority. Resource lists in `boundaries.json` are discovered
@@ -23,7 +24,9 @@ Rankrat speaks MCP over stdio, MCP over Streamable HTTP at `/mcp`, and a
 FastAPI JSON API under `/v1/`. Wrapper-managed HTTP uses a bearer; a custom
 loopback-only launch may explicitly omit it.
 
-**Status:** alpha. The API and tool surface may change before 1.0.
+**Status:** alpha. The API and tool surface may change before 1.0; minor
+releases can include documented incompatible changes, so pin an exact release
+if your integration requires stability.
 
 ## Contents
 
@@ -45,7 +48,7 @@ loopback-only launch may explicitly omit it.
 | Performance | PageSpeed, Core Web Vitals, CrUX history, Cloudflare analytics, and isolated local Lighthouse audits |
 | Site intelligence | Whole-site audits, schema eligibility, internal-link graphs, orphan pages, content opportunities, and cross-provider comparisons |
 | Ownership and onboarding | Google/Bing checks, provider-neutral DNS verification through Cloudflare, and idempotent GA4/Search Console/Bing onboarding |
-| Backlinks | Normalized Bing, Ahrefs, Majestic, Moz, Semrush, and DataForSEO evidence with multi-provider deduplication |
+| Backlinks | Bing Webmaster backlink intelligence for configured sites |
 | Monitoring and remediation | Persistent monitors and issue history, sitemap/URL resubmission, IndexNow, exact Cloudflare purges, and finite cache templates |
 
 Runtime discovery is authoritative: read-only deployments omit every write;

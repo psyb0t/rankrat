@@ -179,18 +179,9 @@ orphan result is incomplete.
 
 ## Inspect backlinks
 
-Use `backlink_report` for one configured Bing or commercial provider and
-`backlink_aggregate` for normalized multi-provider evidence. The aggregate:
-
-- calls exactly the requested sources;
-- deduplicates normalized results;
-- refuses an identical source twice;
-- shares one 20-request ceiling and whole-operation deadline;
-- returns successful evidence alongside typed provider failures;
-- fails only when all sources fail.
-
-Adapters read evidence only. Rankrat does not scrape competitors, manufacture
-links, buy links, or send outreach. Paid providers may charge each call.
+Use `bing_backlink_intelligence` for backlink evidence from one configured Bing
+Webmaster site. It reports only the data Bing exposes for that account; Rankrat
+does not scrape competitors, manufacture links, buy links, or send outreach.
 
 ## Inspect performance
 

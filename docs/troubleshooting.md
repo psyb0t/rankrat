@@ -249,14 +249,14 @@ a credential error may still affect an image whose registry is Docker Hub.
 ## Provider readiness passes but a report fails
 
 Readiness proves a minimal account call, not every resource, date range, quota,
-product feature, or paid plan. Run the provider-specific live target with exact
-selectors, then inspect:
+or product feature. Run the provider-specific live target with exact selectors,
+then inspect:
 
 - provider inventory can discover the resource;
 - the upstream account can access it;
 - date range and pagination limits are valid;
-- quota/paid units remain;
-- requested feature exists on the provider plan;
+- free-tier rate limits and quotas allow the request;
+- requested feature is enabled for the provider account;
 - provider has data for that interval.
 
 ## Collect useful diagnostics safely

@@ -23,11 +23,6 @@ _PROVIDER_ORDER: Final = (
     Provider.GOOGLE,
     Provider.BING,
     Provider.CLOUDFLARE,
-    Provider.AHREFS,
-    Provider.MAJESTIC,
-    Provider.MOZ,
-    Provider.SEMRUSH,
-    Provider.DATAFORSEO,
 )
 _PROVIDER_HELP: Final = {
     Provider.GOOGLE: (
@@ -43,23 +38,11 @@ _PROVIDER_HELP: Final = {
         "Account token covering all zones with Zone Read, DNS Edit, Analytics Read, Cache Purge, "
         "and Zone Settings/Rules Edit. https://dash.cloudflare.com/profile/api-tokens"
     ),
-    Provider.AHREFS: "Ahrefs API v3 token. https://app.ahrefs.com/api",
-    Provider.MAJESTIC: "Majestic OpenApps API key. https://developer-support.majestic.com/",
-    Provider.MOZ: "Moz access ID and secret. https://moz.com/products/api/keys",
-    Provider.SEMRUSH: "Semrush API key. https://www.semrush.com/api-documentation/",
-    Provider.DATAFORSEO: (
-        "DataForSEO API login and password. https://app.dataforseo.com/api-access"
-    ),
 }
 _SECRET_RELATIVE_PATHS: Final = {
     Provider.GOOGLE: Path("google/oauth-client.json"),
     Provider.BING: Path("bing/api-key"),
     Provider.CLOUDFLARE: Path("cloudflare/api-token"),
-    Provider.AHREFS: Path("ahrefs/api-token"),
-    Provider.MAJESTIC: Path("majestic/api-key"),
-    Provider.MOZ: Path("moz/credentials"),
-    Provider.SEMRUSH: Path("semrush/api-key"),
-    Provider.DATAFORSEO: Path("dataforseo/credentials"),
 }
 
 
@@ -187,10 +170,6 @@ def _configure_account(
 
 
 def _credential_prompt_label(provider: Provider) -> str:
-    if provider is Provider.MOZ:
-        return "paste access-id:secret"
-    if provider is Provider.DATAFORSEO:
-        return "paste login:password"
     return "paste account-wide API token/key"
 
 

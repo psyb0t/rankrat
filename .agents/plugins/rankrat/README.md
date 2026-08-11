@@ -3,9 +3,9 @@
 MCP bridge for [rankrat](https://github.com/psyb0t/rankrat) — account-authorized
 SEO and search-analytics operations over Google Search Console, Bing Webmaster
 Tools, GA4, PageSpeed, DNS ownership automation (currently through Cloudflare),
-CrUX, and IndexNow, plus bounded whole-site, internal-link, backlink, content
-opportunity, persistent monitoring, and optional isolated local Lighthouse
-audits.
+CrUX, and IndexNow, plus bounded whole-site, internal-link, Bing backlink,
+content opportunity, persistent monitoring, and optional isolated local
+Lighthouse audits.
 
 The topic-based [operator manual](https://github.com/psyb0t/rankrat/tree/main/docs)
 covers credentials, boundaries, all three transports, feature workflows,
@@ -103,8 +103,7 @@ absent from `tools/list`. Use the Streamable HTTP form for a shared service with
 centralized bearer authentication; OpenClaw receives only the MCP URL and
 bearer header.
 Within one running server, Cloudflare cache-template writes are serialized per
-zone. Backlink reports and aggregates have one deadline and one shared
-20-request upstream budget, and duplicate aggregate sources are rejected.
+zone.
 
 In writable mode the launcher verifies owner-only config-directory permissions,
 ownership, regular-file and ancestor-symlink constraints before making only

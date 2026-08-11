@@ -147,23 +147,9 @@ class Provider(StrEnum):
     GOOGLE = "google"
     BING = "bing"
     CLOUDFLARE = "cloudflare"
-    AHREFS = "ahrefs"
-    MAJESTIC = "majestic"
-    MOZ = "moz"
-    SEMRUSH = "semrush"
-    DATAFORSEO = "dataforseo"
 
 
 DNS_OWNERSHIP_PROVIDERS = frozenset((Provider.CLOUDFLARE,))
-BACKLINK_PROVIDERS = frozenset(
-    (
-        Provider.AHREFS,
-        Provider.MAJESTIC,
-        Provider.MOZ,
-        Provider.SEMRUSH,
-        Provider.DATAFORSEO,
-    )
-)
 
 
 class ResourceKind(StrEnum):
@@ -174,7 +160,6 @@ class ResourceKind(StrEnum):
     GA4_PROPERTY = "ga4_property"
     BING_SITE = "bing_site"
     DNS_ZONE = "dns_zone"
-    BACKLINK_TARGET = "backlink_target"
 
 
 class DnsZone(BaseModel):
@@ -205,7 +190,6 @@ class ConfiguredAccount(BaseModel):
     search_console_sites: tuple[str, ...] = ()
     ga4_properties: tuple[str, ...] = ()
     dns_zones: tuple[DnsZone, ...] = ()
-    backlink_targets: tuple[str, ...] = ()
     bing_sites: tuple[str, ...] = Field(
         default=(),
         validation_alias="sites",
@@ -278,36 +262,15 @@ class ConfiguredAccount(BaseModel):
             raise ValueError("sites must not contain duplicates")
         return normalized_values
 
-    @field_validator("backlink_targets", mode="before")
-    @classmethod
-    def validate_backlink_targets(cls, values: object) -> tuple[str, ...]:
-        if not isinstance(values, list | tuple):
-            raise ValueError("backlink_targets must be a list")
-        typed_values = cast(Sequence[object], values)
-        normalized: list[str] = []
-        for value in typed_values:
-            if not isinstance(value, str):
-                raise ValueError("backlink_targets must contain strings")
-            stripped = value.strip()
-            normalized.append(
-                _normalize_https_url(stripped, "backlink_targets")
-                if "://" in stripped
-                else normalize_indexnow_host(stripped)
-            )
-        if len(set(normalized)) != len(normalized):
-            raise ValueError("backlink_targets must not contain duplicates")
-        return tuple(normalized)
-
     @model_validator(mode="after")
     def validate_provider_resources(self) -> ConfiguredAccount:
-        if self.provider == Provider.GOOGLE and (self.bing_sites or self.backlink_targets):
+        if self.provider == Provider.GOOGLE and self.bing_sites:
             raise ValueError("Google accounts cannot configure Bing sites")
         if self.provider == Provider.BING and (
             self.search_console_sites
             or self.pagespeed_sites
             or self.ga4_properties
             or self.dns_zones
-            or self.backlink_targets
         ):
             raise ValueError("Bing accounts cannot configure non-Bing resources")
         if self.provider == Provider.GOOGLE and self.dns_zones:
@@ -319,7 +282,6 @@ class ConfiguredAccount(BaseModel):
             or self.bing_sites
             or self.oauth_token_file is not None
             or self.pagespeed_api_key_file is not None
-            or self.backlink_targets
         ):
             raise ValueError("DNS provider accounts can configure only DNS zones")
         if self.provider not in DNS_OWNERSHIP_PROVIDERS and self.dns_zones:
@@ -330,19 +292,6 @@ class ConfiguredAccount(BaseModel):
             raise ValueError("only Google accounts can configure pagespeed_api_key_file")
         if self.provider != Provider.GOOGLE and self.pagespeed_sites:
             raise ValueError("only Google accounts can configure pagespeed_sites")
-        if self.provider in BACKLINK_PROVIDERS:
-            if (
-                self.search_console_sites
-                or self.pagespeed_sites
-                or self.ga4_properties
-                or self.bing_sites
-                or self.dns_zones
-                or self.oauth_token_file is not None
-                or self.pagespeed_api_key_file is not None
-            ):
-                raise ValueError("backlink provider accounts can configure only backlink targets")
-        elif self.backlink_targets:
-            raise ValueError("only backlink provider accounts can configure backlink_targets")
         zone_ids = tuple(zone.provider_zone_id for zone in self.dns_zones)
         zone_names = tuple(zone.name for zone in self.dns_zones)
         if len(set(zone_ids)) != len(zone_ids) or len(set(zone_names)) != len(zone_names):
@@ -436,7 +385,6 @@ class BoundaryDocument(BaseModel):
                 *((ResourceKind.GA4_PROPERTY, item) for item in account.ga4_properties),
                 *((ResourceKind.BING_SITE, item) for item in account.bing_sites),
                 *((ResourceKind.DNS_ZONE, item.provider_zone_id) for item in account.dns_zones),
-                *((ResourceKind.BACKLINK_TARGET, item) for item in account.backlink_targets),
             )
             for kind, resource in resources:
                 key = (account.provider, kind, resource)

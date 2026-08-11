@@ -43,8 +43,8 @@ Rankrat image -- /run/lighthouse/lighthouse.sock --> Lighthouse image
 ```
 
 The worker has no TCP listener. Rankrat reaches it through a shared Unix socket.
-The worker receives no Google, Bing, Cloudflare, backlink, IndexNow, OAuth, or
-Rankrat HTTP bearer mounts.
+The worker receives no Google, Bing, Cloudflare, IndexNow, OAuth, or Rankrat
+HTTP bearer mounts.
 
 Requests and reports are schema-validated on both sides. Rankrat checks the
 requested page before dispatch and checks Lighthouse's actual final document

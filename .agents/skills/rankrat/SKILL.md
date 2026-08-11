@@ -1,6 +1,6 @@
 ---
 name: rankrat
-description: Query Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare analytics, and configured backlink providers; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, backlinks, browser scores, performance history, or search traffic for sites they control.
+description: Query Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare analytics, and Bing backlink intelligence; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, backlinks, browser scores, performance history, or search traffic for sites they control.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
@@ -9,7 +9,7 @@ metadata:
     requires:
       bins: [docker]
 permissions:
-  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed/CrUX, Cloudflare, Ahrefs, Majestic, Moz, Semrush, DataForSEO, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
+  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed/CrUX, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
   shell: "docker run invocations for the published image, or bash execution of the bundled references/rankrat.sh wrapper; no other host access is required."
   filesystem: "reads provider-account config and credentials; writes the configured OAuth token store, persistent SQLite monitor state, locally initialized IndexNow key, and discovered resource inventory in the config file when writable."
 ---
@@ -36,7 +36,7 @@ For a human-readable operator manual organized by topic, use the public
 ## Security and safety
 
 Configured provider credentials are Rankrat's authority. A Google OAuth account,
-Bing key, Cloudflare token, or backlink credential can reach every supported
+Bing key or Cloudflare token can reach every supported
 resource that provider exposes to it. Resource arrays in the config are
 discovered inventory and URL-containment data, not a second permission system.
 Fixed provider origins, typed requests, public-URL validation, and child-URL
@@ -74,9 +74,7 @@ the bearer token if anything else can reach it.
   configured DNS adapter; Cloudflare is currently supported.
 - IndexNow change notifications for bounded URLs. This is a writable push
   protocol, not a reporting dashboard or an indexing guarantee.
-- Normalized and aggregated backlink evidence from bounded Bing, Ahrefs,
-  Majestic, Moz, Semrush, and DataForSEO targets. A call has one deadline and a
-  shared 20-request provider budget; duplicate aggregate sources are rejected.
+- Backlink intelligence from configured Bing Webmaster sites.
 - Internal-link graphs, same-site orphan-page joins, lexical link suggestions
   limited to pages sharing normalized title/path tokens, and ranked content
   opportunities joined across search, analytics, and crawl data.

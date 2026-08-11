@@ -13,14 +13,6 @@ from rankrat.operator.monitoring import MonitoringOperator
 from rankrat.operator.site_onboarding import SiteOnboardingOperator
 from rankrat.operator.site_ownership import SiteOwnershipOperator
 from rankrat.policy.boundaries import BoundaryPolicy
-from rankrat.providers.backlinks import (
-    AhrefsBacklinkClient,
-    BingBacklinkClient,
-    DataForSeoBacklinkClient,
-    MajesticBacklinkClient,
-    MozBacklinkClient,
-    SemrushBacklinkClient,
-)
 from rankrat.providers.bing import BingWebmasterClient
 from rankrat.providers.cloudflare import CloudflareDnsClient
 from rankrat.providers.cloudflare_performance import CloudflarePerformanceClient
@@ -45,7 +37,6 @@ from rankrat.providers.lighthouse import LighthouseWorkerClient
 from rankrat.providers.pagespeed import PageSpeedClient
 from rankrat.providers.schema_fetch import PublicSchemaFetcher
 from rankrat.providers.site_fetch import PublicSiteFetcher
-from rankrat.services.backlinks import BacklinkService
 from rankrat.services.bing import BingWebmasterService
 from rankrat.services.capabilities import CapabilityService
 from rankrat.services.cloudflare_performance import CloudflarePerformanceService
@@ -95,7 +86,6 @@ class ApplicationServices:
     internal_links: InternalLinkOperator
     crux: CruxHistoryService
     cloudflare_performance: CloudflarePerformanceService
-    backlinks: BacklinkService
     content_opportunities: ContentOpportunityOperator
     writes_enabled: bool = False
     indexnow: IndexNowService | None = None
@@ -136,17 +126,6 @@ def build_services(settings: Settings) -> ApplicationServices:
     pagespeed_client = PageSpeedClient(policy)
     crux_client = CruxHistoryClient(policy)
     cloudflare_performance_client = CloudflarePerformanceClient(policy)
-    commercial_backlink_clients = (
-        AhrefsBacklinkClient(policy),
-        MajesticBacklinkClient(policy),
-        MozBacklinkClient(policy),
-        SemrushBacklinkClient(policy),
-        DataForSeoBacklinkClient(policy),
-    )
-    backlink_clients = {
-        client.provider: client
-        for client in (BingBacklinkClient(bing_client), *commercial_backlink_clients)
-    }
     indexnow = None
     google_indexing = None
     google_sites = None
@@ -239,7 +218,6 @@ def build_services(settings: Settings) -> ApplicationServices:
         google_search_console,
         google_analytics,
     )
-    backlink_service = BacklinkService(backlink_clients)
     cloudflare_performance = CloudflarePerformanceService(cloudflare_performance_client)
     return ApplicationServices(
         capabilities=CapabilityService(settings, policy, __version__),
@@ -264,7 +242,6 @@ def build_services(settings: Settings) -> ApplicationServices:
                 google_client.provider: google_client,
                 bing_client.provider: bing_client,
                 cloudflare_client.provider: cloudflare_client,
-                **{client.provider: client for client in commercial_backlink_clients},
             },
         ),
         sites=SitesService(policy),
@@ -282,7 +259,6 @@ def build_services(settings: Settings) -> ApplicationServices:
         internal_links=internal_links,
         crux=CruxHistoryService(crux_client),
         cloudflare_performance=cloudflare_performance,
-        backlinks=backlink_service,
         content_opportunities=ContentOpportunityOperator(
             google_search_console,
             bing_webmaster,

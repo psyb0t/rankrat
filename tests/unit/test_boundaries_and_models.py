@@ -73,17 +73,27 @@ def test_dns_boundaries_use_provider_neutral_zone_fields(tmp_path: Path) -> None
         )
 
 
-def test_backlink_provider_credential_authorizes_account_wide_target_discovery(
-    tmp_path: Path,
-) -> None:
-    document = _document(
+@pytest.mark.parametrize(
+    "account",
+    [
         {
-            "id": "ahrefs-main",
+            "id": "commercial-main",
             "provider": "ahrefs",
-            "credential": str(tmp_path / "ahrefs-token"),
-        }
-    )
-    assert document.accounts[0].backlink_targets == ()
+            "credential": "/run/secrets/commercial/api-token",
+        },
+        {
+            "id": "google-main",
+            "provider": "google",
+            "credential": "/run/secrets/google/oauth-client.json",
+            "backlink_targets": [],
+        },
+    ],
+)
+def test_boundary_models_reject_removed_commercial_backlink_surface(
+    account: Mapping[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        _document(account)
 
 
 def test_boundary_models_normalize_sites_and_reject_invalid_shapes(tmp_path: Path) -> None:

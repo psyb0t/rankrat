@@ -95,7 +95,7 @@ Every account has:
 | Field | Meaning |
 | --- | --- |
 | `id` | Caller-facing stable local account ID |
-| `provider` | `google`, `bing`, `cloudflare`, `ahrefs`, `majestic`, `moz`, `semrush`, or `dataforseo` |
+| `provider` | `google`, `bing`, or `cloudflare` |
 | `credential` | Absolute mounted account-wide credential path |
 
 Provider fields:
@@ -109,13 +109,12 @@ Provider fields:
 | `ga4_properties` | Google | Discovered/cached numeric GA4 property IDs |
 | `sites` | Bing | Discovered/cached HTTPS site roots |
 | `dns_zones` | Cloudflare | Discovered/cached provider zone ID/name pairs |
-| `backlink_targets` | Commercial backlink providers | Known targets used for report defaults and containment |
 
 Fields from another provider are rejected. Cloudflare accounts contain only DNS
-zone inventory; backlink accounts contain only target inventory. These arrays
-do not narrow the configured credential's authority. Rankrat discovers or
-records resources as operations need them, while the provider remains the
-source of truth for what the credential may access.
+zone inventory. These arrays do not narrow the configured credential's
+authority. Rankrat discovers or records resources as operations need them,
+while the provider remains the source of truth for what the credential may
+access.
 
 ## URL containment
 

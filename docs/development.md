@@ -158,7 +158,7 @@ The REST contract is YAML-first:
 - [`src/rankrat/api/openapi.yaml`](../src/rankrat/api/openapi.yaml) — base
   provider/operation surface;
 - [`src/rankrat/api/seo-openapi.yaml`](../src/rankrat/api/seo-openapi.yaml) —
-  intelligence, monitoring, backlink, CrUX, and Cloudflare surface;
+  intelligence, monitoring, Bing backlink, CrUX, and Cloudflare surface;
 - [`openapi.json`](../openapi.json) — generated merged artifact.
 
 After editing either source:

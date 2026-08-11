@@ -2,6 +2,21 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.11.0 — 2026-08-10
+
+Keeps Rankrat's provider surface free to use and makes its public metadata and
+operator documentation precise about the remaining integrations.
+
+- **Breaking.** Removes the paid Ahrefs, Majestic, Moz, Semrush, and
+  DataForSEO adapters, their credentials, and the generic
+  `backlink_report`/`backlink_aggregate` REST and MCP operations. Use
+  `bing_backlink_intelligence` and `POST /v1/bing/backlink-intelligence` for
+  the remaining free backlink evidence.
+- Limits Cloudflare traffic/cache analytics queries to the Free-plan 24-hour
+  window.
+- Corrects the README, provider/security guides, OpenClaw metadata, MCP
+  registry metadata, and generated OpenAPI version for the free-only surface.
+
 ## v0.10.0 — 2026-08-10
 
 Makes each configured provider credential the authority for its full account,

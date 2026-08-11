@@ -31,46 +31,6 @@
           "name": "example.com"
         }
       ]
-    },
-    {
-      "id": "ahrefs",
-      "provider": "ahrefs",
-      "credential": "/run/secrets/ahrefs/api-token",
-      "backlink_targets": [
-        "https://example.com/"
-      ]
-    },
-    {
-      "id": "majestic",
-      "provider": "majestic",
-      "credential": "/run/secrets/majestic/api-key",
-      "backlink_targets": [
-        "https://example.com/"
-      ]
-    },
-    {
-      "id": "moz",
-      "provider": "moz",
-      "credential": "/run/secrets/moz/credentials",
-      "backlink_targets": [
-        "https://example.com/"
-      ]
-    },
-    {
-      "id": "semrush",
-      "provider": "semrush",
-      "credential": "/run/secrets/semrush/api-key",
-      "backlink_targets": [
-        "https://example.com/"
-      ]
-    },
-    {
-      "id": "dataforseo",
-      "provider": "dataforseo",
-      "credential": "/run/secrets/dataforseo/credentials",
-      "backlink_targets": [
-        "https://example.com/"
-      ]
     }
   ],
   "indexnow_targets": []

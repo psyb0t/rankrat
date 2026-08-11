@@ -1,5 +1,6 @@
 # Providers and credentials
 
+Rankrat ships only integrations that work without a paid provider subscription.
 Configure only providers you use. Store every secret in an owner-readable file
 under `secrets/`; never put credential values in `.env`, JSON examples,
 Compose, source, or chat. The boundary file contains container paths, account
@@ -12,7 +13,6 @@ IDs, and discovered resource inventory—not credential contents.
 - [PageSpeed and CrUX](#pagespeed-and-crux)
 - [Bing Webmaster Tools](#bing-webmaster-tools)
 - [Cloudflare](#cloudflare)
-- [Commercial backlink providers](#commercial-backlink-providers)
 - [IndexNow](#indexnow)
 - [HTTP bearer](#http-bearer)
 - [Live provider verification](#live-provider-verification)
@@ -26,11 +26,6 @@ IDs, and discovered resource inventory—not credential contents.
 | PageSpeed/CrUX key | `secrets/google/pagespeed-api-key` | API key only |
 | Bing Webmaster | `secrets/bing/api-key` | API key only |
 | Cloudflare | `secrets/cloudflare/api-token` | Scoped API token only |
-| Ahrefs | `secrets/ahrefs/api-token` | API token only |
-| Majestic | `secrets/majestic/api-key` | API key only |
-| Moz | `secrets/moz/credentials` | `ACCESS_ID:SECRET` |
-| Semrush | `secrets/semrush/api-key` | API key only |
-| DataForSEO | `secrets/dataforseo/credentials` | `LOGIN:PASSWORD` |
 | IndexNow | `secrets/indexnow/key` | IndexNow key only |
 | HTTP auth | `secrets/rankrat/http-bearer-token` | Random bearer only |
 
@@ -182,6 +177,11 @@ applies child-URL containment within the selected site.
 Cloudflare is currently the DNS ownership adapter and also supplies traffic,
 cache analytics, exact cache purges, and two finite cache templates.
 
+Rankrat's Cloudflare operations work on the Free plan: the analytics report is
+limited to the most recent 24-hour query window, exact URL purges are supported,
+and its two cache templates fit inside the Free plan's ten Cache Rules. Existing
+zone rules still count toward that Cloudflare limit.
+
 1. Open [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens).
 2. Choose **Create Token → Create Custom Token**.
 3. Add **Zone → Zone → Read** plus only the features you use:
@@ -215,41 +215,6 @@ Rankrat exposes provider-neutral ownership operations so future DNS adapters do
 not change callers. The current tool surface uses DNS for issued ownership
 proofs and separate Cloudflare tools for analytics/cache operations; it does
 not expose arbitrary record bodies or a whole-zone purge.
-
-## Commercial backlink providers
-
-Every adapter needs its own paid provider account. Rankrat does not substitute
-one provider for another.
-
-Credential consoles:
-
-- [Ahrefs API](https://app.ahrefs.com/api)
-- [Majestic API](https://majestic.com/account/api)
-- [Moz API](https://moz.com/products/api)
-- [Semrush API](https://www.semrush.com/api-use/)
-- [DataForSEO API](https://app.dataforseo.com/api-access)
-
-Example:
-
-```json
-{
-  "id": "ahrefs",
-  "provider": "ahrefs",
-  "credential": "/run/secrets/ahrefs/api-token",
-  "backlink_targets": []
-}
-```
-
-Use `ACCESS_ID:SECRET` for Moz and `LOGIN:PASSWORD` for DataForSEO. Ahrefs,
-Majestic, and Semrush files contain one token/key. Target lists are reusable
-inventory/report defaults rather than credential permissions. Readiness
-performs a one-result query when a target is available and may consume paid
-units.
-
-Backlink reports have one whole-operation deadline and a shared ceiling of 20
-provider requests. Aggregates reject duplicate identical sources, return typed
-source failures alongside successful evidence, and fail completely only when
-all sources fail.
 
 ## IndexNow
 

@@ -8,8 +8,6 @@ import mcp.types as types
 from pydantic import BaseModel
 
 from rankrat.constants import (
-    BACKLINK_AGGREGATE_OPERATION,
-    BACKLINK_REPORT_OPERATION,
     CLOUDFLARE_ANALYTICS_OPERATION,
     CLOUDFLARE_CACHE_PURGE_OPERATION,
     CLOUDFLARE_CACHE_TEMPLATE_OPERATION,
@@ -39,11 +37,6 @@ from rankrat.operator.monitoring import (
     MonitorListRequest,
     MonitorUpdateRequest,
 )
-from rankrat.services.backlinks import (
-    BacklinkAggregateRequest,
-    BacklinkAggregateSource,
-    BacklinkReadRequest,
-)
 from rankrat.services.cloudflare_performance import (
     CloudflareAnalyticsRequest,
     CloudflareCacheTemplateRequest,
@@ -52,8 +45,6 @@ from rankrat.services.cloudflare_performance import (
 from rankrat.services.crux import CruxHistoryRequest
 from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.seo_contracts import (
-    BacklinkAggregateInput,
-    BacklinkReadInput,
     CloudflareAnalyticsInput,
     CloudflareCacheTemplateInput,
     CloudflarePurgeInput,
@@ -80,8 +71,6 @@ _READ_TOOL_MODELS: dict[str, type[StrictInput]] = {
     INTERNAL_LINK_OPPORTUNITIES_OPERATION: InternalLinkInput,
     CRUX_HISTORY_OPERATION: CruxHistoryInput,
     CLOUDFLARE_ANALYTICS_OPERATION: CloudflareAnalyticsInput,
-    BACKLINK_REPORT_OPERATION: BacklinkReadInput,
-    BACKLINK_AGGREGATE_OPERATION: BacklinkAggregateInput,
     CONTENT_OPPORTUNITIES_OPERATION: ContentOpportunityInput,
     MONITORS_LIST_OPERATION: MonitorListInput,
     MONITOR_SNAPSHOTS_OPERATION: MonitorHistoryInput,
@@ -105,8 +94,6 @@ _TOOL_DESCRIPTIONS = {
     ),
     CRUX_HISTORY_OPERATION: "Read bounded Chrome UX Report history for one configured target.",
     CLOUDFLARE_ANALYTICS_OPERATION: "Read bounded Cloudflare traffic and cache aggregates.",
-    BACKLINK_REPORT_OPERATION: "Read normalized backlinks from one configured provider.",
-    BACKLINK_AGGREGATE_OPERATION: "Deduplicate normalized backlinks across configured providers.",
     CONTENT_OPPORTUNITIES_OPERATION: (
         "Join search, analytics, and crawl evidence into opportunities."
     ),
@@ -204,36 +191,6 @@ async def dispatch_seo_tool(
                 cloudflare_arguments.end,
                 cloudflare_arguments.limit,
                 cloudflare_arguments.timeout_seconds,
-            )
-        )
-    if name == BACKLINK_REPORT_OPERATION:
-        backlink_arguments = BacklinkReadInput.model_validate(raw_arguments)
-        return await services.backlinks.read(
-            BacklinkReadRequest(
-                backlink_arguments.account_id,
-                backlink_arguments.provider,
-                backlink_arguments.target,
-                backlink_arguments.site_url,
-                backlink_arguments.limit,
-                backlink_arguments.offset,
-                backlink_arguments.timeout_seconds,
-            )
-        )
-    if name == BACKLINK_AGGREGATE_OPERATION:
-        aggregate_arguments = BacklinkAggregateInput.model_validate(raw_arguments)
-        return await services.backlinks.aggregate(
-            BacklinkAggregateRequest(
-                tuple(
-                    BacklinkAggregateSource(
-                        source.account_id,
-                        source.provider,
-                        source.target,
-                        source.site_url,
-                    )
-                    for source in aggregate_arguments.sources
-                ),
-                aggregate_arguments.limit_per_source,
-                aggregate_arguments.timeout_seconds,
             )
         )
     if name == CONTENT_OPPORTUNITIES_OPERATION:

@@ -9,10 +9,6 @@ from fastapi import APIRouter, Query
 from pydantic import Field
 
 from rankrat.constants import (
-    BACKLINK_AGGREGATE_OPERATION,
-    BACKLINK_AGGREGATE_PATH,
-    BACKLINK_REPORT_OPERATION,
-    BACKLINK_REPORT_PATH,
     CLOUDFLARE_ANALYTICS_OPERATION,
     CLOUDFLARE_ANALYTICS_PATH,
     CLOUDFLARE_CACHE_PURGE_OPERATION,
@@ -74,19 +70,12 @@ from rankrat.operator.monitoring import (
     MonitorRunResult,
     MonitorUpdateRequest,
 )
-from rankrat.providers.backlinks import BacklinkResult
 from rankrat.providers.cloudflare_performance import (
     CloudflareAnalyticsReport,
     CloudflareCacheRuleReceipt,
     CloudflarePurgeReceipt,
 )
 from rankrat.providers.crux import CruxHistoryRecord
-from rankrat.services.backlinks import (
-    BacklinkAggregateReport,
-    BacklinkAggregateRequest,
-    BacklinkAggregateSource,
-    BacklinkReadRequest,
-)
 from rankrat.services.cloudflare_performance import (
     CloudflareAnalyticsRequest,
     CloudflareCacheTemplateRequest,
@@ -103,8 +92,6 @@ from rankrat.state.sqlite import (
 )
 from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.seo_contracts import (
-    BacklinkAggregateInput,
-    BacklinkReadInput,
     CloudflareAnalyticsInput,
     CloudflareCacheTemplateInput,
     CloudflarePurgeInput,
@@ -217,50 +204,6 @@ def build_seo_router(services: ApplicationServices) -> APIRouter:
                     body.start,
                     body.end,
                     body.limit,
-                    body.timeout_seconds,
-                )
-            )
-        )
-
-    @router.post(
-        BACKLINK_REPORT_PATH,
-        response_model=BacklinkResult,
-        operation_id=BACKLINK_REPORT_OPERATION,
-    )
-    async def backlink_report(body: BacklinkReadInput) -> JsonValue:
-        return to_json_value(
-            await services.backlinks.read(
-                BacklinkReadRequest(
-                    body.account_id,
-                    body.provider,
-                    body.target,
-                    body.site_url,
-                    body.limit,
-                    body.offset,
-                    body.timeout_seconds,
-                )
-            )
-        )
-
-    @router.post(
-        BACKLINK_AGGREGATE_PATH,
-        response_model=BacklinkAggregateReport,
-        operation_id=BACKLINK_AGGREGATE_OPERATION,
-    )
-    async def backlink_aggregate(body: BacklinkAggregateInput) -> JsonValue:
-        return to_json_value(
-            await services.backlinks.aggregate(
-                BacklinkAggregateRequest(
-                    tuple(
-                        BacklinkAggregateSource(
-                            source.account_id,
-                            source.provider,
-                            source.target,
-                            source.site_url,
-                        )
-                        for source in body.sources
-                    ),
-                    body.limit_per_source,
                     body.timeout_seconds,
                 )
             )

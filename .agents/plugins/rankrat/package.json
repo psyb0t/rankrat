@@ -2,7 +2,7 @@
   "name": "@psyb0t/rankrat",
   "version": "0.0.0",
   "mcpName": "io.github.psyb0t/rankrat",
-  "description": "OpenClaw static MCP definition and Docker stdio launcher for Rankrat SEO audits, monitoring, internal links, CrUX, ownership, analytics, backlinks, Cloudflare performance, remediation, PageSpeed, and optional Lighthouse tools.",
+  "description": "OpenClaw static MCP definition and Docker stdio launcher for Rankrat SEO audits, monitoring, internal links, CrUX, ownership, analytics, Bing backlink intelligence, Cloudflare performance, remediation, PageSpeed, and optional Lighthouse tools.",
   "type": "module",
   "bin": {
     "rankrat-mcp": "bin/cli.js"
