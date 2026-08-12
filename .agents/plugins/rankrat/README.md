@@ -60,12 +60,11 @@ For a Rankrat server you are already running, replace the plugin's static stdio
 definition with OpenClaw's native Streamable HTTP client. There is no proxy
 process and the bearer token never appears in a child-process argument.
 
-Start the shared Rankrat + Lighthouse server from the bundled skill or installed
-wrapper. The selected profile owns the generated/preserved Compose deployment:
+Start the shared Rankrat + Lighthouse server from the installed public launcher.
+The selected profile owns the generated/preserved Compose deployment:
 
 ```bash
-export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
-bash /absolute/path/to/rankrat.sh http -d
+rankrat --data-dir /absolute/path/to/rankrat-profile http -d
 ```
 
 ```bash

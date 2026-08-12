@@ -2,6 +2,24 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.12.0 — 2026-08-12
+
+Simplifies operator setup around one safe, reusable Rankrat profile and one
+public launcher.
+
+- **Breaking.** Replaces `rankrat.sh` with the executable `rankrat`. Replace
+  `bash rankrat.sh <mode>` with `rankrat <mode>`; a non-default profile is now
+  selected explicitly with `rankrat --data-dir /absolute/path <mode>`.
+- **Breaking.** Removes repository-local configuration initialization and the
+  profile `.env` file. `rankrat setup` now creates the owner-only default
+  profile at `$HOME/.config/rankrat`; checkout users can use
+  `RANKRAT_PROFILE=/absolute/path make <target>`.
+- Makes `make run`, `make auth-google`, and setup build only the Rankrat image;
+  the Lighthouse image is built only for the HTTP stack and explicit browser
+  audits.
+- Simplifies Google OAuth commands for the ordinary one-account case and keeps
+  IndexNow initialization inside the selected profile.
+
 ## v0.11.0 — 2026-08-10
 
 Keeps Rankrat's provider surface free to use and makes its public metadata and

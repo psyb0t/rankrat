@@ -75,6 +75,11 @@ cd rankrat
 make setup
 ```
 
+`make setup` uses `$HOME/.config/rankrat`. Set
+`RANKRAT_PROFILE=/absolute/path/to/rankrat-profile` only when this checkout
+must use a different existing profile; installed users use the clearer
+`rankrat --data-dir ...` form instead.
+
 Setup does not submit URLs or create site properties. It validates account
 access so a later agent session can do those jobs through the normal API/MCP
 tools. Exact provider details and the standalone-wrapper path are in
@@ -86,7 +91,7 @@ tools. Exact provider details and the standalone-wrapper path are in
 ```sh
 make run             # MCP over stdio
 make run-http        # Rankrat + Lighthouse over HTTP, attached to Compose
-rankrat.sh http -d   # same HTTP stack detached with automatic restarts
+rankrat http -d      # same HTTP stack detached with automatic restarts
 ```
 
 For HTTP, MCP is at `http://127.0.0.1:8080/mcp`; REST is under `/v1/`.
@@ -177,8 +182,9 @@ make lint
 make test
 ```
 
-Mocked tests need no provider credentials. Live tests are explicit and
-selector-driven. See [Development](docs/development.md).
+Mocked tests need no provider credentials. Live tests are explicit and derive
+their sole account plus a safe target from the selected profile. See
+[Development](docs/development.md).
 
 ## Project information
 

@@ -198,7 +198,7 @@ bounded provider call and returns typed state rather than raw responses.
 - [ ] HTTP is loopback/private, bearer-protected, and TLS-proxied if remote.
 - [ ] Provider secrets are never mounted into Lighthouse.
 - [ ] State and the boundary are backed up before onboarding.
-- [ ] `rankrat.sh setup` and intended provider live checks pass.
+- [ ] `rankrat setup` and intended provider live checks pass.
 - [ ] Production image, MCP, REST, and security regression tests pass for the
   release being deployed.
 - [ ] Dependency/image audits and secret scanning are green.

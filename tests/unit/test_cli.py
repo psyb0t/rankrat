@@ -117,7 +117,7 @@ def test_site_onboarding_requires_explicit_write_enablement(
     assert capsys.readouterr().err == "rankrat startup failed: invalid configuration\n"
 
 
-def test_oauth_commands_require_an_explicit_account_id(
+def test_oauth_commands_fail_without_a_configured_google_account(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
@@ -197,7 +197,7 @@ def test_auth_google_prints_an_authorization_url_only_when_requested(
     monkeypatch.setattr(
         sys,
         "argv",
-        ["rankrat", "auth-google", "--account-id", "google-main", "--print-authorization-url"],
+        ["rankrat", "auth-google", "--print-authorization-url"],
     )
     assert cli.main() == 0
     assert observed["enable_writes"] is True
@@ -233,7 +233,7 @@ def test_revoke_google_never_registers_a_transport_surface(
         revoked.extend((account, enable_writes))
 
     monkeypatch.setattr(cli, "revoke_google_oauth_account", revoke)
-    monkeypatch.setattr(sys, "argv", ["rankrat", "revoke-google", "--account-id", "google-main"])
+    monkeypatch.setattr(sys, "argv", ["rankrat", "revoke-google"])
     assert cli.main() == 0
     assert len(revoked) == 2
     assert revoked[1] is True

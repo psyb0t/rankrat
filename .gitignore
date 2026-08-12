@@ -5,6 +5,7 @@ CODEX.local.md
 .agent_notes/
 .agent_knowledge/
 .testing/
+.refactor/
 .secaudit/
 .anustimes/
 .brutal_reviews/

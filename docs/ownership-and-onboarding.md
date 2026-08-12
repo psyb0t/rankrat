@@ -71,7 +71,7 @@ When several are visible, pass the intended numeric ID as
 This terminal command requires writes and a safely writable config directory:
 
 ```sh
-RANKRAT_READ_ONLY=false rankrat.sh onboard-site \
+RANKRAT_READ_ONLY=false rankrat onboard-site \
   --site-url https://example.com/ \
   --display-name example \
   --time-zone Etc/UTC \

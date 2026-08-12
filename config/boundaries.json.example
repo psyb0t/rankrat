@@ -1,37 +1,4 @@
 {
-  "accounts": [
-    {
-      "id": "google",
-      "provider": "google",
-      "credential": "/run/secrets/google/oauth-client.json",
-      "oauth_token_file": "/run/oauth/google.json",
-      "pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key",
-      "search_console_sites": [
-        "sc-domain:example.com"
-      ],
-      "pagespeed_sites": [
-        "https://example.com/"
-      ]
-    },
-    {
-      "id": "bing",
-      "provider": "bing",
-      "credential": "/run/secrets/bing/api-key",
-      "sites": [
-        "https://example.com/"
-      ]
-    },
-    {
-      "id": "cloudflare",
-      "provider": "cloudflare",
-      "credential": "/run/secrets/cloudflare/api-token",
-      "dns_zones": [
-        {
-          "provider_zone_id": "00000000000000000000000000000000",
-          "name": "example.com"
-        }
-      ]
-    }
-  ],
+  "accounts": [],
   "indexnow_targets": []
 }

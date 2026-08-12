@@ -343,9 +343,6 @@ class BoundaryDocument(BaseModel):
 
     @model_validator(mode="after")
     def validate_unique_accounts_and_resources(self) -> BoundaryDocument:
-        if not self.accounts and not self.indexnow_targets:
-            raise ValueError("at least one account or IndexNow target is required")
-
         account_ids = tuple(account.id for account in self.accounts)
         if len(set(account_ids)) != len(account_ids):
             raise ValueError("account IDs must be unique")

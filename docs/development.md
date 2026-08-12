@@ -127,8 +127,8 @@ not replace their cleanup with blanket Docker removal/pruning.
 
 ## Live provider tests
 
-Live tests are opt-in and use `.env` selectors plus the local boundary/secrets/
-OAuth mounts:
+Live tests are opt-in and derive their account/resource inputs from the selected
+Rankrat profile. They never need a `.env` selector matrix:
 
 ```sh
 make test-live
@@ -148,8 +148,10 @@ RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true \
 make test-live-indexnow
 ```
 
-Leave selectors for unused providers blank. Mocked tests never need live
-credentials. See [Providers and credentials](providers.md#live-provider-verification).
+Unused providers skip cleanly. Use
+`RANKRAT_PROFILE=/absolute/profile make test-live-<provider>` when the default
+profile is not the intended one. Mocked tests never need live credentials. See
+[Providers and credentials](providers.md#live-provider-verification).
 
 ## Spec-first REST development
 
@@ -222,9 +224,11 @@ make run        # locally built stdio MCP
 make run-http   # Compose Rankrat + Lighthouse on loopback HTTP
 ```
 
-These targets call the same `rankrat.sh` wrapper used by published-image users.
-Configuration and credentials remain local/gitignored. `make run-http` stays
-attached; use `rankrat.sh http -d` with the same profile for a detached
+These targets call the same `rankrat` launcher used by published-image users.
+They default to `$HOME/.config/rankrat`; override that only with
+`RANKRAT_PROFILE=/absolute/profile`. Configuration and credentials remain
+local/gitignored. `make run-http` stays attached; use `rankrat http -d` with
+the same profile for a detached
 restartable deployment.
 
 ## CI and release surface

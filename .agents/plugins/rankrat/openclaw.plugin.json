@@ -13,7 +13,7 @@
   "environment": {
     "RANKRAT_DATA_DIR": {
       "required": false,
-      "description": "Absolute shared profile directory containing config, secrets, OAuth records, state, and .env. Defaults to $HOME/.config/rankrat."
+      "description": "Absolute shared profile directory containing config, secrets, OAuth records, and state. Defaults to $HOME/.config/rankrat."
     },
     "RANKRAT_IMAGE": {
       "required": false,

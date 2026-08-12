@@ -33,17 +33,13 @@ def test_indexnow_make_targets_use_the_pinned_project_python_runtime() -> None:
 
 def test_indexnow_initializer_script_is_idempotent_and_never_submits(tmp_path: Path) -> None:
     boundary_file = tmp_path / "boundaries.json"
-    environment_file = tmp_path / ".env"
     key_file = tmp_path / "secrets" / "indexnow" / "key"
     boundary_file.write_text(json.dumps({"accounts": []}), encoding="utf-8")
-    environment_file.write_text("RANKRAT_READ_ONLY=true\n", encoding="utf-8")
     command = [
         sys.executable,
         str(_SCRIPT),
         "--boundary-file",
         str(boundary_file),
-        "--environment-file",
-        str(environment_file),
         "--key-file",
         str(key_file),
         "--target-id",

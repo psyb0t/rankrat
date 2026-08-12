@@ -30,8 +30,6 @@ _KEY_LOCATION_TEMPLATE: Final = "https://{host}/{key}.txt"
 _HTTP_OK_STATUS: Final = 200
 _PUBLIC_KEY_TIMEOUT_SECONDS: Final = 10.0
 _MAX_PUBLIC_KEY_RESPONSE_BYTES: Final = 130
-_LIVE_TARGET_ID_ENVIRONMENT_VARIABLE: Final = "RANKRAT_LIVE_INDEXNOW_TARGET_ID"
-_LIVE_TARGET_URL_ENVIRONMENT_VARIABLE: Final = "RANKRAT_LIVE_INDEXNOW_URL"
 
 
 class IndexNowInitializationError(ValueError):
@@ -59,22 +57,15 @@ class IndexNowPublicKeyVerificationResult:
 
 def initialize_indexnow(
     boundary_file: Path,
-    environment_file: Path,
     key_file: Path,
     *,
     target_id: str = _DEFAULT_TARGET_ID,
     host: str = _DEFAULT_HOST,
 ) -> IndexNowInitializationResult:
-    """Create or retain one key and exact target while preserving write opt-outs."""
+    """Create or retain one key and exact target without modifying runtime settings."""
     boundary_document = _read_boundary_document(boundary_file)
-    environment_lines = _read_environment_lines(environment_file)
     normalized_target_id, normalized_host = _normalize_target_inputs(target_id, host)
     _validated_target_entries(boundary_document)
-    configured_environment = _configure_environment(
-        environment_lines,
-        normalized_target_id,
-        normalized_host,
-    )
     key, created_key = _load_or_create_key(key_file)
     configured_target = _configure_target(
         boundary_document,
@@ -83,7 +74,6 @@ def initialize_indexnow(
         normalized_host,
     )
     _write_atomically(boundary_file, _serialize_json(boundary_document), 0o600)
-    _write_atomically(environment_file, configured_environment, 0o600)
     return IndexNowInitializationResult(created_key, configured_target)
 
 
@@ -182,24 +172,6 @@ def _read_boundary_document(path: Path) -> dict[str, object]:
     if not isinstance(targets, list):
         raise IndexNowInitializationError("IndexNow targets must be a JSON list")
     return document
-
-
-def _read_environment_lines(path: Path) -> list[str]:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        raise IndexNowInitializationError("environment file is unavailable") from error
-    if "\x00" in text:
-        raise IndexNowInitializationError("environment file contains a null byte")
-    lines = text.splitlines()
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        name, separator, _ = line.partition("=")
-        if not separator or not name or name.strip() != name:
-            raise IndexNowInitializationError("environment file contains an invalid assignment")
-    return lines
 
 
 def _load_or_create_key(path: Path) -> tuple[str, bool]:
@@ -322,32 +294,6 @@ def _validated_target_entries(document: dict[str, object]) -> list[object]:
         if not isinstance(raw_target, Mapping):
             raise IndexNowInitializationError("IndexNow target must be a JSON object")
     return targets
-
-
-def _configure_environment(lines: list[str], target_id: str, host: str) -> str:
-    desired_values = {
-        _LIVE_TARGET_ID_ENVIRONMENT_VARIABLE: target_id,
-        _LIVE_TARGET_URL_ENVIRONMENT_VARIABLE: f"https://{host}/",
-    }
-    output = list(lines)
-    configured_names: set[str] = set()
-    for index, line in enumerate(lines):
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        name, _, value = line.partition("=")
-        if name not in desired_values:
-            continue
-        configured_names.add(name)
-        expected_value = desired_values[name]
-        if value and value != expected_value:
-            raise IndexNowInitializationError(
-                "existing IndexNow environment target conflicts with the requested target"
-            )
-        output[index] = f"{name}={expected_value}"
-    for name, value in desired_values.items():
-        if name not in configured_names:
-            output.append(f"{name}={value}")
-    return "\n".join(output) + "\n"
 
 
 def _serialize_json(document: dict[str, object]) -> str:

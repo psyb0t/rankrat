@@ -80,7 +80,7 @@ _ONBOARDING_GUIDE_POINTER = (
 _SETUP_READY_MESSAGE = (
     "SETUP READY: configured provider checks passed. Confirm each configured GA4 web stream's "
     "G- Measurement ID is deployed in its site's public <head>, then run make test-live for "
-    "extended checks."
+    "optional extended checks."
 )
 
 
@@ -150,15 +150,15 @@ def main() -> int:
 
 
 def _run_google_oauth_operator(arguments: argparse.Namespace, settings: Settings) -> int:
-    account_id = arguments.account_id
-    if not isinstance(account_id, str) or not account_id:
-        raise ConfigurationError("Google OAuth commands require --account-id")
     policy = BoundaryPolicy.from_file(
         settings.boundary_file,
         settings.secret_root,
         settings.oauth_token_root,
     )
-    account = policy.resolve_account(account_id, Provider.GOOGLE)
+    account = policy.select_account(
+        Provider.GOOGLE,
+        arguments.account_id if isinstance(arguments.account_id, str) else None,
+    )
     if account.oauth_token_file is None:
         raise ConfigurationError("configured Google account has no OAuth token path")
     if arguments.mode == "auth-google":
@@ -317,15 +317,15 @@ def _run_setup_operator(arguments: argparse.Namespace, settings: Settings) -> in
         )
         missing_tokens = ()
     if missing_tokens:
-        account_ids = ", ".join(
+        account_ids = tuple(
             account.id
             for account in policy.accounts()
             if account.oauth_token_file in missing_tokens
         )
-        sys.stdout.write(
-            "SETUP BLOCKED: authorize Google with "
-            f"make auth-google OAUTH_ACCOUNT_ID=<one of: {account_ids}>\n"
-        )
+        command = "rankrat auth-google"
+        if len(account_ids) != 1:
+            command += f" --account-id <one of: {', '.join(account_ids)}>"
+        sys.stdout.write(f"SETUP BLOCKED: authorize Google with {command}\n")
         return 2
     services = build_services(settings)
 

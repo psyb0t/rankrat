@@ -31,18 +31,12 @@ def _document(account: Mapping[str, object]) -> BoundaryDocument:
     return BoundaryDocument.model_validate({"accounts": [dict(account)]})
 
 
-def test_shipped_boundary_example_configures_google_oauth() -> None:
+def test_shipped_boundary_example_is_a_valid_empty_profile_registry() -> None:
     example_path = Path(__file__).parents[2] / "config" / "boundaries.json.example"
     document = BoundaryDocument.model_validate(json.loads(example_path.read_text(encoding="utf-8")))
-    google_account = next(account for account in document.accounts if account.id == "google")
-    bing_account = next(account for account in document.accounts if account.id == "bing")
 
-    assert google_account.credential == Path("/run/secrets/google/oauth-client.json")
-    assert google_account.oauth_token_file == Path("/run/oauth/google.json")
-    assert google_account.pagespeed_api_key_file == Path("/run/secrets/google/pagespeed-api-key")
-    assert google_account.search_console_sites == ("sc-domain:example.com",)
-    assert google_account.pagespeed_sites == ("https://example.com/",)
-    assert bing_account.credential == Path("/run/secrets/bing/api-key")
+    assert document.accounts == ()
+    assert document.indexnow_targets == ()
 
 
 def test_dns_boundaries_use_provider_neutral_zone_fields(tmp_path: Path) -> None:
@@ -466,12 +460,12 @@ def test_indexnow_boundaries_normalize_and_fail_closed(tmp_path: Path) -> None:
     assert document.indexnow_targets[0].host == "example.com"
     assert document.indexnow_targets[0].key_location == "https://example.com/keys/indexnow-key.txt"
     policy = BoundaryPolicy(document)
+    assert policy.indexnow_targets() == document.indexnow_targets
     assert policy.resolve_indexnow_target("site-main").id == "site-main"
     with pytest.raises(BoundaryDeniedError):
         policy.resolve_indexnow_target("missing")
 
     invalid_documents: tuple[Mapping[str, object], ...] = (
-        {},
         {
             "indexnow_targets": [
                 {

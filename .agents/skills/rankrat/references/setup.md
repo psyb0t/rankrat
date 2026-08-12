@@ -50,19 +50,14 @@ supported settings fail startup instead of being silently accepted.
 `make run-http` always supplies a bearer-secret file, including for loopback
 use; a custom loopback launch may deliberately omit it.
 
-`RANKRAT_DATA_DIR` is different: it is consumed by the host wrapper/launcher,
-not by the Python process. Set it to one absolute profile directory containing
-`config/boundaries.json`, `secrets/`, `oauth/`, `state/`, and `.env`. HTTP also
-uses `docker-compose.yml` there, generating the reviewed default when missing.
-With no override, the wrapper and OpenClaw launcher use
-`$HOME/.config/rankrat`. They derive every host mount from that one root and
-never mount the root wholesale.
-
-The `RANKRAT_LIVE_*` variables select deeper provider-specific live suites that
-`make setup` runs after the image's setup check. They are blank in
-`.env.example`: set them only for providers you configured and leave unused
-provider selectors blank so those extra live suites skip. The image's `setup`
-command itself checks every account represented in the boundary file.
+`RANKRAT_DATA_DIR` is an optional compatibility environment override consumed
+by host launchers, not by the Python process. Prefer the explicit
+`rankrat --data-dir /absolute/profile ...` form when choosing a non-default
+profile. The profile contains `config/boundaries.json`, `secrets/`, `oauth/`,
+`state/`, and, for HTTP, an operator-owned `docker-compose.yml`. `rankrat setup`
+creates every required path and secret safely; do not create a profile tree or
+copy an example file by hand. With no override, launchers use
+`$HOME/.config/rankrat` and never mount the root wholesale.
 
 ## The boundary file
 
@@ -124,10 +119,9 @@ command prints the consent URL, waits for the loopback callback, and stores the
 full Rankrat grant under `oauth/`. PageSpeed's separate API key is prompted at
 the same time because that API does not use OAuth.
 
-After storage, setup runs account readiness, provider-specific live checks for
-configured selectors, and the shipped authenticated HTTP/MCP image smoke. It
-does not create site properties, submit sitemaps/URLs, or send IndexNow
-notifications. Secret values are never printed or written into `.env`.
+After storage, setup runs account readiness. It does not create site properties,
+submit sitemaps/URLs, or send IndexNow notifications. Secret values are never
+printed or written into `.env`.
 
 ## Provider credentials
 
@@ -168,24 +162,21 @@ APIs over HTTPS and are not sent anywhere else.
 
 ## Running it
 
-An agent runs the published image directly. The boundary file, the credentials
-and the Google authorization are created by a human beforehand. This skill
-includes [`rankrat.sh`](rankrat.sh), a byte-identical copy of the repository
-wrapper around these same invocations. Run it from its installed skill path with
-`bash references/rankrat.sh` when the wrapper is more convenient than the plain
-Docker commands below; no system-wide installation is required:
+An agent runs the published image directly. A human creates the profile,
+credentials, and Google authorization with `rankrat setup` beforehand. The
+single public launcher is named `rankrat`; it is not duplicated into agent
+skills, so the shipped code cannot drift from what operators install:
 
 ```bash
-export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
-bash references/rankrat.sh stdio
-bash references/rankrat.sh http       # attached Rankrat + Lighthouse
-bash references/rankrat.sh http -d    # detached, restart unless stopped
+rankrat --data-dir /absolute/path/to/rankrat-profile stdio
+rankrat --data-dir /absolute/path/to/rankrat-profile http       # attached Rankrat + Lighthouse
+rankrat --data-dir /absolute/path/to/rankrat-profile http -d    # detached, restart unless stopped
 ```
 
 HTTP treats the profile as its Compose project directory. It atomically creates
 the embedded reviewed `docker-compose.yml` when absent, preserves an existing
 safe regular file, rejects symlinked/non-regular paths, and exports the chosen
-image, port, UID/GID, and read-only values ahead of profile `.env`. The project
+image, port, UID/GID, and read-only values from its environment. The project
 directory and Compose file must be owned by the current UID and not group/world
 writable. Only the four fixed children below are mounted into containers.
 
@@ -242,7 +233,7 @@ loopback. MCP is then at `http://127.0.0.1:8080/mcp`; send
 The commands above use the writable default. Before mounting config writable,
 verify that the resolved directory is owner-only, `boundaries.json` is not a
 symlink, both are owned by the current UID, and the file is not group- or
-world-writable. The bundled `rankrat.sh` performs those checks. The OpenClaw
+world-writable. The public `rankrat` launcher performs those checks. The OpenClaw
 launcher additionally rejects symlinked path components. For a read-only
 caller, set `RANKRAT_READ_ONLY=true` and make only `/run/config` read-only.
 Never make the provider-secret mount writable during normal service operation.

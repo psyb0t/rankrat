@@ -9,14 +9,12 @@ from pathlib import Path
 from rankrat.operator.indexnow import IndexNowInitializationError, initialize_indexnow
 
 _DEFAULT_BOUNDARY_FILE = Path("config/boundaries.json")
-_DEFAULT_ENVIRONMENT_FILE = Path(".env")
 _DEFAULT_KEY_FILE = Path("secrets/indexnow/key")
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="init_indexnow")
     parser.add_argument("--boundary-file", type=Path, default=_DEFAULT_BOUNDARY_FILE)
-    parser.add_argument("--environment-file", type=Path, default=_DEFAULT_ENVIRONMENT_FILE)
     parser.add_argument("--key-file", type=Path, default=_DEFAULT_KEY_FILE)
     parser.add_argument("--target-id", required=True)
     parser.add_argument("--host", required=True)
@@ -29,7 +27,6 @@ def main() -> int:
     try:
         result = initialize_indexnow(
             arguments.boundary_file,
-            arguments.environment_file,
             arguments.key_file,
             target_id=arguments.target_id,
             host=arguments.host,

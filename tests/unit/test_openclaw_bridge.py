@@ -373,11 +373,13 @@ def test_agent_setup_documents_every_runtime_environment_setting() -> None:
         assert f"`{environment_name}`" in setup
 
 
-def test_skill_bundles_the_canonical_rankrat_wrapper_without_drift() -> None:
-    canonical_wrapper = Path("rankrat.sh").read_bytes()
-    bundled_wrapper = Path(".agents/skills/rankrat/references/rankrat.sh").read_bytes()
+def test_skill_points_to_the_single_public_rankrat_launcher() -> None:
+    skill = Path(".agents/skills/rankrat/SKILL.md").read_text(encoding="utf-8")
+    setup = Path(".agents/skills/rankrat/references/setup.md").read_text(encoding="utf-8")
 
-    assert bundled_wrapper == canonical_wrapper
+    assert Path("rankrat").is_file()
+    assert "rankrat.sh" not in skill
+    assert "rankrat.sh" not in setup
 
 
 def _run_bridge(environment: dict[str, str]) -> subprocess.CompletedProcess[str]:

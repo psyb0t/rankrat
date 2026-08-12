@@ -1,24 +1,22 @@
 #!/bin/bash
-# rankrat.sh -- host wrapper around the published Rankrat images.
+# rankrat -- host wrapper around the published Rankrat images.
 #
 # Stdio and operator commands use hardened `docker run` invocations. HTTP uses a
-# persistent Docker Compose project rooted in RANKRAT_DATA_DIR so Rankrat and its
+# persistent Docker Compose project rooted in one profile directory so Rankrat and its
 # Lighthouse companion share one restart policy and one operator-owned profile.
 #
-# The first argument is the image's own mode -- stdio (default), http, setup,
-# auth-google, revoke-google, onboard-site. Non-HTTP arguments are forwarded to
-# the image untouched. This script owns host-side mounts, ports and hardening.
+# The first non-option argument is the image's own mode -- stdio (default),
+# http, setup, auth-google, revoke-google, onboard-site. Non-HTTP arguments
+# are forwarded to the image untouched. This script owns host-side mounts,
+# profile bootstrap, ports, and hardening.
 #
 # Host-side settings, read here and never forwarded into the container:
 #
 #   RANKRAT_IMAGE                 image reference          psyb0t/rankrat:latest
 #   RANKRAT_LIGHTHOUSE_IMAGE      companion image          psyb0t/rankrat-lighthouse:latest
-#   RANKRAT_DATA_DIR              persistent profile       $HOME/.config/rankrat
+#   RANKRAT_DATA_DIR              optional profile override $HOME/.config/rankrat
 #   RANKRAT_HTTP_PORT             published loopback port  8080
 #   RANKRAT_OAUTH_CALLBACK_PORT   published OAuth port     49152
-#
-# HTTP Compose reads the profile's `.env`, but explicit host values exported by
-# this wrapper take precedence. Setup passes `.env` to the Rankrat container.
 #
 # RANKRAT_READ_ONLY is the server's own setting, read here as well because it
 # decides which tools are visible and how the account file has to be mounted.
@@ -39,7 +37,6 @@ readonly BOUNDARY_FILE_RELATIVE_PATH="config/boundaries.json"
 readonly SECRETS_DIRECTORY_RELATIVE_PATH="secrets"
 readonly OAUTH_DIRECTORY_RELATIVE_PATH="oauth"
 readonly STATE_DIRECTORY_RELATIVE_PATH="state"
-readonly ENVIRONMENT_FILE_RELATIVE_PATH=".env"
 readonly COMPOSE_FILE_RELATIVE_PATH="docker-compose.yml"
 
 readonly CONTAINER_CONFIG_DIRECTORY="/run/config"
@@ -74,7 +71,7 @@ fail() {
 
 usage() {
 	cat <<'EOF' >&2
-usage: rankrat.sh [mode] [arguments...]
+usage: rankrat [--data-dir DIRECTORY] [mode] [arguments...]
 
 modes:
   stdio           MCP over stdio (default)
@@ -85,36 +82,58 @@ modes:
   revoke-google   revoke one Google OAuth account
   onboard-site    create and record resources for one new site
 
+options:
+  --data-dir DIRECTORY  persistent Rankrat profile (defaults to ~/.config/rankrat)
+
 host settings (environment):
-  RANKRAT_IMAGE RANKRAT_LIGHTHOUSE_IMAGE RANKRAT_DATA_DIR RANKRAT_HTTP_PORT
+  RANKRAT_IMAGE RANKRAT_LIGHTHOUSE_IMAGE RANKRAT_HTTP_PORT
   RANKRAT_OAUTH_CALLBACK_PORT RANKRAT_READ_ONLY
 
+`rankrat setup` creates a new profile safely before prompting for credentials.
+Use --data-dir only to keep a separate profile for another account or workspace.
 The README documents direct stdio Docker and Compose HTTP invocations.
 EOF
 }
 
 data_directory() {
-	local directory="${RANKRAT_DATA_DIR:-}"
+	local directory="${profile_directory_override:-${RANKRAT_DATA_DIR:-}}"
+	local parent_directory
 	if [[ -z "$directory" ]]; then
-		[[ -n "${HOME:-}" ]] || fail "RANKRAT_DATA_DIR is required when HOME is unset"
+		[[ -n "${HOME:-}" ]] || fail "Rankrat profile directory is required when HOME is unset; pass --data-dir"
 		directory="$HOME/$DEFAULT_DATA_DIRECTORY_SUFFIX"
 	fi
 
-	[[ "$directory" == /* ]] || fail "RANKRAT_DATA_DIR must be an absolute path"
+	[[ "$directory" == /* ]] || fail "Rankrat profile directory must be an absolute path"
 	case "$directory" in
 	*','* | *$'\r'* | *$'\n'*)
-		fail "RANKRAT_DATA_DIR contains a forbidden mount delimiter or line break"
+		fail "Rankrat profile directory contains a forbidden mount delimiter or line break"
 		;;
 	esac
 
 	while [[ "$directory" != "/" && "$directory" == */ ]]; do
 		directory="${directory%/}"
 	done
-	[[ "$directory" != "/" ]] || fail "RANKRAT_DATA_DIR must not be the filesystem root"
-	[[ ! -L "$directory" && -d "$directory" ]] ||
-		fail "RANKRAT_DATA_DIR must be a real directory"
-	[[ "$(realpath -- "$directory")" == "$directory" ]] ||
-		fail "RANKRAT_DATA_DIR must be canonical and contain no symbolic links"
+	[[ "$directory" != "/" ]] || fail "Rankrat profile directory must not be the filesystem root"
+	if [[ -e "$directory" || -L "$directory" ]]; then
+		[[ ! -L "$directory" && -d "$directory" ]] ||
+			fail "Rankrat profile directory must be a real directory"
+		[[ "$(realpath -- "$directory")" == "$directory" ]] ||
+			fail "Rankrat profile directory must be canonical and contain no symbolic links"
+	else
+		parent_directory="$(dirname -- "$directory")"
+		if [[ ! -d "$parent_directory" ]]; then
+			[[ "$directory" == "${HOME:-}/$DEFAULT_DATA_DIRECTORY_SUFFIX" ]] ||
+				fail "the --data-dir parent must be a real directory"
+			[[ ! -L "$HOME" && -d "$HOME" && "$(realpath -- "$HOME")" == "$HOME" ]] ||
+				fail "HOME must be a canonical real directory"
+			printf '%s' "$directory"
+			return
+		fi
+		[[ ! -L "$parent_directory" && -d "$parent_directory" ]] ||
+			fail "the --data-dir parent must be a real directory"
+		[[ "$(realpath -- "$parent_directory")" == "$parent_directory" ]] ||
+			fail "the Rankrat profile parent must be canonical and contain no symbolic links"
+	fi
 	printf '%s' "$directory"
 }
 
@@ -171,6 +190,81 @@ require_owner_only_directory() {
 		fail "$description must not contain symbolic links"
 }
 
+ensure_owner_only_directory() {
+	local directory="$1" description="$2" host_user_id
+	host_user_id="$(id -u)"
+	if [[ -e "$directory" || -L "$directory" ]]; then
+		require_real_directory "$directory" "$description"
+	else
+		umask 077
+		mkdir --mode=700 -- "$directory" || fail "could not create $description"
+	fi
+	[[ "$(stat -c '%u' "$directory")" -eq "$host_user_id" ]] ||
+		fail "$description must be owned by UID $host_user_id"
+	chmod 700 -- "$directory" || fail "could not restrict $description permissions"
+	require_owner_only_directory "$directory" "$description"
+}
+
+write_initial_boundary() {
+	printf '%s\n' '{' '  "accounts": [],' '  "indexnow_targets": []' '}'
+}
+
+write_initial_http_bearer() {
+	head -c 32 /dev/urandom | base64 -w 0
+	printf '\n'
+}
+
+create_owner_only_file_if_missing() {
+	local file="$1" description="$2" writer="$3" parent temporary_file host_user_id
+	parent="$(dirname -- "$file")"
+	host_user_id="$(id -u)"
+	if [[ -e "$file" || -L "$file" ]]; then
+		require_real_file "$file" "$description"
+		[[ "$(stat -c '%u' "$file")" -eq "$host_user_id" ]] ||
+			fail "$description must be owned by UID $host_user_id"
+		chmod 600 -- "$file" || fail "could not restrict $description permissions"
+		return
+	fi
+
+	umask 077
+	temporary_file="$(mktemp "$parent/.rankrat-profile.XXXXXX")"
+	if ! "$writer" >"$temporary_file"; then
+		rm -f -- "$temporary_file"
+		fail "could not initialize $description"
+	fi
+	chmod 600 -- "$temporary_file"
+	if ! ln -- "$temporary_file" "$file"; then
+		rm -f -- "$temporary_file"
+		fail "$description appeared while the profile was being initialized"
+	fi
+	rm -f -- "$temporary_file"
+	require_real_file "$file" "$description"
+}
+
+bootstrap_profile() {
+	local directory="$1" parent_directory boundary_file bearer_file relative_path
+	parent_directory="$(dirname -- "$directory")"
+	if [[ ! -e "$parent_directory" && ! -L "$parent_directory" ]]; then
+		umask 077
+		mkdir --mode=700 -- "$parent_directory" || fail "could not create Rankrat profile parent"
+	fi
+	require_real_directory "$parent_directory" "Rankrat profile parent"
+	if [[ ! -e "$directory" && ! -L "$directory" ]]; then
+		umask 077
+		mkdir --mode=700 -- "$directory" || fail "could not create RANKRAT_DATA_DIR"
+	fi
+	ensure_owner_only_directory "$directory" "RANKRAT_DATA_DIR"
+	for relative_path in config secrets secrets/google secrets/bing secrets/cloudflare \
+		secrets/indexnow secrets/rankrat oauth state; do
+		ensure_owner_only_directory "$directory/$relative_path" "Rankrat $relative_path directory"
+	done
+	boundary_file="$directory/$BOUNDARY_FILE_RELATIVE_PATH"
+	bearer_file="$directory/$SECRETS_DIRECTORY_RELATIVE_PATH/$HOST_HTTP_BEARER_SECRET_RELATIVE_PATH"
+	create_owner_only_file_if_missing "$boundary_file" "Rankrat boundary file" write_initial_boundary
+	create_owner_only_file_if_missing "$bearer_file" "Rankrat HTTP bearer secret" write_initial_http_bearer
+	log INFO "initialized Rankrat profile directory=$directory"
+}
+
 require_compose_project_directory_is_safe() {
 	local directory="$1" host_user_id
 	host_user_id="$(id -u)"
@@ -218,9 +312,6 @@ services:
   rankrat:
     image: ${RANKRAT_IMAGE:-psyb0t/rankrat:latest}
     command: ["http"]
-    env_file:
-      - path: ${RANKRAT_DATA_DIR:-.}/.env
-        required: false
     environment:
       RANKRAT_BOUNDARY_FILE: /run/config/boundaries.json
       RANKRAT_SECRET_ROOT: /run/secrets
@@ -238,7 +329,7 @@ services:
     ports:
       - "127.0.0.1:${RANKRAT_HTTP_PORT:-8080}:8080"
     volumes:
-      # One profile shared with rankrat.sh and every MCP client. Mount the
+      # One profile shared with rankrat and every MCP client. Mount the
       # directory, not only boundaries.json, so writable discovery/onboarding
       # can atomically update inventory without depending on image ownership.
       - type: bind
@@ -387,6 +478,23 @@ run_http_compose() {
 	exec docker "${compose_arguments[@]}"
 }
 
+profile_directory_override=""
+while [[ "$#" -gt 0 ]]; do
+	case "$1" in
+	--data-dir)
+		[[ "$#" -ge 2 ]] || fail "--data-dir requires an absolute directory"
+		profile_directory_override="$2"
+		shift 2
+		;;
+	--data-dir=*)
+		profile_directory_override="${1#--data-dir=}"
+		[[ -n "$profile_directory_override" ]] || fail "--data-dir requires an absolute directory"
+		shift
+		;;
+	*) break ;;
+	esac
+done
+
 mode="stdio"
 if [[ "$#" -gt 0 ]]; then
 	mode="$1"
@@ -423,11 +531,13 @@ fi
 image="${RANKRAT_IMAGE:-$DEFAULT_IMAGE}"
 lighthouse_image="${RANKRAT_LIGHTHOUSE_IMAGE:-$DEFAULT_LIGHTHOUSE_IMAGE}"
 profile_directory="$(data_directory)"
+if [[ "$mode" == "setup" ]]; then
+	bootstrap_profile "$profile_directory"
+fi
 boundary_file="$profile_directory/$BOUNDARY_FILE_RELATIVE_PATH"
 secrets_directory="$profile_directory/$SECRETS_DIRECTORY_RELATIVE_PATH"
 oauth_directory="$profile_directory/$OAUTH_DIRECTORY_RELATIVE_PATH"
 state_directory="$profile_directory/$STATE_DIRECTORY_RELATIVE_PATH"
-environment_file="$profile_directory/$ENVIRONMENT_FILE_RELATIVE_PATH"
 compose_file="$profile_directory/$COMPOSE_FILE_RELATIVE_PATH"
 http_port="${RANKRAT_HTTP_PORT:-$DEFAULT_HTTP_PORT}"
 oauth_callback_port="${RANKRAT_OAUTH_CALLBACK_PORT:-$DEFAULT_OAUTH_CALLBACK_PORT}"
@@ -509,12 +619,10 @@ stdio)
 	)
 	;;
 setup)
-	require_real_file "$environment_file" "Rankrat setup environment file"
 	mode_arguments=(
 		-i
 		--network bridge
 		-p "$LOOPBACK_HOST:$oauth_callback_port:$oauth_callback_port"
-		--env-file "$environment_file"
 		--mount "$writable_boundary_mount"
 		-e "RANKRAT_BOUNDARY_FILE=$runtime_boundary_file"
 		-e "RANKRAT_SECRET_ROOT=$CONTAINER_SECRET_ROOT"

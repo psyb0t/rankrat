@@ -61,8 +61,7 @@ make run-http
 Equivalent published-image wrapper flow:
 
 ```sh
-export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
-rankrat.sh http -d
+rankrat --data-dir /absolute/path/to/rankrat-profile http -d
 ```
 
 The wrapper creates the reviewed Compose deployment in the selected profile

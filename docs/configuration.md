@@ -17,36 +17,35 @@ incompatible provider fields, and relative credential paths fail startup.
 - [IndexNow targets](#indexnow-targets)
 - [Runtime policies](#runtime-policies)
 - [Monitoring state](#monitoring-state)
-- [Live selectors](#live-selectors)
 
 ## Host wrapper settings
 
-These are consumed by `rankrat.sh`, not the Python process:
+These are consumed by the `rankrat` launcher, not the Python process:
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
 | `RANKRAT_IMAGE` | `psyb0t/rankrat:latest` | Image reference |
 | `RANKRAT_LIGHTHOUSE_IMAGE` | `psyb0t/rankrat-lighthouse:latest` | HTTP companion image reference |
-| `RANKRAT_DATA_DIR` | `$HOME/.config/rankrat` | Absolute persistent profile root |
+| `RANKRAT_DATA_DIR` | `$HOME/.config/rankrat` | Optional compatibility override for the persistent profile root |
 | `RANKRAT_HTTP_PORT` | `8080` | Published loopback port |
 | `RANKRAT_OAUTH_CALLBACK_PORT` | `49152` | Published OAuth callback |
 | `RANKRAT_READ_ONLY` | `false` | Set true to remove every write tool and route |
 
-The wrapper derives exactly six paths from that root:
-`config/boundaries.json`, `secrets/`, `oauth/`, `state/`, `.env`, and
-`docker-compose.yml`. It does
-not accept separate path overrides, so one process cannot accidentally combine
+The launcher derives exactly five paths from that root:
+`config/boundaries.json`, `secrets/`, `oauth/`, `state/`, and
+`docker-compose.yml`. It does not accept separate path overrides, so one
+process cannot accidentally combine
 credentials, OAuth records, and inventory from different profiles. The root
 must be absolute, canonical, non-symlinked, and safe for Docker's `--mount`
 syntax. Only the fixed children are mounted; the profile root is not.
 
-The wrapper reads `RANKRAT_DATA_DIR` from its host environment. HTTP uses it as
-the Compose project directory, creates the reviewed Compose file there when
+Use `rankrat --data-dir /absolute/profile ...` when choosing a non-default
+profile; use no path at all for `$HOME/.config/rankrat`. `rankrat setup`
+creates every path and the HTTP bearer safely. HTTP uses the profile as its
+Compose project directory, creates the reviewed Compose file there when
 missing, and preserves an existing regular file. The project directory and
 Compose file must be owned by the current UID and not group/world writable.
-Explicit wrapper image, port, UID/GID, and read-only values override profile `.env` interpolation. Direct
-Docker Compose can instead read those values from `.env` or `--env-file`. The
-Python process ignores the host-only data-directory and image selectors.
+The Python process ignores the host-only data-directory and image selectors.
 
 ## Process settings
 
@@ -81,7 +80,7 @@ Copy [`boundaries.json.example`](../config/boundaries.json.example). Its shape:
 }
 ```
 
-At least one account or IndexNow target is required. IDs use lowercase letters,
+An empty document is valid before guided setup. IDs use lowercase letters,
 digits, and hyphens, begin with a letter/digit, contain at most 63 characters,
 and are unique across both collections.
 
@@ -195,11 +194,3 @@ return a finite unavailable error.
 
 Back up SQLite using its online-backup tooling or while Rankrat is stopped. Do
 not copy only a live main database while WAL state may exist.
-
-## Live selectors
-
-`RANKRAT_LIVE_*` values in [`.env.example`](../.env.example) select exact
-accounts/resources for opt-in live tests. Leave unused providers blank.
-IndexNow additionally requires `RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true` so a
-general live-test run cannot submit by accident. See the selector matrix in
-[Providers and credentials](providers.md#live-provider-verification).

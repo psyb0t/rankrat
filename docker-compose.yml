@@ -23,9 +23,6 @@ services:
   rankrat:
     image: ${RANKRAT_IMAGE:-psyb0t/rankrat:latest}
     command: ["http"]
-    env_file:
-      - path: ${RANKRAT_DATA_DIR:-.}/.env
-        required: false
     environment:
       RANKRAT_BOUNDARY_FILE: /run/config/boundaries.json
       RANKRAT_SECRET_ROOT: /run/secrets
@@ -43,7 +40,7 @@ services:
     ports:
       - "127.0.0.1:${RANKRAT_HTTP_PORT:-8080}:8080"
     volumes:
-      # One profile shared with rankrat.sh and every MCP client. Mount the
+      # One profile shared with rankrat and every MCP client. Mount the
       # directory, not only boundaries.json, so writable discovery/onboarding
       # can atomically update inventory without depending on image ownership.
       - type: bind

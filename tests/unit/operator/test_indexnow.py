@@ -25,22 +25,14 @@ def _boundary_file(path: Path) -> Path:
     return boundary_file
 
 
-def _environment_file(path: Path) -> Path:
-    environment_file = path / ".env"
-    environment_file.write_text("RANKRAT_READ_ONLY=true\n", encoding="utf-8")
-    return environment_file
-
-
 def test_initialize_creates_a_mode_600_key_and_exact_target(tmp_path: Path) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
 
-    result = initialize_indexnow(boundary_file, environment_file, key_file)
+    result = initialize_indexnow(boundary_file, key_file)
 
     key = key_file.read_text(encoding="utf-8")
     boundary = json.loads(boundary_file.read_text(encoding="utf-8"))
-    environment = environment_file.read_text(encoding="utf-8")
     assert result.created_key is True
     assert result.configured_target is True
     assert len(key) == 64
@@ -54,19 +46,14 @@ def test_initialize_creates_a_mode_600_key_and_exact_target(tmp_path: Path) -> N
             "key_file": "/run/secrets/indexnow/key",
         }
     ]
-    assert "RANKRAT_READ_ONLY=true" in environment
-    assert "RANKRAT_LIVE_INDEXNOW_TARGET_ID=site" in environment
-    assert "RANKRAT_LIVE_INDEXNOW_URL=https://example.com/" in environment
 
 
 def test_initialize_uses_an_operator_selected_target(tmp_path: Path) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow" / "key"
 
     initialize_indexnow(
         boundary_file,
-        environment_file,
         key_file,
         target_id="documentation",
         host="docs.example",
@@ -91,13 +78,11 @@ def test_initialize_rejects_unsafe_operator_hosts_before_creating_a_key(
     host: str,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow" / "key"
 
     with pytest.raises(IndexNowInitializationError, match="target input"):
         initialize_indexnow(
             boundary_file,
-            environment_file,
             key_file,
             target_id="documentation",
             host=host,
@@ -106,27 +91,18 @@ def test_initialize_rejects_unsafe_operator_hosts_before_creating_a_key(
     assert not key_file.exists()
 
 
-def test_initialize_is_idempotent_and_does_not_change_explicit_write_values(tmp_path: Path) -> None:
+def test_initialize_is_idempotent_and_changes_only_the_boundary_and_key(tmp_path: Path) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
-    environment_file.write_text(
-        "RANKRAT_READ_ONLY=false\nRANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true\n",
-        encoding="utf-8",
-    )
     key_file = tmp_path / "secrets" / "indexnow-main-key"
 
-    first = initialize_indexnow(boundary_file, environment_file, key_file)
+    first = initialize_indexnow(boundary_file, key_file)
     key_before = key_file.read_text(encoding="utf-8")
-    second = initialize_indexnow(boundary_file, environment_file, key_file)
+    second = initialize_indexnow(boundary_file, key_file)
 
     assert first.created_key is True
     assert second.created_key is False
     assert second.configured_target is False
     assert key_file.read_text(encoding="utf-8") == key_before
-    assert "RANKRAT_READ_ONLY=false" in environment_file.read_text(encoding="utf-8")
-    assert "RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true" in environment_file.read_text(
-        encoding="utf-8"
-    )
 
 
 @pytest.mark.parametrize(
@@ -138,24 +114,20 @@ def test_initialize_rejects_malformed_key_without_replacing_configuration(
     contents: str,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
     key_file.parent.mkdir()
     key_file.write_text(contents, encoding="utf-8")
     os.chmod(key_file, 0o600)
     original_boundary = boundary_file.read_bytes()
-    original_environment = environment_file.read_bytes()
 
     with pytest.raises(IndexNowInitializationError, match="key"):
-        initialize_indexnow(boundary_file, environment_file, key_file)
+        initialize_indexnow(boundary_file, key_file)
 
     assert boundary_file.read_bytes() == original_boundary
-    assert environment_file.read_bytes() == original_environment
 
 
 def test_initialize_rejects_conflicting_target_without_overwrite(tmp_path: Path) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
     key_file.parent.mkdir()
     key_file.write_text("a" * 64, encoding="utf-8")
@@ -179,28 +151,22 @@ def test_initialize_rejects_conflicting_target_without_overwrite(tmp_path: Path)
     original_boundary = boundary_file.read_bytes()
 
     with pytest.raises(IndexNowInitializationError, match="conflicts"):
-        initialize_indexnow(boundary_file, environment_file, key_file)
+        initialize_indexnow(boundary_file, key_file)
 
     assert boundary_file.read_bytes() == original_boundary
 
 
-@pytest.mark.parametrize(
-    ("boundary_contents", "environment_contents"),
-    (("not-json", "RANKRAT_READ_ONLY=true\n"), ("{}", "broken assignment")),
-)
+@pytest.mark.parametrize("boundary_contents", ("not-json", "{}"))
 def test_initialize_rejects_invalid_inputs_without_creating_a_key(
     tmp_path: Path,
     boundary_contents: str,
-    environment_contents: str,
 ) -> None:
     boundary_file = tmp_path / "boundaries.json"
-    environment_file = tmp_path / ".env"
     key_file = tmp_path / "secrets" / "indexnow-main-key"
     boundary_file.write_text(boundary_contents, encoding="utf-8")
-    environment_file.write_text(environment_contents, encoding="utf-8")
 
     with pytest.raises(IndexNowInitializationError):
-        initialize_indexnow(boundary_file, environment_file, key_file)
+        initialize_indexnow(boundary_file, key_file)
 
     assert not key_file.exists()
 
@@ -218,43 +184,22 @@ def test_initialize_rejects_invalid_boundary_shapes_without_creating_a_key(
     boundary_contents: str,
 ) -> None:
     boundary_file = tmp_path / "boundaries.json"
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
     boundary_file.write_text(boundary_contents, encoding="utf-8")
 
     with pytest.raises(IndexNowInitializationError, match="boundary document|IndexNow targets"):
-        initialize_indexnow(boundary_file, environment_file, key_file)
-
-    assert not key_file.exists()
-
-
-@pytest.mark.parametrize(
-    "environment_contents",
-    ("\x00", "# a comment\n\nnot-an-assignment\n"),
-)
-def test_initialize_rejects_unsafe_environment_contents_without_creating_a_key(
-    tmp_path: Path,
-    environment_contents: str,
-) -> None:
-    boundary_file = _boundary_file(tmp_path)
-    environment_file = tmp_path / ".env"
-    key_file = tmp_path / "secrets" / "indexnow-main-key"
-    environment_file.write_text(environment_contents, encoding="utf-8")
-
-    with pytest.raises(IndexNowInitializationError, match="null byte|invalid assignment"):
-        initialize_indexnow(boundary_file, environment_file, key_file)
+        initialize_indexnow(boundary_file, key_file)
 
     assert not key_file.exists()
 
 
 def test_initialize_rejects_nonregular_key_path_and_symlinked_parent(tmp_path: Path) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     directory_key_file = tmp_path / "directory-key"
     directory_key_file.mkdir()
 
     with pytest.raises(IndexNowInitializationError, match="regular file"):
-        initialize_indexnow(boundary_file, environment_file, directory_key_file)
+        initialize_indexnow(boundary_file, directory_key_file)
 
     actual_parent = tmp_path / "actual-secrets"
     actual_parent.mkdir()
@@ -262,12 +207,11 @@ def test_initialize_rejects_nonregular_key_path_and_symlinked_parent(tmp_path: P
     symlink_parent.symlink_to(actual_parent, target_is_directory=True)
 
     with pytest.raises(IndexNowInitializationError, match="directory"):
-        initialize_indexnow(boundary_file, environment_file, symlink_parent / "indexnow-main-key")
+        initialize_indexnow(boundary_file, symlink_parent / "indexnow-main-key")
 
 
 def test_initialize_rejects_nonobject_target_without_writing(tmp_path: Path) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
     boundary_file.write_text(
         json.dumps({"accounts": [], "indexnow_targets": ["not-an-object"]}),
@@ -275,7 +219,7 @@ def test_initialize_rejects_nonobject_target_without_writing(tmp_path: Path) -> 
     )
 
     with pytest.raises(IndexNowInitializationError, match="JSON object"):
-        initialize_indexnow(boundary_file, environment_file, key_file)
+        initialize_indexnow(boundary_file, key_file)
 
     assert not key_file.exists()
 
@@ -316,16 +260,13 @@ def test_low_level_key_and_atomic_write_errors_are_fail_closed(
     indexnow._write_atomically(tmp_path / "atomic-target", "contents", 0o600)
 
 
-def test_unreadable_environment_and_key_files_are_fail_closed(
+def test_unreadable_key_file_is_fail_closed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     key_file = tmp_path / "indexnow-main-key"
     key_file.write_text("a" * 64, encoding="utf-8")
     os.chmod(key_file, 0o600)
-
-    with pytest.raises(IndexNowInitializationError, match="environment file is unavailable"):
-        indexnow._read_environment_lines(tmp_path / "missing.env")
 
     def raise_os_error(*_: object, **__: object) -> str:
         raise OSError("synthetic read failure")
@@ -370,9 +311,8 @@ def test_target_helpers_reject_invalid_entries_and_preserve_unrelated_targets() 
 @pytest.mark.asyncio
 async def test_verify_public_key_requires_the_direct_configured_file(tmp_path: Path) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
-    initialize_indexnow(boundary_file, environment_file, key_file)
+    initialize_indexnow(boundary_file, key_file)
     key = key_file.read_text(encoding="utf-8")
     requests: list[httpx.Request] = []
 
@@ -408,9 +348,8 @@ async def test_verify_public_key_rejects_redirects_mismatches_and_oversized_bodi
     response: httpx.Response,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
-    initialize_indexnow(boundary_file, environment_file, key_file)
+    initialize_indexnow(boundary_file, key_file)
 
     with pytest.raises(IndexNowPublicKeyVerificationError):
         await verify_indexnow_public_key(
@@ -433,9 +372,8 @@ async def test_verify_public_key_rejects_non_success_statuses(
     response: httpx.Response,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
-    initialize_indexnow(boundary_file, environment_file, key_file)
+    initialize_indexnow(boundary_file, key_file)
 
     with pytest.raises(IndexNowPublicKeyVerificationError, match="HTTP 200"):
         await verify_indexnow_public_key(
@@ -450,9 +388,8 @@ async def test_verify_public_key_rejects_transport_failures_without_key_disclosu
     tmp_path: Path,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
-    initialize_indexnow(boundary_file, environment_file, key_file)
+    initialize_indexnow(boundary_file, key_file)
     key = key_file.read_text(encoding="utf-8")
 
     def raise_transport_error(_: httpx.Request) -> httpx.Response:
@@ -473,9 +410,8 @@ async def test_verify_public_key_rejects_a_nonpublic_dns_resolution_before_reque
     tmp_path: Path,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
-    initialize_indexnow(boundary_file, environment_file, key_file)
+    initialize_indexnow(boundary_file, key_file)
 
     async def reject_resolution(_: str) -> tuple[ResolvedAddress, ...]:
         raise SchemaFetchError("synthetic nonpublic address")
@@ -519,9 +455,8 @@ async def test_verify_public_key_rejects_local_preconditions_before_network(
     message: str,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
-    initialize_indexnow(boundary_file, environment_file, key_file)
+    initialize_indexnow(boundary_file, key_file)
     if key_contents is None:
         key_file.unlink()
     else:
@@ -551,9 +486,8 @@ async def test_verify_public_key_rejects_unsafe_local_key_mode_before_network(
     tmp_path: Path,
 ) -> None:
     boundary_file = _boundary_file(tmp_path)
-    environment_file = _environment_file(tmp_path)
     key_file = tmp_path / "secrets" / "indexnow-main-key"
-    initialize_indexnow(boundary_file, environment_file, key_file)
+    initialize_indexnow(boundary_file, key_file)
     os.chmod(key_file, 0o644)
 
     with pytest.raises(IndexNowPublicKeyVerificationError, match="mode is unsafe"):

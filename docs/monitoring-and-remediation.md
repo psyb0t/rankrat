@@ -23,9 +23,9 @@ HTTP auth still apply.
 ## Enable ordinary writes
 
 ```sh
-RANKRAT_READ_ONLY=false rankrat.sh          # writable stdio MCP
-RANKRAT_READ_ONLY=false rankrat.sh http     # writable REST + HTTP MCP
-RANKRAT_READ_ONLY=false rankrat.sh http -d  # persistent restartable scheduler
+RANKRAT_READ_ONLY=false rankrat          # writable stdio MCP
+RANKRAT_READ_ONLY=false rankrat http     # writable REST + HTTP MCP
+RANKRAT_READ_ONLY=false rankrat http -d  # persistent restartable scheduler
 ```
 
 Writable mode includes site onboarding; read-only mode omits it.
@@ -70,8 +70,8 @@ interval it:
 Stdio supports explicit monitor management and `monitor_run`, but a stdio child
 cannot perform future due work after its caller exits.
 
-Use `rankrat.sh http -d` for an unattended scheduler. Its Compose services use
-`restart: unless-stopped`, while an attached `rankrat.sh http` exits with the
+Use `rankrat http -d` for an unattended scheduler. Its Compose services use
+`restart: unless-stopped`, while an attached `rankrat http` exits with the
 foreground Compose process.
 
 Rankrat sends no email, webhook, or pager notification. Agents poll issue/event

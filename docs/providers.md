@@ -85,7 +85,7 @@ The usual Google account shape is:
 Authorize:
 
 ```sh
-rankrat.sh auth-google --account-id google --print-authorization-url
+rankrat auth-google --print-authorization-url
 ```
 
 The fixed authorization flow requests:
@@ -104,7 +104,7 @@ enabled API.
 Revoke:
 
 ```sh
-rankrat.sh revoke-google --account-id google
+rankrat revoke-google
 ```
 
 ### Google permissions and product limits
@@ -247,20 +247,26 @@ authentication and unused by stdio.
 
 ## Live provider verification
 
-Configure selectors in `.env`; leave unused ones blank.
+Each test derives its account and a safe target from the selected Rankrat
+profile. There is no second selector matrix to maintain. A test skips with a
+specific explanation when that provider is absent or the account has no usable
+site/property/zone yet.
 
-| Target | Required selectors |
+| Target | What it verifies |
 | --- | --- |
-| `make test-live-google-search-console` | Google account, site; optional sitemap, inspection URL, indexing URL |
-| `make test-live-google-analytics` | Google account and GA4 property; optional funnel events |
-| `make test-live-pagespeed` | PageSpeed account/site and target URL |
-| `make test-live-cloudflare` | Cloudflare account and zone ID |
-| `make test-live-bing` | Bing account/site; optional query, page, country, language |
-| `make test-live-indexnow` | Target ID, public URL, writable mode, and explicit submission opt-in |
-| `make test-live-http` | Configured accounts plus production image, bearer, and both HTTP transports |
+| `make test-live-google-search-console` | Site list, analytics, sitemap status, and URL inspection for the sole Google account |
+| `make test-live-google-analytics` | GA4 account/property discovery, report, and realtime read |
+| `make test-live-pagespeed` | PageSpeed analysis for a configured public site |
+| `make test-live-cloudflare` | Free-plan-compatible 24-hour analytics for a discovered zone |
+| `make test-live-bing` | Site list plus traffic, query/page, crawl, feed, quota, and link reads |
+| `make test-live-indexnow` | One real submission only with an explicit one-command opt-in |
+| `make test-live-http` | Production image plus authenticated REST and both MCP transports |
 
 `make test-live` runs every provider target then the authenticated HTTP/MCP
 transport check. Individual targets are faster while configuring one provider.
 
-Use [Troubleshooting](troubleshooting.md) if readiness and a deep live test
-disagree.
+Use `RANKRAT_PROFILE=/absolute/profile make test-live-<provider>` for a
+non-default profile. The IndexNow test is the destructive exception: it sends
+nothing unless `RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true` is present on that
+one command. Use [Troubleshooting](troubleshooting.md) if readiness and a deep
+live test disagree.

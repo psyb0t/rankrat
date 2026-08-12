@@ -10,7 +10,7 @@ metadata:
       bins: [docker]
 permissions:
   network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed/CrUX, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
-  shell: "docker run invocations for the published image, or bash execution of the bundled references/rankrat.sh wrapper; no other host access is required."
+  shell: "docker run invocations for the published image or the installed rankrat launcher; no other host access is required."
   filesystem: "reads provider-account config and credentials; writes the configured OAuth token store, persistent SQLite monitor state, locally initialized IndexNow key, and discovered resource inventory in the config file when writable."
 ---
 
@@ -109,13 +109,13 @@ discovery surface even when their provider is not configured; ask
 `provider_readiness` before interpreting an empty or unavailable result. Only
 write-tool discovery changes only with `RANKRAT_READ_ONLY`.
 
-The bundled launcher keeps stdio as a hardened direct `docker run` child and
-uses Docker Compose for HTTP so Rankrat and Lighthouse share one lifecycle:
+The public `rankrat` launcher keeps stdio as a hardened direct `docker run`
+child and uses Docker Compose for HTTP so Rankrat and Lighthouse share one
+lifecycle:
 
 ```bash
-export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
-bash references/rankrat.sh stdio
-bash references/rankrat.sh http -d
+rankrat --data-dir /absolute/path/to/rankrat-profile stdio
+rankrat --data-dir /absolute/path/to/rankrat-profile http -d
 ```
 
 HTTP uses the profile as its Compose project directory. The launcher creates
@@ -174,15 +174,13 @@ refresh token; provider secrets stay read-only. For a read-only agent, set
 `RANKRAT_READ_ONLY=true` and make the config mount read-only as described in the
 setup reference.
 
-The repo ships `rankrat.sh` for humans. The published skill bundles the same
-script at
-[`references/rankrat.sh`](references/rankrat.sh), so it remains available when
-the skill is installed without a repository checkout. It uses direct Docker for
+The repository ships one public launcher named `rankrat`; install it before
+asking an agent to use a human-managed profile. It uses direct Docker for
 stdio/operator commands and Compose for HTTP; agents can still invoke either
-image directly. Set `RANKRAT_DATA_DIR` to one absolute persistent profile. Its
-fixed `config/`, `secrets/`, `oauth/`, and `state/` children preserve the same
-provider sessions and inventory when launched from different site repositories;
-the default is `$HOME/.config/rankrat`.
+image directly. Omit `--data-dir` for the default `$HOME/.config/rankrat`
+profile. A chosen profile's fixed `config/`, `secrets/`, `oauth/`, and `state/`
+children preserve provider sessions and inventory when launched from different
+site repositories.
 
 The one-container manual examples return `UNAVAILABLE` for Lighthouse because
 Chromium is deliberately isolated in `psyb0t/rankrat-lighthouse`. Use the

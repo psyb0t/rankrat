@@ -31,27 +31,26 @@ scheduled work after the child exits.
 ## Wrapper commands
 
 ```sh
-rankrat.sh              # stdio MCP (default)
-rankrat.sh stdio        # explicit stdio
-rankrat.sh http         # attached Rankrat + Lighthouse Compose stack
-rankrat.sh http -d      # detached restartable HTTP stack
-rankrat.sh setup        # guided credentials, Google OAuth, and readiness
-rankrat.sh auth-google --account-id google --print-authorization-url
-rankrat.sh revoke-google --account-id google
-rankrat.sh onboard-site --help
-rankrat.sh --help
+rankrat              # stdio MCP (default)
+rankrat stdio        # explicit stdio
+rankrat http         # attached Rankrat + Lighthouse Compose stack
+rankrat http -d      # detached restartable HTTP stack
+rankrat setup        # bootstrap profile, credentials, Google OAuth, readiness
+rankrat auth-google --print-authorization-url
+rankrat revoke-google
+rankrat onboard-site --help
+rankrat --help
 ```
 
 The wrapper uses one persistent host profile:
 
 ```sh
-export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
-rankrat.sh stdio
+rankrat --data-dir /absolute/path/to/rankrat-profile stdio
 ```
 
 The fixed layout beneath it is `config/boundaries.json`, `secrets/`, `oauth/`,
-`state/`, `.env`, and the HTTP deployment's `docker-compose.yml`. With no
-override, the wrapper uses `$HOME/.config/rankrat`. `RANKRAT_IMAGE`,
+`state/`, and the HTTP deployment's `docker-compose.yml`. With no override,
+the launcher uses `$HOME/.config/rankrat`. `RANKRAT_IMAGE`,
 `RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, and
 `RANKRAT_OAUTH_CALLBACK_PORT` select images and published ports;
 `RANKRAT_READ_ONLY=true` is the only capability switch. HTTP creates the
@@ -148,7 +147,7 @@ credential-bearing upstream URLs.
 ## Docker Compose
 
 The repository's runnable [`docker-compose.yml`](../docker-compose.yml), also
-embedded in `rankrat.sh` as the default profile deployment, runs:
+embedded in `rankrat` as the default profile deployment, runs:
 
 - one Rankrat HTTP service;
 - one isolated Lighthouse worker;
@@ -159,9 +158,8 @@ attached to logs; detached mode uses `restart: unless-stopped` for both
 long-lived services:
 
 ```sh
-export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
-rankrat.sh http
-rankrat.sh http -d
+rankrat --data-dir /absolute/path/to/rankrat-profile http
+rankrat --data-dir /absolute/path/to/rankrat-profile http -d
 ```
 
 From a checkout, `make run-http` builds both local images and starts the same
@@ -171,8 +169,8 @@ Compose stack in the foreground:
 make run-http
 ```
 
-To run Compose directly, set `RANKRAT_DATA_DIR`, `RANKRAT_UID`, and
-`RANKRAT_GID` in `.env`, then run `docker compose up` or
+To run Compose directly, export `RANKRAT_DATA_DIR`, `RANKRAT_UID`, and
+`RANKRAT_GID` in the shell, then run `docker compose up` or
 `docker compose up -d`. The committed deployment uses published image defaults;
 the Make target exports locally built tags.
 
@@ -185,7 +183,7 @@ or non-regular Compose paths.
 
 The deployment uses loopback HTTP, read-only roots, dropped
 capabilities, no-new-privileges, explicit limits, a named socket volume, and
-the same profile bind mounts as `rankrat.sh`. Normal writable mode persists
+the same profile bind mounts as `rankrat`. Normal writable mode persists
 discovered inventory, OAuth refresh records, and monitor state. Provider
 secrets are always read-only. Set `RANKRAT_READ_ONLY=true`; the default Compose
 file then mounts config read-only and the application omits every write route
@@ -220,7 +218,7 @@ should use the same Rankrat login:
 ```sh
 claude mcp add --transport stdio --scope user \
   --env RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile \
-  rankrat -- /absolute/path/to/rankrat.sh stdio
+  rankrat -- /absolute/path/to/rankrat stdio
 ```
 
 ### Codex
@@ -235,7 +233,7 @@ Register the same shared profile in Codex:
 ```sh
 codex mcp add \
   --env RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile \
-  rankrat -- /absolute/path/to/rankrat.sh stdio
+  rankrat -- /absolute/path/to/rankrat stdio
 ```
 
 The installed skill invokes as `$rankrat:rankrat`; a checkout containing

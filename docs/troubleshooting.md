@@ -4,11 +4,11 @@ Start with the smallest layer that can fail: local paths → boundary parsing �
 credential readiness → one provider live test → production transport test.
 
 ```sh
-rankrat.sh setup
+rankrat setup
 ```
 
-From a checkout, `make setup` adds permission normalization, provider-specific
-live selectors, and production HTTP/MCP checks.
+From a checkout, `make setup` runs the same guided profile setup. It validates
+each configured provider account without a second live-test selector file.
 
 ## Contents
 
@@ -37,7 +37,7 @@ live selectors, and production HTTP/MCP checks.
 Check:
 
 - `config/boundaries.json` is valid JSON;
-- at least one account or IndexNow target exists;
+- an empty document is expected only before guided setup has added a provider;
 - no example account remains with a missing credential;
 - provider-specific fields are not mixed;
 - credential/OAuth/key paths are absolute container paths;
@@ -54,20 +54,13 @@ Use [`boundaries.json.example`](../config/boundaries.json.example) and
 ## A required config, secret, OAuth, or state path is missing
 
 The wrapper requires a boundary file plus real `secrets/`, `oauth/`, and
-`state/` directories beneath one profile. Check which profile the caller uses,
-then create missing paths there:
+`state/` directories beneath one profile. Do not create or repair that tree by
+hand: run `rankrat setup`, or `rankrat --data-dir /absolute/profile setup` for
+a separate profile. Setup creates only missing owner-only paths and never
+replaces an existing secret or boundary document.
 
-```sh
-export RANKRAT_DATA_DIR="${RANKRAT_DATA_DIR:-$HOME/.config/rankrat}"
-mkdir -p "$RANKRAT_DATA_DIR"/{config,oauth,state,secrets}
-chmod 700 "$RANKRAT_DATA_DIR"/{config,oauth,state,secrets}
-```
-
-From a checkout, `make init-config` creates the full tree without overwriting
-existing files and generates the HTTP bearer if missing.
-
-`RANKRAT_DATA_DIR` must be absolute and canonical. Do not replace the profile,
-a required child, or the boundary file with a symlink. Writable config/state
+The profile must be absolute and canonical. Do not replace the profile, a
+required child, or the boundary file with a symlink. Writable config/state
 paths must be owned by the current user and owner-only.
 
 ## Boundary file permission denied inside Docker
@@ -249,8 +242,8 @@ a credential error may still affect an image whose registry is Docker Hub.
 ## Provider readiness passes but a report fails
 
 Readiness proves a minimal account call, not every resource, date range, quota,
-or product feature. Run the provider-specific live target with exact selectors,
-then inspect:
+or product feature. Run the provider-specific live target against the same
+profile, then inspect:
 
 - provider inventory can discover the resource;
 - the upstream account can access it;

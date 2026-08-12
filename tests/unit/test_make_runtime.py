@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -7,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 _SOURCE_MAKEFILE = Path("Makefile")
-_SOURCE_WRAPPER = Path("rankrat.sh")
+_SOURCE_WRAPPER = Path("rankrat")
 _BASH_EXECUTABLE = "/bin/bash"
 _READ_ONLY_MOUNT_ASSIGNMENT = (
     'readonly_boundary_mount="type=bind,src=$boundary_directory,'
@@ -23,15 +24,26 @@ def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
 
     assert "RANKRAT_READ_ONLY ?= false" in source
     assert "RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY)" in source
-    assert "RANKRAT_DATA_DIR=$(PWD)" in source
+    assert "RANKRAT_PROFILE ?= $(HOME)/.config/rankrat" in source
+    assert "PROFILE_CONFIG := $(RANKRAT_PROFILE)/config" in source
+    assert './rankrat --data-dir "$(RANKRAT_PROFILE)"' in source
     assert "RANKRAT_STATE=$(STATE)" not in source
-    assert "./rankrat.sh" in source
+    assert "./rankrat.sh" not in source
     assert "$(WRAPPER) stdio" in _target(source, "run")
     assert "$(WRAPPER) http" in _target(source, "run-http")
-    assert "RANKRAT_WRAPPERS := rankrat.sh .agents/skills/rankrat/references/rankrat.sh" in source
+    assert "RANKRAT_WRAPPERS := rankrat" in source
     assert "$(SHELLCHECK_IMAGE) $(RANKRAT_WRAPPERS) scripts/*.sh" in source
     assert "$(SHFMT_IMAGE) -d $(RANKRAT_WRAPPERS) scripts" in source
     assert "$(SHFMT_IMAGE) -w $(RANKRAT_WRAPPERS) scripts" in source
+
+
+def test_live_tests_mount_the_selected_profile_config_directory() -> None:
+    source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    target = _target(source, "test-live-one")
+
+    assert "$(PROFILE_CONFIG) is required" in target
+    assert "--mount type=bind,src=$(PROFILE_CONFIG),dst=/run/config,readonly" in target
+    assert "src=$(BOUNDARIES),dst=/run/config/boundaries.json,readonly" not in target
 
 
 def test_local_dev_image_mode_is_an_explicit_checked_fallback() -> None:
@@ -67,6 +79,41 @@ def test_wrapper_runs_setup_interactively_with_owner_only_writable_paths() -> No
     assert "--interactive-setup" in target
     assert '--callback-port "$oauth_callback_port"' in target
     assert "--docker-loopback-proxy" in target
+
+
+def test_wrapper_setup_bootstraps_a_fresh_default_profile(
+    tmp_path: Path,
+) -> None:
+    home_directory = tmp_path / "home"
+    home_directory.mkdir(mode=0o700)
+    data_directory = home_directory / ".config/rankrat"
+    docker_arguments = tmp_path / "docker-arguments"
+    environment = {
+        **os.environ,
+        "HOME": str(home_directory),
+        "RANKRAT_READ_ONLY": "false",
+        "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
+    }
+
+    with _fake_bin_directory() as fake_bin:
+        environment["PATH"] = f"{fake_bin}:{os.environ['PATH']}"
+        result = _run_wrapper(environment, tmp_path, mode="setup")
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads((data_directory / "config/boundaries.json").read_text()) == {
+        "accounts": [],
+        "indexnow_targets": [],
+    }
+    assert (data_directory / "secrets/rankrat/http-bearer-token").stat().st_mode & 0o777 == 0o600
+    for directory in (
+        data_directory,
+        data_directory / "config",
+        data_directory / "secrets",
+        data_directory / "oauth",
+        data_directory / "state",
+    ):
+        assert directory.stat().st_mode & 0o777 == 0o700
+    assert "setup" in docker_arguments.read_text(encoding="utf-8").splitlines()
 
 
 def test_wrapper_never_bind_mounts_the_boundary_file_on_its_own() -> None:
@@ -382,18 +429,12 @@ def test_wrapper_requires_http_bearer_before_compose_generation(tmp_path: Path) 
     assert not docker_marker.exists()
 
 
-def test_init_config_creates_and_preserves_a_safe_http_bearer_secret() -> None:
+def test_make_setup_delegates_profile_bootstrap_to_the_public_wrapper() -> None:
     source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
-    target = _target(source, "init-config")
+    target = _target(source, "setup")
 
-    assert "secrets/rankrat/http-bearer-token" in target
-    assert 'test -L "$$path"' in target
-    assert "config, OAuth, secret, and state paths must not contain symlinks" in target
-    assert "find config oauth secrets state -type d -exec chmod 700 {} +" in target
-    assert "find oauth secrets state -type f -exec chmod 600 {} +" in target
-    assert "chmod 600 config/boundaries.json .env" in target
-    assert 'test -f "$$token" && test ! -L "$$token"' in target
-    assert "secrets.token_urlsafe(32)" in target
+    assert "init-config" not in source
+    assert "$(WRAPPER) setup" in target
 
 
 def test_indexnow_verifier_mounts_the_selected_host_files_read_only() -> None:
@@ -407,6 +448,18 @@ def test_indexnow_verifier_mounts_the_selected_host_files_read_only() -> None:
     assert "--boundary-file $(INDEXNOW_VERIFY_BOUNDARY_FILE)" in target
     assert "--key-file $(INDEXNOW_VERIFY_KEY_FILE)" in target
     assert "--key-file secrets/indexnow/key" not in target
+
+
+def test_indexnow_initializer_uses_the_selected_profile() -> None:
+    source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    target = _target(source, "init-indexnow")
+
+    assert "INDEXNOW_INIT_RUN := docker run --rm --init" in source
+    assert "src=$(PROFILE_CONFIG),dst=/profile/config" in source
+    assert "src=$(RANKRAT_PROFILE)/secrets/indexnow,dst=/profile/secrets/indexnow" in source
+    assert "$(INDEXNOW_INIT_RUN) uv run --frozen --no-sync python" in target
+    assert "--boundary-file /profile/config/boundaries.json" in target
+    assert "--key-file /profile/secrets/indexnow/key" in target
 
 
 def test_search_console_live_target_does_not_select_the_whole_live_test_file() -> None:

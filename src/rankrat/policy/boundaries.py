@@ -82,6 +82,11 @@ class BoundaryPolicy:
         """Return immutable accounts for safe read-only summaries."""
         return self._document.accounts
 
+    def indexnow_targets(self) -> tuple[IndexNowTarget, ...]:
+        """Return configured IndexNow targets for explicit local verification."""
+
+        return self._document.indexnow_targets
+
     def resolve_account(
         self,
         account_id: str,
