@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: rankrat
-  version: "0.13.0"
+  version: "0.13.1"
   description: >-
     Boundary-limited SEO operations over REST and MCP. The source document lists
     the full writable contract; a read-only runtime removes write routes from

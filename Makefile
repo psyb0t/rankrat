@@ -56,6 +56,9 @@ TOOLING_LOG_FLUSH_DELAY_SECONDS ?= 0.1
 PKG_GROUP ?=
 LIGHTHOUSE_PKG ?=
 RANKRAT_WRAPPERS := rankrat
+RANKRAT_RELEASE_VERSION := $(value V)
+
+export RANKRAT_RELEASE_VERSION
 
 UID := $(shell id -u)
 GID := $(shell id -g)
@@ -80,6 +83,7 @@ DEV_RUN := docker run --rm --init \
 	-e XDG_CACHE_HOME=/tmp/cache \
 	-e COVERAGE_FILE=/tmp/.coverage \
 	-e PYTHONDONTWRITEBYTECODE=1 \
+	-e RANKRAT_RELEASE_VERSION \
 	-e PYTHONPATH=/work/src \
 	-v $(PWD):/work \
 	-w /work \
@@ -164,8 +168,17 @@ LIGHTHOUSE_MUTATE_RUN := docker run --rm --init \
 help: ## Show supported Rankrat commands
 	@awk 'BEGIN {FS = ":.*##"}; /^[a-zA-Z0-9_.-]+:.*##/ {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-version: ## Print the version-derived production image tag
+version: dev-image ## Print the release tag, or update every static version carrier: make version V=X.Y.Z
+ifndef V
 	@echo $(IMAGE_TAG)
+else
+	$(DEV_RUN) sh -ceu 'printf "%s\n" "$$RANKRAT_RELEASE_VERSION" | grep -qE "^[0-9]+\.[0-9]+\.[0-9]+$$" || { echo "RANKRAT_RELEASE_VERSION must be a release version (X.Y.Z)" >&2; exit 1; }'
+	$(DEV_RUN) sh -ceu 'uv version --no-sync "$$RANKRAT_RELEASE_VERSION" >/dev/null'
+	$(DEV_RUN) node -e 'const fs = require("node:fs"); const path = ".agents/.codex-plugin/plugin.json"; if (fs.existsSync(path)) { const manifest = JSON.parse(fs.readFileSync(path, "utf8")); manifest.version = process.env.RANKRAT_RELEASE_VERSION; fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + "\n", "utf8"); }'
+	$(DEV_RUN) sh -ceu 'source_file="src/rankrat/api/openapi.yaml"; temporary_file="$$(mktemp)"; trap '\''rm -f "$$temporary_file"'\'' EXIT; sed -E "0,/^  version: \"[^\"]+\"$$/s//  version: \"$$RANKRAT_RELEASE_VERSION\"/" "$$source_file" >"$$temporary_file"; if ! cmp -s "$$source_file" "$$temporary_file"; then mv "$$temporary_file" "$$source_file"; fi'
+	@$(MAKE) --no-print-directory generate-openapi
+	@echo "[make version] updated static version carriers to v$$RANKRAT_RELEASE_VERSION; run git-update.sh to commit and tag"
+endif
 
 dev-image: ## Build the sandboxed development image
 	@case "$(RANKRAT_DEV_IMAGE_SOURCE)" in \

@@ -27,8 +27,9 @@ path. These guides carry the operational and contributor detail.
 - REST clients should use runtime `/openapi.json` when
   `RANKRAT_ENABLE_OPENAPI=true` or the committed merged
   [`openapi.json`](../openapi.json).
-- The YAML sources are [`openapi.yaml`](../src/rankrat/api/openapi.yaml) and
-  [`seo-openapi.yaml`](../src/rankrat/api/seo-openapi.yaml).
+- The YAML sources are [`openapi.yaml`](../src/rankrat/api/openapi.yaml),
+  [`seo-openapi.yaml`](../src/rankrat/api/seo-openapi.yaml), and
+  [`free-seo-openapi.yaml`](../src/rankrat/api/free-seo-openapi.yaml).
 - Runtime examples are [`.env.example`](../.env.example),
   [`boundaries.json.example`](../config/boundaries.json.example), and
   the runnable [`docker-compose.yml`](../docker-compose.yml).

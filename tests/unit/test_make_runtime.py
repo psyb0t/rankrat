@@ -61,6 +61,18 @@ def test_local_dev_image_mode_is_an_explicit_checked_fallback() -> None:
     assert "RANKRAT_DEV_IMAGE_SOURCE=local test" in _target(source, "test-local")
 
 
+def test_version_target_treats_the_release_version_as_data() -> None:
+    source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
+    target = _target(source, "version")
+
+    assert "RANKRAT_RELEASE_VERSION := $(value V)" in source
+    assert "export RANKRAT_RELEASE_VERSION" in source
+    assert "-e RANKRAT_RELEASE_VERSION" in source
+    assert '"$$RANKRAT_RELEASE_VERSION"' in target
+    assert "process.env.RANKRAT_RELEASE_VERSION" in target
+    assert "$(V)" not in target
+
+
 def test_wrapper_mounts_config_writable_exactly_when_writes_are_enabled() -> None:
     source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
 

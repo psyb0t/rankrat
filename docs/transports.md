@@ -132,7 +132,8 @@ log. Prefer client environment expansion or a secret manager.
 
 The complete committed contract is [`openapi.json`](../openapi.json). It is
 generated from the [base](../src/rankrat/api/openapi.yaml) and
-[SEO](../src/rankrat/api/seo-openapi.yaml) YAML sources.
+[SEO](../src/rankrat/api/seo-openapi.yaml) and
+[free SEO](../src/rankrat/api/free-seo-openapi.yaml) YAML sources.
 
 Set `RANKRAT_ENABLE_OPENAPI=true` to serve the runtime contract. The runtime
 document reflects startup policy: read-only removes every write operation,

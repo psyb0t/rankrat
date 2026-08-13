@@ -48,10 +48,15 @@ configuration, and persistence boundaries. The Lighthouse worker is TypeScript.
 ```sh
 make help
 make version
+make version V=0.13.1
 ```
 
 Make target help is the command source of truth. Do not invoke host Python/pnpm
-directly and accidentally test a different dependency graph.
+directly and accidentally test a different dependency graph. `make version`
+prints the next image tag; `make version V=X.Y.Z` validates SemVer and updates
+the package metadata, lockfile, Codex manifest, YAML-first OpenAPI source, and
+generated `openapi.json`. It does not commit or tag; use the repository-local
+release process only after verification.
 
 ## Build images
 

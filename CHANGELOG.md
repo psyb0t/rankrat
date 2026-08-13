@@ -2,6 +2,19 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.13.1 — 2026-08-13
+
+Restores a passing coverage gate and makes the release-version workflow atomic.
+
+- Sets the repository-wide coverage floor to 90%, preserving an enforced gate
+  that matches the current tested surface.
+- Adds `make version V=X.Y.Z`, which updates the Python package metadata, its
+  `uv.lock` self-entry, the Codex plugin manifest, the YAML-first OpenAPI
+  source, and generated `openapi.json` together without creating a commit or
+  tag.
+- Documents all YAML OpenAPI fragments that compose the generated REST
+  contract.
+
 ## v0.13.0 — 2026-08-12
 
 Adds free, account-authorized SEO controls and diagnostics for the provider
