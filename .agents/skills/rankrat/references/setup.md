@@ -83,10 +83,11 @@ agent cannot discover them, let alone call them.
 Writes cover IndexNow submission, Bing URL/sitemap/property changes, Google
 Indexing notifications, Search Console site/sitemap changes, DNS-provider-backed
 ownership verification, discovery remediation, and new-site onboarding, and
-monitor lifecycle operations plus finite Cloudflare cache purges/templates, and
-are marked as writes in MCP. The human may operate Rankrat interactively or
-delegate fully autonomous work; use read-only mode when that caller must not
-mutate provider or local state.
+monitor lifecycle operations plus typed Google Tag Manager changes, safe Bing
+content submission, provider-neutral managed edge redirects, and finite
+Cloudflare cache purges/templates, and are marked as writes in MCP. The human
+may operate Rankrat interactively or delegate fully autonomous work; use
+read-only mode when that caller must not mutate provider or local state.
 
 ## Guided setup
 
@@ -113,6 +114,7 @@ the intended account first.
 | Google | `secrets/google/oauth-client.json` |
 | Bing | `secrets/bing/api-key` |
 | Cloudflare | `secrets/cloudflare/api-token` |
+| Microsoft Clarity | `secrets/clarity/api-token` |
 
 Google accepts only an installed/Desktop OAuth client JSON. The same setup
 command prints the consent URL, waits for the loopback callback, and stores the
@@ -131,11 +133,12 @@ provider cannot run. Ask `provider_readiness` which providers are live rather
 than inferring it from discovery or an empty result. Write tools are the
 exception: they are absent unless writable mode enables them.
 
-- **Google Search Console / Google Analytics 4 / Google Indexing** — OAuth. The
-  CLI runs one authorization flow and stores the resulting token under
-  `RANKRAT_OAUTH_TOKEN_ROOT`. It requests Search Console management, Google
-  Indexing, and GA4 read/edit scopes; provider-side ownership still controls
-  what the account can do.
+- **Google Search Console / Google Analytics 4 / Google Tag Manager / Google
+  Indexing** — OAuth. The CLI runs one authorization flow and stores the
+  resulting token under `RANKRAT_OAUTH_TOKEN_ROOT`. It requests Search Console
+  management, Google Indexing, GA4 read/edit, and Tag Manager container edit,
+  delete, version-edit, and publish scopes; provider-side ownership still
+  controls what the account can do.
 - **Bing Webmaster Tools** — an API key from the Bing Webmaster dashboard,
   placed under `RANKRAT_SECRET_ROOT`.
 - **Cloudflare** — an account token stored at the configured account's
@@ -143,8 +146,15 @@ exception: they are absent unless writable mode enables them.
   ownership, Analytics Read for reports, Cache Purge for exact URL purges, and
   Cache Rules Edit/Cache Settings Write for the two named templates. Select all
   zones when the credential must onboard current and future domains; Rankrat
-  discovers zone IDs. Rankrat exposes no
-  arbitrary DNS record, whole-zone purge, or arbitrary cache-rule body.
+  discovers zone IDs. Add Zone Rulesets Edit (sometimes labelled Dynamic
+  Redirects or Rulesets Write) for managed edge redirects. Rankrat exposes no
+  arbitrary DNS record, whole-zone purge, arbitrary cache-rule body, or
+  arbitrary ruleset replacement.
+- **Microsoft Clarity** — a project Data Export API token. In the Clarity
+  project, use **Settings → Data Export → Generate new API token** and store it
+  at the configured account credential path. One Clarity account represents one
+  project and is read-only in Rankrat. The upstream API allows at most ten
+  requests per project/day; see [Microsoft's documentation](https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api).
 - **PageSpeed Insights** — an API key, same location, and the one Google surface
   that does not use OAuth: the key goes on the query string, so the Google
   consent flow grants it nothing. It is optional — with no key configured the
@@ -351,6 +361,8 @@ composed from the
 [base](https://github.com/psyb0t/rankrat/blob/main/src/rankrat/api/openapi.yaml)
 and
 [SEO intelligence](https://github.com/psyb0t/rankrat/blob/main/src/rankrat/api/seo-openapi.yaml)
+and
+[free provider SEO](https://github.com/psyb0t/rankrat/blob/main/src/rankrat/api/free-seo-openapi.yaml)
 YAML sources. When enabled, the runtime `/openapi.json` removes write routes
 from a read-only server.
 
@@ -383,6 +395,10 @@ from a read-only server.
   `google_analytics_ecommerce_performance`,
   `google_analytics_audience_segments`, `google_analytics_user_behavior`,
   `google_analytics_conversion_funnel`.
+- **Google Tag Manager, Microsoft Clarity, and managed redirects:**
+  `google_tag_manager_accounts_list`, `google_tag_manager_containers_list`,
+  `google_tag_manager_workspaces_list`, `google_tag_manager_entities_list`,
+  `clarity_insights`, `edge_redirects_list`.
 - **PageSpeed, CrUX, Cloudflare, and local Lighthouse:** `pagespeed_analyze`,
   `pagespeed_core_web_vitals`, `lighthouse_audit`,
   `lighthouse_seo_findings`, `lighthouse_accessibility_findings`,
@@ -411,17 +427,27 @@ These appear only when `RANKRAT_READ_ONLY=false`:
   notification with the other participating engines, while each engine makes
   its own crawl and indexing decisions.
 - **Bing:** `bing_url_submit`, `bing_sitemap_submit`, `bing_site_submit`.
+- **Bing content:** `bing_content_submission_create` fetches an allowed public
+  page itself, then submits that fresh HTML to Bing.
 - **Google Search Console and Indexing:** `google_indexing_submit`,
   `google_indexing_batch_submit`, `google_site_submit`,
   `google_sitemap_submit`.
 - **Google Analytics 4:** `google_analytics_account_rename`,
   `google_analytics_property_rename`.
+- **Google Tag Manager:** `google_tag_manager_container_create`,
+  `google_tag_manager_container_delete`, `google_tag_manager_workspace_create`,
+  `google_tag_manager_workspace_delete`, `google_tag_manager_entity_create`,
+  `google_tag_manager_entity_update`, `google_tag_manager_entity_delete`,
+  `google_tag_manager_workspace_version_create`,
+  `google_tag_manager_version_publish`.
 - **Ownership and discovery remediation:** `site_ownership_verify`,
   `site_remediation_apply`.
 - **Persistent monitoring:** `monitor_create`, `monitor_update`,
   `monitor_delete`, `monitor_run`, `issue_status_update`.
 - **Cloudflare performance:** `cloudflare_cache_purge`,
   `cloudflare_cache_template_apply`.
+- **Provider-neutral managed redirects:** `edge_redirect_upsert`,
+  `edge_redirect_delete`. Cloudflare is the currently shipped adapter.
 - **Site onboarding:** `site_onboarding_submit`.
 
 ## Checking it works

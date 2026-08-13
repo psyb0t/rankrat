@@ -1,0 +1,1495 @@
+paths:
+  /v1/clarity/insights:
+    post:
+      summary: Clarity Insights
+      operationId: clarityInsights
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClarityInsightsInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClarityInsightsReport'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/accounts:
+    get:
+      summary: Gtm Accounts List
+      operationId: googleTagManagerAccountsList
+      parameters:
+      - name: account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+      - name: timeout_seconds
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 30.0
+          exclusiveMinimum: 0
+          default: 10.0
+          title: Timeout Seconds
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GtmAccount'
+                title: Response Googletagmanageraccountslist
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/containers:
+    get:
+      summary: Gtm Containers List
+      operationId: googleTagManagerContainersList
+      parameters:
+      - name: account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+      - name: gtm_account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+      - name: timeout_seconds
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 30.0
+          exclusiveMinimum: 0
+          default: 10.0
+          title: Timeout Seconds
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GtmContainer'
+                title: Response Googletagmanagercontainerslist
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: Gtm Container Create
+      operationId: googleTagManagerContainerCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmContainerCreateInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GtmContainer'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/workspaces:
+    get:
+      summary: Gtm Workspaces List
+      operationId: googleTagManagerWorkspacesList
+      parameters:
+      - name: account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+      - name: gtm_account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+      - name: container_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+      - name: timeout_seconds
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 30.0
+          exclusiveMinimum: 0
+          default: 10.0
+          title: Timeout Seconds
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GtmWorkspace'
+                title: Response Googletagmanagerworkspaceslist
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: Gtm Workspace Create
+      operationId: googleTagManagerWorkspaceCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmWorkspaceCreateInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GtmWorkspace'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/entities:
+    get:
+      summary: Gtm Entities List
+      operationId: googleTagManagerEntitiesList
+      parameters:
+      - name: account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+      - name: gtm_account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+      - name: container_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+      - name: workspace_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Workspace Id
+      - name: kind
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/GtmEntityKind'
+      - name: timeout_seconds
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 30.0
+          exclusiveMinimum: 0
+          default: 10.0
+          title: Timeout Seconds
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GtmEntity'
+                title: Response Googletagmanagerentitieslist
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: Gtm Entity Create
+      operationId: googleTagManagerEntityCreate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmEntityCreateInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GtmEntity'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/edge-redirects:
+    get:
+      summary: Edge Redirects List
+      operationId: edgeRedirectsList
+      parameters:
+      - name: account_id
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+      - name: site_url
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          title: Site Url
+      - name: timeout_seconds
+        in: query
+        required: false
+        schema:
+          type: number
+          maximum: 30.0
+          exclusiveMinimum: 0
+          default: 10.0
+          title: Timeout Seconds
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/CloudflareEdgeRedirect'
+                title: Response Edgeredirectslist
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: Edge Redirect Upsert
+      operationId: edgeRedirectUpsert
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdgeRedirectUpsertInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloudflareEdgeRedirectReceipt'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/bing/content-submissions:
+    post:
+      summary: Bing Content Submission
+      operationId: bingContentSubmissionCreate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BingContentSubmissionInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BingContentSubmissionReceipt'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/edge-redirects/{redirect_id}:
+    delete:
+      summary: Edge Redirect Delete
+      operationId: edgeRedirectDelete
+      parameters:
+      - name: redirect_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Redirect Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EdgeRedirectDeleteInput'
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/containers/{container_id}:
+    delete:
+      summary: Gtm Container Delete
+      operationId: googleTagManagerContainerDelete
+      parameters:
+      - name: container_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Container Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmContainerDeleteInput'
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/workspaces/{workspace_id}:
+    delete:
+      summary: Gtm Workspace Delete
+      operationId: googleTagManagerWorkspaceDelete
+      parameters:
+      - name: workspace_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Workspace Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmWorkspaceDeleteInput'
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/entities/{entity_id}:
+    put:
+      summary: Gtm Entity Update
+      operationId: googleTagManagerEntityUpdate
+      parameters:
+      - name: entity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Entity Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmEntityUpdateInput'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GtmEntity'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    delete:
+      summary: Gtm Entity Delete
+      operationId: googleTagManagerEntityDelete
+      parameters:
+      - name: entity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Entity Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmEntityDeleteInput'
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/workspace-versions:
+    post:
+      summary: Gtm Workspace Version Create
+      operationId: googleTagManagerWorkspaceVersionCreate
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmVersionCreateInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GtmVersion'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /v1/google-tag-manager/version-publications:
+    post:
+      summary: Gtm Version Publish
+      operationId: googleTagManagerVersionPublish
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GtmVersionPublishInput'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GtmVersion'
+        '422':
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        default:
+          description: Rankrat error response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  schemas:
+    BingContentSubmissionInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        site_url:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Site Url
+        page_url:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Page Url
+        dynamic_serving:
+          type: boolean
+          title: Dynamic Serving
+          default: false
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - site_url
+      - page_url
+      title: BingContentSubmissionInput
+    BingContentSubmissionReceipt:
+      properties:
+        site_url:
+          type: string
+          title: Site Url
+        page_url:
+          type: string
+          title: Page Url
+        content_bytes:
+          type: integer
+          title: Content Bytes
+        dynamic_serving:
+          type: boolean
+          title: Dynamic Serving
+      type: object
+      required:
+      - site_url
+      - page_url
+      - content_bytes
+      - dynamic_serving
+      title: BingContentSubmissionReceipt
+    ClarityDimension:
+      type: string
+      enum:
+      - Browser
+      - Device
+      - Country/Region
+      - OS
+      - Source
+      - Medium
+      - Campaign
+      - Channel
+      - URL
+      title: ClarityDimension
+      description: Documented Microsoft Clarity live-insights breakdown dimensions.
+    ClarityInsightsInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        num_days:
+          type: integer
+          maximum: 3.0
+          minimum: 1.0
+          title: Num Days
+          default: 1
+        dimensions:
+          items:
+            $ref: '#/components/schemas/ClarityDimension'
+          type: array
+          maxItems: 3
+          title: Dimensions
+          default: []
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      title: ClarityInsightsInput
+    ClarityInsightsReport:
+      properties:
+        num_days:
+          type: integer
+          title: Num Days
+        dimensions:
+          items:
+            $ref: '#/components/schemas/ClarityDimension'
+          type: array
+          title: Dimensions
+        metrics:
+          items:
+            $ref: '#/components/schemas/ClarityMetric'
+          type: array
+          title: Metrics
+      type: object
+      required:
+      - num_days
+      - dimensions
+      - metrics
+      title: ClarityInsightsReport
+    ClarityMetric:
+      properties:
+        metric_name:
+          type: string
+          title: Metric Name
+        information:
+          items:
+            additionalProperties:
+              $ref: '#/components/schemas/ClarityScalar'
+            type: object
+          type: array
+          title: Information
+      type: object
+      required:
+      - metric_name
+      - information
+      title: ClarityMetric
+    ClarityScalar:
+      anyOf:
+      - type: string
+      - type: integer
+      - type: number
+      - type: boolean
+      - type: 'null'
+    CloudflareEdgeRedirect:
+      properties:
+        zone_id:
+          type: string
+          title: Zone Id
+        rule_id:
+          type: string
+          title: Rule Id
+        source_path:
+          type: string
+          title: Source Path
+        target_url:
+          type: string
+          title: Target Url
+        status_code:
+          $ref: '#/components/schemas/CloudflareRedirectStatus'
+        preserve_query_string:
+          type: boolean
+          title: Preserve Query String
+      type: object
+      required:
+      - zone_id
+      - rule_id
+      - source_path
+      - target_url
+      - status_code
+      - preserve_query_string
+      title: CloudflareEdgeRedirect
+    CloudflareEdgeRedirectReceipt:
+      properties:
+        redirect:
+          $ref: '#/components/schemas/CloudflareEdgeRedirect'
+        created:
+          type: boolean
+          title: Created
+        changed:
+          type: boolean
+          title: Changed
+      type: object
+      required:
+      - redirect
+      - created
+      - changed
+      title: CloudflareEdgeRedirectReceipt
+    CloudflareRedirectStatus:
+      type: integer
+      enum:
+      - 301
+      - 302
+      - 307
+      - 308
+      title: CloudflareRedirectStatus
+      description: Documented Cloudflare redirect status codes Rankrat can create.
+    EdgeRedirectDeleteInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        site_url:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Site Url
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        rule_id:
+          type: string
+          pattern: ^[0-9a-f]{32}$
+          title: Rule Id
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - site_url
+      - rule_id
+      title: EdgeRedirectDeleteInput
+    EdgeRedirectUpsertInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        site_url:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Site Url
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        source_path:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Source Path
+        target_url:
+          type: string
+          maxLength: 2048
+          minLength: 1
+          title: Target Url
+        status_code:
+          $ref: '#/components/schemas/CloudflareRedirectStatus'
+          default: 301
+        preserve_query_string:
+          type: boolean
+          title: Preserve Query String
+          default: true
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - site_url
+      - source_path
+      - target_url
+      title: EdgeRedirectUpsertInput
+    GtmAccount:
+      properties:
+        account_id:
+          type: string
+          title: Account Id
+        name:
+          type: string
+          title: Name
+        path:
+          type: string
+          title: Path
+      type: object
+      required:
+      - account_id
+      - name
+      - path
+      title: GtmAccount
+    GtmContainer:
+      properties:
+        account_id:
+          type: string
+          title: Account Id
+        container_id:
+          type: string
+          title: Container Id
+        name:
+          type: string
+          title: Name
+        path:
+          type: string
+          title: Path
+        public_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Public Id
+      type: object
+      required:
+      - account_id
+      - container_id
+      - name
+      - path
+      - public_id
+      title: GtmContainer
+    GtmContainerCreateInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        name:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Name
+        usage_contexts:
+          items:
+            $ref: '#/components/schemas/GtmUsageContext'
+          type: array
+          maxItems: 5
+          minItems: 1
+          title: Usage Contexts
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - name
+      - usage_contexts
+      title: GtmContainerCreateInput
+    GtmContainerDeleteInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      title: GtmContainerDeleteInput
+    GtmEntity:
+      properties:
+        kind:
+          $ref: '#/components/schemas/GtmEntityKind'
+        account_id:
+          type: string
+          title: Account Id
+        container_id:
+          type: string
+          title: Container Id
+        workspace_id:
+          type: string
+          title: Workspace Id
+        entity_id:
+          type: string
+          title: Entity Id
+        name:
+          type: string
+          title: Name
+        type:
+          type: string
+          title: Type
+        path:
+          type: string
+          title: Path
+      type: object
+      required:
+      - kind
+      - account_id
+      - container_id
+      - workspace_id
+      - entity_id
+      - name
+      - type
+      - path
+      title: GtmEntity
+    GtmEntityCreateInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+        workspace_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Workspace Id
+        kind:
+          $ref: '#/components/schemas/GtmEntityKind'
+        definition:
+          $ref: '#/components/schemas/GtmEntityDefinition'
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      - workspace_id
+      - kind
+      - definition
+      title: GtmEntityCreateInput
+    GtmEntityDefinition:
+      properties:
+        name:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Name
+        type:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Type
+        parameters:
+          items:
+            $ref: '#/components/schemas/GtmParameter'
+          type: array
+          title: Parameters
+          default: []
+        filters:
+          items:
+            $ref: '#/components/schemas/GtmParameter'
+          type: array
+          title: Filters
+          default: []
+        firing_trigger_ids:
+          items:
+            type: string
+          type: array
+          title: Firing Trigger Ids
+          default: []
+        blocking_trigger_ids:
+          items:
+            type: string
+          type: array
+          title: Blocking Trigger Ids
+          default: []
+        notes:
+          anyOf:
+          - type: string
+            maxLength: 1024
+          - type: 'null'
+          title: Notes
+      additionalProperties: false
+      type: object
+      required:
+      - name
+      - type
+      title: GtmEntityDefinition
+      description: Typed mutable fields shared by GTM tags, triggers, and variables.
+    GtmEntityDeleteInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+        workspace_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Workspace Id
+        kind:
+          $ref: '#/components/schemas/GtmEntityKind'
+        entity_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Entity Id
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      - workspace_id
+      - kind
+      - entity_id
+      title: GtmEntityDeleteInput
+    GtmEntityKind:
+      type: string
+      enum:
+      - tag
+      - trigger
+      - variable
+      title: GtmEntityKind
+      description: The GTM workspace resource families Rankrat manages.
+    GtmEntityUpdateInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+        workspace_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Workspace Id
+        kind:
+          $ref: '#/components/schemas/GtmEntityKind'
+        definition:
+          $ref: '#/components/schemas/GtmEntityDefinition'
+        entity_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Entity Id
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      - workspace_id
+      - kind
+      - definition
+      - entity_id
+      title: GtmEntityUpdateInput
+    GtmParameter:
+      properties:
+        key:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Key
+        type:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Type
+        value:
+          anyOf:
+          - type: string
+            maxLength: 1024
+          - type: 'null'
+          title: Value
+        list_items:
+          items:
+            $ref: '#/components/schemas/GtmParameter'
+          type: array
+          title: List Items
+          default: []
+        map_items:
+          items:
+            $ref: '#/components/schemas/GtmParameter'
+          type: array
+          title: Map Items
+          default: []
+      additionalProperties: false
+      type: object
+      required:
+      - key
+      - type
+      title: GtmParameter
+      description: One bounded GTM parameter, including nested list or map parameters.
+    GtmUsageContext:
+      type: string
+      enum:
+      - web
+      - android
+      - ios
+      - amp
+      - server
+      title: GtmUsageContext
+      description: Documented GTM container usage contexts.
+    GtmVersion:
+      properties:
+        account_id:
+          type: string
+          title: Account Id
+        container_id:
+          type: string
+          title: Container Id
+        version_id:
+          type: string
+          title: Version Id
+        name:
+          type: string
+          title: Name
+        path:
+          type: string
+          title: Path
+      type: object
+      required:
+      - account_id
+      - container_id
+      - version_id
+      - name
+      - path
+      title: GtmVersion
+    GtmVersionCreateInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+        workspace_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Workspace Id
+        name:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Name
+        notes:
+          anyOf:
+          - type: string
+            maxLength: 1024
+          - type: 'null'
+          title: Notes
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      - workspace_id
+      - name
+      title: GtmVersionCreateInput
+    GtmVersionPublishInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+        version_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Version Id
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      - version_id
+      title: GtmVersionPublishInput
+    GtmWorkspace:
+      properties:
+        account_id:
+          type: string
+          title: Account Id
+        container_id:
+          type: string
+          title: Container Id
+        workspace_id:
+          type: string
+          title: Workspace Id
+        name:
+          type: string
+          title: Name
+        path:
+          type: string
+          title: Path
+      type: object
+      required:
+      - account_id
+      - container_id
+      - workspace_id
+      - name
+      - path
+      title: GtmWorkspace
+    GtmWorkspaceCreateInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+        name:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Name
+        description:
+          anyOf:
+          - type: string
+            maxLength: 1024
+          - type: 'null'
+          title: Description
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      - name
+      title: GtmWorkspaceCreateInput
+    GtmWorkspaceDeleteInput:
+      properties:
+        account_id:
+          type: string
+          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+          title: Account Id
+        timeout_seconds:
+          type: number
+          maximum: 30.0
+          minimum: 0.1
+          title: Timeout Seconds
+          default: 10.0
+        gtm_account_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Gtm Account Id
+        container_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Container Id
+        workspace_id:
+          type: string
+          pattern: ^[0-9]{1,64}$
+          title: Workspace Id
+      additionalProperties: false
+      type: object
+      required:
+      - account_id
+      - gtm_account_id
+      - container_id
+      - workspace_id
+      title: GtmWorkspaceDeleteInput

@@ -5,10 +5,14 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import Field
 
 from rankrat.constants import (
+    BING_CONTENT_SUBMISSION_OPERATION,
+    BING_CONTENT_SUBMISSIONS_PATH,
+    CLARITY_INSIGHTS_OPERATION,
+    CLARITY_INSIGHTS_PATH,
     CLOUDFLARE_ANALYTICS_OPERATION,
     CLOUDFLARE_ANALYTICS_PATH,
     CLOUDFLARE_CACHE_PURGE_OPERATION,
@@ -19,7 +23,35 @@ from rankrat.constants import (
     CONTENT_OPPORTUNITIES_PATH,
     CRUX_HISTORY_OPERATION,
     CRUX_HISTORY_PATH,
+    DEFAULT_PROVIDER_TIMEOUT_SECONDS,
     DEFAULT_STATE_PAGE_SIZE,
+    EDGE_REDIRECT_DELETE_OPERATION,
+    EDGE_REDIRECT_OPERATION_PATH,
+    EDGE_REDIRECT_UPSERT_OPERATION,
+    EDGE_REDIRECTS_LIST_OPERATION,
+    EDGE_REDIRECTS_PATH,
+    GTM_ACCOUNTS_LIST_OPERATION,
+    GTM_ACCOUNTS_PATH,
+    GTM_CONTAINER_OPERATION_PATH,
+    GTM_CONTAINERS_CREATE_OPERATION,
+    GTM_CONTAINERS_DELETE_OPERATION,
+    GTM_CONTAINERS_LIST_OPERATION,
+    GTM_CONTAINERS_PATH,
+    GTM_ENTITIES_CREATE_OPERATION,
+    GTM_ENTITIES_DELETE_OPERATION,
+    GTM_ENTITIES_LIST_OPERATION,
+    GTM_ENTITIES_PATH,
+    GTM_ENTITIES_UPDATE_OPERATION,
+    GTM_ENTITY_OPERATION_PATH,
+    GTM_VERSION_PUBLISH_OPERATION,
+    GTM_VERSION_PUBLISH_PATH,
+    GTM_WORKSPACE_OPERATION_PATH,
+    GTM_WORKSPACE_VERSION_CREATE_OPERATION,
+    GTM_WORKSPACE_VERSIONS_PATH,
+    GTM_WORKSPACES_CREATE_OPERATION,
+    GTM_WORKSPACES_DELETE_OPERATION,
+    GTM_WORKSPACES_LIST_OPERATION,
+    GTM_WORKSPACES_PATH,
     INTERNAL_LINK_GRAPH_OPERATION,
     INTERNAL_LINK_GRAPH_PATH,
     INTERNAL_LINK_OPPORTUNITIES_OPERATION,
@@ -30,6 +62,7 @@ from rankrat.constants import (
     ISSUE_STATUS_OPERATION,
     MAX_MONITOR_INTERVAL_SECONDS,
     MAX_MONITOR_NAME_CHARS,
+    MAX_PROVIDER_TIMEOUT_SECONDS,
     MAX_STATE_PAGE_SIZE,
     MIN_MONITOR_INTERVAL_SECONDS,
     MONITOR_DELETE_OPERATION,
@@ -73,15 +106,46 @@ from rankrat.operator.monitoring import (
 from rankrat.providers.cloudflare_performance import (
     CloudflareAnalyticsReport,
     CloudflareCacheRuleReceipt,
+    CloudflareEdgeRedirect,
+    CloudflareEdgeRedirectReceipt,
     CloudflarePurgeReceipt,
 )
 from rankrat.providers.crux import CruxHistoryRecord
+from rankrat.providers.google_tag_manager import (
+    GtmAccount,
+    GtmContainer,
+    GtmEntity,
+    GtmEntityKind,
+    GtmVersion,
+    GtmWorkspace,
+)
+from rankrat.services.bing_content import (
+    BingContentSubmissionReceipt,
+    BingContentSubmissionRequest,
+)
+from rankrat.services.clarity import ClarityInsightsReport, ClarityInsightsRequest
 from rankrat.services.cloudflare_performance import (
     CloudflareAnalyticsRequest,
     CloudflareCacheTemplateRequest,
     CloudflarePurgeRequest,
 )
 from rankrat.services.crux import CruxHistoryRequest
+from rankrat.services.edge_redirects import (
+    EdgeRedirectDeleteRequest,
+    EdgeRedirectListRequest,
+    EdgeRedirectUpsertRequest,
+)
+from rankrat.services.google_tag_manager import (
+    GtmContainerCreateRequest,
+    GtmContainerRequest,
+    GtmEntityCreateRequest,
+    GtmEntityRequest,
+    GtmEntityUpdateRequest,
+    GtmVersionCreateRequest,
+    GtmVersionPublishRequest,
+    GtmWorkspaceCreateRequest,
+    GtmWorkspaceRequest,
+)
 from rankrat.state.sqlite import (
     IssueEvent,
     IssueStatus,
@@ -92,11 +156,24 @@ from rankrat.state.sqlite import (
 )
 from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.seo_contracts import (
+    BingContentSubmissionInput,
+    ClarityInsightsInput,
     CloudflareAnalyticsInput,
     CloudflareCacheTemplateInput,
     CloudflarePurgeInput,
     ContentOpportunityInput,
     CruxHistoryInput,
+    EdgeRedirectDeleteInput,
+    EdgeRedirectUpsertInput,
+    GtmContainerCreateInput,
+    GtmContainerDeleteInput,
+    GtmEntityCreateInput,
+    GtmEntityDeleteInput,
+    GtmEntityUpdateInput,
+    GtmVersionCreateInput,
+    GtmVersionPublishInput,
+    GtmWorkspaceCreateInput,
+    GtmWorkspaceDeleteInput,
     InternalLinkInput,
     MonitorCreateInput,
     MonitorDeleteReceipt,
@@ -230,6 +307,140 @@ def build_seo_router(services: ApplicationServices) -> APIRouter:
                     end_date=body.end_date,
                     limit=body.limit,
                 )
+            )
+        )
+
+    @router.post(
+        CLARITY_INSIGHTS_PATH,
+        response_model=ClarityInsightsReport,
+        operation_id=CLARITY_INSIGHTS_OPERATION,
+    )
+    async def clarity_insights(body: ClarityInsightsInput) -> JsonValue:
+        return to_json_value(
+            await services.clarity.live_insights(
+                ClarityInsightsRequest(
+                    body.account_id,
+                    body.num_days,
+                    body.dimensions,
+                    body.timeout_seconds,
+                )
+            )
+        )
+
+    @router.get(
+        GTM_ACCOUNTS_PATH,
+        response_model=tuple[GtmAccount, ...],
+        operation_id=GTM_ACCOUNTS_LIST_OPERATION,
+    )
+    async def gtm_accounts_list(
+        account_id: Annotated[str, Query(pattern=ACCOUNT_ID_PATTERN)],
+        timeout_seconds: Annotated[
+            float,
+            Query(gt=0, le=MAX_PROVIDER_TIMEOUT_SECONDS),
+        ] = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    ) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.list_accounts(
+                account_id,
+                timeout_seconds,
+            )
+        )
+
+    @router.get(
+        GTM_CONTAINERS_PATH,
+        response_model=tuple[GtmContainer, ...],
+        operation_id=GTM_CONTAINERS_LIST_OPERATION,
+    )
+    async def gtm_containers_list(
+        account_id: Annotated[str, Query(pattern=ACCOUNT_ID_PATTERN)],
+        gtm_account_id: Annotated[str, Query(pattern=r"^[0-9]{1,64}$")],
+        timeout_seconds: Annotated[
+            float,
+            Query(gt=0, le=MAX_PROVIDER_TIMEOUT_SECONDS),
+        ] = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    ) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.list_containers(
+                GtmContainerRequest(
+                    account_id,
+                    gtm_account_id,
+                    timeout_seconds,
+                )
+            )
+        )
+
+    @router.get(
+        GTM_WORKSPACES_PATH,
+        response_model=tuple[GtmWorkspace, ...],
+        operation_id=GTM_WORKSPACES_LIST_OPERATION,
+    )
+    async def gtm_workspaces_list(
+        account_id: Annotated[str, Query(pattern=ACCOUNT_ID_PATTERN)],
+        gtm_account_id: Annotated[str, Query(pattern=r"^[0-9]{1,64}$")],
+        container_id: Annotated[str, Query(pattern=r"^[0-9]{1,64}$")],
+        timeout_seconds: Annotated[
+            float,
+            Query(gt=0, le=MAX_PROVIDER_TIMEOUT_SECONDS),
+        ] = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    ) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.list_workspaces(
+                GtmWorkspaceRequest(
+                    account_id,
+                    gtm_account_id,
+                    container_id,
+                    timeout_seconds,
+                )
+            )
+        )
+
+    @router.get(
+        GTM_ENTITIES_PATH,
+        response_model=tuple[GtmEntity, ...],
+        operation_id=GTM_ENTITIES_LIST_OPERATION,
+    )
+    async def gtm_entities_list(
+        account_id: Annotated[str, Query(pattern=ACCOUNT_ID_PATTERN)],
+        gtm_account_id: Annotated[str, Query(pattern=r"^[0-9]{1,64}$")],
+        container_id: Annotated[str, Query(pattern=r"^[0-9]{1,64}$")],
+        workspace_id: Annotated[str, Query(pattern=r"^[0-9]{1,64}$")],
+        kind: GtmEntityKind,
+        timeout_seconds: Annotated[
+            float,
+            Query(gt=0, le=MAX_PROVIDER_TIMEOUT_SECONDS),
+        ] = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    ) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.list_entities(
+                GtmEntityRequest(
+                    account_id,
+                    gtm_account_id,
+                    container_id,
+                    timeout_seconds,
+                    workspace_id,
+                    kind,
+                )
+            )
+        )
+
+    @router.get(
+        EDGE_REDIRECTS_PATH,
+        response_model=tuple[CloudflareEdgeRedirect, ...],
+        operation_id=EDGE_REDIRECTS_LIST_OPERATION,
+    )
+    async def edge_redirects_list(
+        account_id: Annotated[str, Query(pattern=ACCOUNT_ID_PATTERN)],
+        site_url: Annotated[str, Query(min_length=1, max_length=_URL_MAX_LENGTH)],
+        timeout_seconds: Annotated[
+            float,
+            Query(gt=0, le=MAX_PROVIDER_TIMEOUT_SECONDS),
+        ] = DEFAULT_PROVIDER_TIMEOUT_SECONDS,
+    ) -> JsonValue:
+        if services.edge_redirects is None:
+            raise HTTPException(status_code=503, detail="edge redirect service is unavailable")
+        return to_json_value(
+            await services.edge_redirects.list(
+                EdgeRedirectListRequest(account_id, site_url, timeout_seconds)
             )
         )
 
@@ -457,6 +668,246 @@ def _register_write_routes(router: APIRouter, services: ApplicationServices) -> 
                     body.zone_id,
                     body.template,
                     body.timeout_seconds,
+                )
+            )
+        )
+
+    @router.post(
+        BING_CONTENT_SUBMISSIONS_PATH,
+        response_model=BingContentSubmissionReceipt,
+        operation_id=BING_CONTENT_SUBMISSION_OPERATION,
+    )
+    async def bing_content_submission(body: BingContentSubmissionInput) -> JsonValue:
+        if services.bing_content is None:
+            raise HTTPException(status_code=503, detail="Bing content service is unavailable")
+        return to_json_value(
+            await services.bing_content.submit(
+                BingContentSubmissionRequest(
+                    body.account_id,
+                    body.site_url,
+                    body.page_url,
+                    body.dynamic_serving,
+                    body.timeout_seconds,
+                )
+            )
+        )
+
+    @router.post(
+        EDGE_REDIRECTS_PATH,
+        response_model=CloudflareEdgeRedirectReceipt,
+        operation_id=EDGE_REDIRECT_UPSERT_OPERATION,
+    )
+    async def edge_redirect_upsert(body: EdgeRedirectUpsertInput) -> JsonValue:
+        if services.edge_redirects is None:
+            raise HTTPException(status_code=503, detail="edge redirect service is unavailable")
+        return to_json_value(
+            await services.edge_redirects.upsert(
+                EdgeRedirectUpsertRequest(
+                    body.account_id,
+                    body.site_url,
+                    body.timeout_seconds,
+                    body.source_path,
+                    body.target_url,
+                    body.status_code,
+                    body.preserve_query_string,
+                )
+            )
+        )
+
+    @router.delete(
+        EDGE_REDIRECT_OPERATION_PATH,
+        status_code=204,
+        operation_id=EDGE_REDIRECT_DELETE_OPERATION,
+    )
+    async def edge_redirect_delete(redirect_id: str, body: EdgeRedirectDeleteInput) -> None:
+        if redirect_id != body.rule_id:
+            raise HTTPException(
+                status_code=409, detail="redirect_id does not match the request body"
+            )
+        if services.edge_redirects is None:
+            raise HTTPException(status_code=503, detail="edge redirect service is unavailable")
+        await services.edge_redirects.delete(
+            EdgeRedirectDeleteRequest(
+                body.account_id,
+                body.site_url,
+                body.timeout_seconds,
+                body.rule_id,
+            )
+        )
+
+    @router.post(
+        GTM_CONTAINERS_PATH,
+        response_model=GtmContainer,
+        operation_id=GTM_CONTAINERS_CREATE_OPERATION,
+    )
+    async def gtm_container_create(body: GtmContainerCreateInput) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.create_container(
+                GtmContainerCreateRequest(
+                    body.account_id,
+                    body.gtm_account_id,
+                    body.timeout_seconds,
+                    body.name,
+                    body.usage_contexts,
+                )
+            )
+        )
+
+    @router.delete(
+        GTM_CONTAINER_OPERATION_PATH,
+        status_code=204,
+        operation_id=GTM_CONTAINERS_DELETE_OPERATION,
+    )
+    async def gtm_container_delete(container_id: str, body: GtmContainerDeleteInput) -> None:
+        if container_id != body.container_id:
+            raise HTTPException(
+                status_code=409, detail="container_id does not match the request body"
+            )
+        await services.google_tag_manager.delete_container(
+            GtmContainerRequest(
+                body.account_id,
+                body.gtm_account_id,
+                body.timeout_seconds,
+            ),
+            body.container_id,
+        )
+
+    @router.post(
+        GTM_WORKSPACES_PATH,
+        response_model=GtmWorkspace,
+        operation_id=GTM_WORKSPACES_CREATE_OPERATION,
+    )
+    async def gtm_workspace_create(body: GtmWorkspaceCreateInput) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.create_workspace(
+                GtmWorkspaceCreateRequest(
+                    body.account_id,
+                    body.gtm_account_id,
+                    body.container_id,
+                    body.timeout_seconds,
+                    body.name,
+                    body.description,
+                )
+            )
+        )
+
+    @router.delete(
+        GTM_WORKSPACE_OPERATION_PATH,
+        status_code=204,
+        operation_id=GTM_WORKSPACES_DELETE_OPERATION,
+    )
+    async def gtm_workspace_delete(workspace_id: str, body: GtmWorkspaceDeleteInput) -> None:
+        if workspace_id != body.workspace_id:
+            raise HTTPException(
+                status_code=409, detail="workspace_id does not match the request body"
+            )
+        await services.google_tag_manager.delete_workspace(
+            GtmWorkspaceRequest(
+                body.account_id,
+                body.gtm_account_id,
+                body.container_id,
+                body.timeout_seconds,
+            ),
+            body.workspace_id,
+        )
+
+    @router.post(
+        GTM_ENTITIES_PATH,
+        response_model=GtmEntity,
+        operation_id=GTM_ENTITIES_CREATE_OPERATION,
+    )
+    async def gtm_entity_create(body: GtmEntityCreateInput) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.create_entity(
+                GtmEntityCreateRequest(
+                    body.account_id,
+                    body.gtm_account_id,
+                    body.container_id,
+                    body.timeout_seconds,
+                    body.workspace_id,
+                    body.kind,
+                    body.definition,
+                )
+            )
+        )
+
+    @router.put(
+        GTM_ENTITY_OPERATION_PATH,
+        response_model=GtmEntity,
+        operation_id=GTM_ENTITIES_UPDATE_OPERATION,
+    )
+    async def gtm_entity_update(entity_id: str, body: GtmEntityUpdateInput) -> JsonValue:
+        if entity_id != body.entity_id:
+            raise HTTPException(status_code=409, detail="entity_id does not match the request body")
+        return to_json_value(
+            await services.google_tag_manager.update_entity(
+                GtmEntityUpdateRequest(
+                    body.account_id,
+                    body.gtm_account_id,
+                    body.container_id,
+                    body.timeout_seconds,
+                    body.workspace_id,
+                    body.kind,
+                    body.definition,
+                    body.entity_id,
+                )
+            )
+        )
+
+    @router.delete(
+        GTM_ENTITY_OPERATION_PATH,
+        status_code=204,
+        operation_id=GTM_ENTITIES_DELETE_OPERATION,
+    )
+    async def gtm_entity_delete(entity_id: str, body: GtmEntityDeleteInput) -> None:
+        if entity_id != body.entity_id:
+            raise HTTPException(status_code=409, detail="entity_id does not match the request body")
+        await services.google_tag_manager.delete_entity(
+            GtmEntityRequest(
+                body.account_id,
+                body.gtm_account_id,
+                body.container_id,
+                body.timeout_seconds,
+                body.workspace_id,
+                body.kind,
+            ),
+            body.entity_id,
+        )
+
+    @router.post(
+        GTM_WORKSPACE_VERSIONS_PATH,
+        response_model=GtmVersion,
+        operation_id=GTM_WORKSPACE_VERSION_CREATE_OPERATION,
+    )
+    async def gtm_workspace_version_create(body: GtmVersionCreateInput) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.create_version(
+                GtmVersionCreateRequest(
+                    body.account_id,
+                    body.gtm_account_id,
+                    body.container_id,
+                    body.timeout_seconds,
+                    body.workspace_id,
+                    body.name,
+                    body.notes,
+                )
+            )
+        )
+
+    @router.post(
+        GTM_VERSION_PUBLISH_PATH,
+        response_model=GtmVersion,
+        operation_id=GTM_VERSION_PUBLISH_OPERATION,
+    )
+    async def gtm_version_publish(body: GtmVersionPublishInput) -> JsonValue:
+        return to_json_value(
+            await services.google_tag_manager.publish_version(
+                GtmVersionPublishRequest(
+                    body.account_id,
+                    body.gtm_account_id,
+                    body.container_id,
+                    body.timeout_seconds,
+                    body.version_id,
                 )
             )
         )

@@ -147,6 +147,7 @@ class Provider(StrEnum):
     GOOGLE = "google"
     BING = "bing"
     CLOUDFLARE = "cloudflare"
+    CLARITY = "clarity"
 
 
 DNS_OWNERSHIP_PROVIDERS = frozenset((Provider.CLOUDFLARE,))
@@ -275,6 +276,16 @@ class ConfiguredAccount(BaseModel):
             raise ValueError("Bing accounts cannot configure non-Bing resources")
         if self.provider == Provider.GOOGLE and self.dns_zones:
             raise ValueError("Google accounts cannot configure DNS zones")
+        if self.provider == Provider.CLARITY and (
+            self.search_console_sites
+            or self.pagespeed_sites
+            or self.ga4_properties
+            or self.dns_zones
+            or self.bing_sites
+            or self.oauth_token_file is not None
+            or self.pagespeed_api_key_file is not None
+        ):
+            raise ValueError("Clarity accounts can configure only their credential")
         if self.provider in DNS_OWNERSHIP_PROVIDERS and (
             self.search_console_sites
             or self.pagespeed_sites

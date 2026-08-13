@@ -23,6 +23,10 @@ def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
     source = _SOURCE_MAKEFILE.read_text(encoding="utf-8")
 
     assert "RANKRAT_READ_ONLY ?= false" in source
+    assert "TOOLING_LOG_FLUSH_ATTEMPTS ?= 20" in source
+    assert "TOOLING_LOG_FLUSH_DELAY_SECONDS ?= 0.1" in source
+    assert 'wait_for_log "$$scratch/bump.log"' in _target(source, "test-tooling")
+    assert 'wait_for_log "$$scratch/bump-lighthouse.log"' in _target(source, "test-tooling")
     assert "RANKRAT_READ_ONLY=$(RANKRAT_READ_ONLY)" in source
     assert "RANKRAT_PROFILE ?= $(HOME)/.config/rankrat" in source
     assert "PROFILE_CONFIG := $(RANKRAT_PROFILE)/config" in source
@@ -479,8 +483,10 @@ def test_live_target_runs_every_provider_and_transport_target() -> None:
     expected_targets = (
         "test-live-google-search-console",
         "test-live-google-analytics",
+        "test-live-google-tag-manager",
         "test-live-pagespeed",
         "test-live-cloudflare",
+        "test-live-clarity",
         "test-live-bing",
         "test-live-indexnow",
         "test-live-http",
@@ -529,6 +535,9 @@ def test_lighthouse_image_target_drives_the_production_transport() -> None:
     assert 'docker rm -f "$worker_container_name"' in script
     assert 'docker volume create "$runtime_volume_name"' in script
     assert 'docker volume rm "$runtime_volume_name"' in script
+    assert "SMOKE_BOUNDARY_DOCUMENT" in script
+    assert '"pagespeed_sites": ["https://example.com/"]' in script
+    assert "boundaries.json.example" not in script
     assert script.count('--user "$HOST_USER_ID:$HOST_GROUP_ID"') == 5
 
 

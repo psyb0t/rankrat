@@ -15,6 +15,7 @@ or [`openapi.json`](../openapi.json) for exact request/response schemas. The
 - [Improve internal links and content](#improve-internal-links-and-content)
 - [Inspect backlinks](#inspect-backlinks)
 - [Inspect performance](#inspect-performance)
+- [Manage tags, redirects, and Bing content](#manage-tags-redirects-and-bing-content)
 - [Ownership and onboarding](#ownership-and-onboarding)
 - [Monitoring and writes](#monitoring-and-writes)
 
@@ -195,6 +196,29 @@ does not scrape competitors, manufacture links, buy links, or send outreach.
 PageSpeed/CrUX are external Google services. Lighthouse is local and optional.
 Read [Lighthouse](lighthouse.md) before enabling its browser worker.
 
+## Manage tags, redirects, and Bing content
+
+Use `google_tag_manager_accounts_list` first to discover the signed-in user's
+Tag Manager accounts. The Google Tag Manager tools then provide typed list,
+create, update, delete, workspace-version, and publication operations for
+containers, workspaces, tags, triggers, and variables. Re-run
+`rankrat auth-google` after upgrading to a release that adds a Tag Manager
+scope; the grant must contain the current edit, delete, version-edit, and
+publish scopes before those writes can succeed.
+
+`clarity_insights` reads one bounded Microsoft Clarity project export. It is a
+read-only project token integration with a small upstream daily request quota;
+use it to inspect evidence, not as a high-frequency monitor.
+
+`edge_redirects_list`, `edge_redirect_upsert`, and `edge_redirect_delete` are
+provider-neutral names. Cloudflare is the currently shipped adapter. Rankrat
+lists and changes only redirects marked as Rankrat-managed; it does not
+overwrite arbitrary provider rules.
+
+`bing_content_submission_create` fetches an allowed public HTML page itself,
+then sends the freshly fetched body to Bing. It does not accept caller-supplied
+HTML, headers, or a free-form destination URL.
+
 ## Ownership and onboarding
 
 `site_ownership_check` reads Google/Bing and public DNS status without returning
@@ -210,6 +234,7 @@ write flow.
 Monitors persist bounded site-audit snapshots and issue lifecycle state. Other
 writes submit sitemaps/URLs, publish eligible Indexing notifications, notify
 IndexNow, rename GA4 resources, verify ownership, remediate discovery, and
-perform finite Cloudflare cache actions. Read
+perform typed Tag Manager, managed edge-redirect, Bing content-submission, and
+finite Cloudflare cache actions. Read
 [Monitoring and remediation](monitoring-and-remediation.md) for asynchronous and
 partial-failure semantics before enabling writes.

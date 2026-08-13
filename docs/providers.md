@@ -13,6 +13,7 @@ IDs, and discovered resource inventory—not credential contents.
 - [PageSpeed and CrUX](#pagespeed-and-crux)
 - [Bing Webmaster Tools](#bing-webmaster-tools)
 - [Cloudflare](#cloudflare)
+- [Microsoft Clarity](#microsoft-clarity)
 - [IndexNow](#indexnow)
 - [HTTP bearer](#http-bearer)
 - [Live provider verification](#live-provider-verification)
@@ -26,6 +27,7 @@ IDs, and discovered resource inventory—not credential contents.
 | PageSpeed/CrUX key | `secrets/google/pagespeed-api-key` | API key only |
 | Bing Webmaster | `secrets/bing/api-key` | API key only |
 | Cloudflare | `secrets/cloudflare/api-token` | Scoped API token only |
+| Microsoft Clarity | `secrets/clarity/api-token` | Project Data Export API token only |
 | IndexNow | `secrets/indexnow/key` | IndexNow key only |
 | HTTP auth | `secrets/rankrat/http-bearer-token` | Random bearer only |
 
@@ -40,7 +42,8 @@ account. Manual file creation remains available for automated deployments.
 ## Google OAuth
 
 One OAuth Desktop client and one consent flow cover Search Console, Site
-Verification, Google Indexing, GA4 Data, and GA4 Admin operations.
+Verification, Google Indexing, GA4 Data, GA4 Admin, and Google Tag Manager
+operations.
 
 ### Create the Google project
 
@@ -55,6 +58,7 @@ Verification, Google Indexing, GA4 Data, and GA4 Admin operations.
    - [Site Verification API](https://console.cloud.google.com/apis/library/siteverification.googleapis.com)
    - [Google Analytics Data API](https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com)
    - [Google Analytics Admin API](https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com)
+   - [Google Tag Manager API](https://console.cloud.google.com/apis/library/tagmanager.googleapis.com)
    - [Web Search Indexing API](https://console.cloud.google.com/apis/library/indexing.googleapis.com)
    - [PageSpeed Insights API](https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com)
 
@@ -95,6 +99,10 @@ The fixed authorization flow requests:
 - `https://www.googleapis.com/auth/analytics.readonly`
 - `https://www.googleapis.com/auth/analytics.edit`
 - `https://www.googleapis.com/auth/siteverification`
+- `https://www.googleapis.com/auth/tagmanager.edit.containers`
+- `https://www.googleapis.com/auth/tagmanager.delete.containers`
+- `https://www.googleapis.com/auth/tagmanager.edit.containerversions`
+- `https://www.googleapis.com/auth/tagmanager.publish`
 
 It uses PKCE, a high-entropy state, an exact loopback callback, and offline
 access. Rankrat persists only the refresh record required for later calls.
@@ -111,9 +119,10 @@ rankrat revoke-google
 
 OAuth can only exercise permissions the signed-in Google user already has.
 Rankrat discovers and can operate on every Search Console site, Analytics
-account, and GA4 property visible to that user. The resource arrays are cached
-inventory and URL-containment data, not a second permission gate. OAuth does
-not grant ownership of a property the user cannot already manage.
+account, GA4 property, and Tag Manager account visible to that user. The
+resource arrays are cached inventory and URL-containment data, not a second
+permission gate. OAuth does not grant ownership of a property the user cannot
+already manage.
 
 The Google Analytics Admin API cannot create a GA4 **account**. It can create a
 property inside an existing account. If no Analytics account exists, create it
@@ -175,7 +184,8 @@ applies child-URL containment within the selected site.
 ## Cloudflare
 
 Cloudflare is currently the DNS ownership adapter and also supplies traffic,
-cache analytics, exact cache purges, and two finite cache templates.
+cache analytics, exact cache purges, two finite cache templates, and the
+currently shipped provider adapter for Rankrat-managed edge redirects.
 
 Rankrat's Cloudflare operations work on the Free plan: the analytics report is
 limited to the most recent 24-hour query window, exact URL purges are supported,
@@ -192,6 +202,7 @@ zone rules still count toward that Cloudflare limit.
    | Traffic/cache analytics | Analytics → Read |
    | Exact URL purge | Cache Purge → Purge |
    | Rankrat cache templates | Cache Rules → Edit; some interfaces call it Cache Settings Write |
+   | Rankrat-managed edge redirects | Zone Rulesets → Edit; some interfaces call it Dynamic Redirects or Rulesets Write |
 
    Cloudflare changes dashboard labels over time; cross-check the current
    [API token permission reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
@@ -211,10 +222,33 @@ zone rules still count toward that Cloudflare limit.
    }
    ```
 
-Rankrat exposes provider-neutral ownership operations so future DNS adapters do
-not change callers. The current tool surface uses DNS for issued ownership
-proofs and separate Cloudflare tools for analytics/cache operations; it does
-not expose arbitrary record bodies or a whole-zone purge.
+Rankrat exposes provider-neutral ownership and edge-redirect operations so
+future DNS and CDN adapters do not change callers. The current tool surface
+uses DNS for issued ownership proofs and separate Cloudflare tools for
+analytics/cache/managed-redirect operations; it does not expose arbitrary
+record bodies, whole-zone purges, or arbitrary existing Cloudflare ruleset
+replacement.
+
+## Microsoft Clarity
+
+Clarity's free Data Export API is project-scoped. Configure one Rankrat
+`clarity` account for each Clarity project you want to inspect; its credential
+is the project token, not a Microsoft account-wide credential.
+
+1. Open the relevant project in [Microsoft Clarity](https://clarity.microsoft.com/).
+2. Select **Settings → Data Export**.
+3. Choose **Generate new API token** and store only the token at
+   `secrets/clarity/api-token`.
+4. Add an account whose `provider` is `clarity` and whose `credential` is
+   `/run/secrets/clarity/api-token`, or let `make setup` create it from a
+   hidden prompt.
+
+Rankrat calls only Clarity's fixed project-insights endpoint. It does not
+write Clarity configuration or replay session recordings. The upstream export
+API limits each project to ten requests per day; use
+`make test-live-clarity` deliberately rather than placing it in a frequent
+polling loop. See [Microsoft's Data Export API documentation](https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api)
+for the current upstream dimensions, metrics, and quota.
 
 ## IndexNow
 
@@ -257,7 +291,9 @@ site/property/zone yet.
 | `make test-live-google-search-console` | Site list, analytics, sitemap status, and URL inspection for the sole Google account |
 | `make test-live-google-analytics` | GA4 account/property discovery, report, and realtime read |
 | `make test-live-pagespeed` | PageSpeed analysis for a configured public site |
+| `make test-live-google-tag-manager` | Google Tag Manager account discovery through the stored OAuth grant |
 | `make test-live-cloudflare` | Free-plan-compatible 24-hour analytics for a discovered zone |
+| `make test-live-clarity` | One bounded Data Export insight request for the configured Clarity project |
 | `make test-live-bing` | Site list plus traffic, query/page, crawl, feed, quota, and link reads |
 | `make test-live-indexnow` | One real submission only with an explicit one-command opt-in |
 | `make test-live-http` | Production image plus authenticated REST and both MCP transports |

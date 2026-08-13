@@ -51,6 +51,8 @@ COVERAGE_LOG := $(PWD)/.coverage-report.log
 COVERAGE_PERCENT_FILE := $(PWD)/coverage-percent.txt
 BUMP_EXCLUDE_NEWER := bash scripts/bump-exclude-newer.sh
 BUMP_LIGHTHOUSE_RELEASE_AGE := bash scripts/bump_lighthouse_minimum_release_age.sh
+TOOLING_LOG_FLUSH_ATTEMPTS ?= 20
+TOOLING_LOG_FLUSH_DELAY_SECONDS ?= 0.1
 PKG_GROUP ?=
 LIGHTHOUSE_PKG ?=
 RANKRAT_WRAPPERS := rankrat
@@ -155,7 +157,7 @@ LIGHTHOUSE_MUTATE_RUN := docker run --rm --init \
 	$(LIGHTHOUSE_LOCK_IMAGE)
 
 .PHONY: help version dev-image lighthouse-dev-image lighthouse-lock-image lighthouse-image rankrat-image lock-image setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove lighthouse-pkg-lock lighthouse-pkg-add lighthouse-pkg-update lighthouse-pkg-upgrade lighthouse-pkg-remove \
-	lint lighthouse-lint lint-fix format lighthouse-format test lighthouse-test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-pagespeed test-live-cloudflare test-live-bing test-live-indexnow test-live-http test-image test-lighthouse-image \
+	lint lighthouse-lint lint-fix format lighthouse-format test lighthouse-test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-google-tag-manager test-live-pagespeed test-live-cloudflare test-live-clarity test-live-bing test-live-indexnow test-live-http test-image test-lighthouse-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
 	auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
 
@@ -311,14 +313,16 @@ test-security: dev-image ## Run security regression tests in the dev container
 	$(DEV_RUN) uv run --frozen --no-sync pytest -p no:cacheprovider tests/security
 
 test-tooling: dev-image ## Exercise dependency age-gate tooling in container-local scratch
-	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; test -s bump.log || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "RANKRAT_PROFILE ?= \$$(HOME)/.config/rankrat"; require_fragment Makefile "./rankrat --data-dir \"\$$(RANKRAT_PROFILE)\""; require_fragment Makefile "RANKRAT_LIGHTHOUSE_IMAGE=\$$(LIGHTHOUSE_IMAGE)"; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "--boundary-file /profile/config/boundaries.json"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat "COMPOSE_FILE_RELATIVE_PATH=\"docker-compose.yml\""; require_fragment rankrat "--project-directory \"\$$profile_directory\""; require_fragment rankrat "--detach"; grep -Fq '"'"'"accounts"'"'"' /work/config/boundaries.json.example; grep -Fq "\$${RANKRAT_DATA_DIR:-.}/secrets:/run/secrets:ro" /work/docker-compose.yml'
-	$(DEV_RUN) sh -ec 'scratch=$$(mktemp -d); mkdir -p "$$scratch/lighthouse-worker"; cp scripts/bump_lighthouse_minimum_release_age.sh "$$scratch"; cp lighthouse-worker/pnpm-workspace.yaml "$$scratch/lighthouse-worker"; cd "$$scratch"; LOG_FILE="$$scratch/bump-lighthouse.log" bash bump_lighthouse_minimum_release_age.sh; test -s bump-lighthouse.log || { echo "Lighthouse dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^minimumReleaseAge: 10080$$" lighthouse-worker/pnpm-workspace.yaml)" -eq 1 || { echo "Lighthouse dependency age gate is not exact" >&2; exit 1; }; grep -Fq -- "- brace-expansion@5.0.9" lighthouse-worker/pnpm-workspace.yaml; grep -Fq "brace-expansion: 5.0.9" lighthouse-worker/pnpm-workspace.yaml'
+	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; wait_for_log() { attempts=1; while ! test -s "$$1" && [ "$$attempts" -le "$(TOOLING_LOG_FLUSH_ATTEMPTS)" ]; do sleep "$(TOOLING_LOG_FLUSH_DELAY_SECONDS)"; attempts=$$((attempts + 1)); done; test -s "$$1"; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; wait_for_log "$$scratch/bump.log" || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "RANKRAT_PROFILE ?= \$$(HOME)/.config/rankrat"; require_fragment Makefile "./rankrat --data-dir \"\$$(RANKRAT_PROFILE)\""; require_fragment Makefile "RANKRAT_LIGHTHOUSE_IMAGE=\$$(LIGHTHOUSE_IMAGE)"; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "--boundary-file /profile/config/boundaries.json"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat "COMPOSE_FILE_RELATIVE_PATH=\"docker-compose.yml\""; require_fragment rankrat "--project-directory \"\$$profile_directory\""; require_fragment rankrat "--detach"; grep -Fq '"'"'"accounts"'"'"' /work/config/boundaries.json.example; grep -Fq "\$${RANKRAT_DATA_DIR:-.}/secrets:/run/secrets:ro" /work/docker-compose.yml'
+	$(DEV_RUN) sh -ec 'wait_for_log() { attempts=1; while ! test -s "$$1" && [ "$$attempts" -le "$(TOOLING_LOG_FLUSH_ATTEMPTS)" ]; do sleep "$(TOOLING_LOG_FLUSH_DELAY_SECONDS)"; attempts=$$((attempts + 1)); done; test -s "$$1"; }; scratch=$$(mktemp -d); mkdir -p "$$scratch/lighthouse-worker"; cp scripts/bump_lighthouse_minimum_release_age.sh "$$scratch"; cp lighthouse-worker/pnpm-workspace.yaml "$$scratch/lighthouse-worker"; cd "$$scratch"; LOG_FILE="$$scratch/bump-lighthouse.log" bash bump_lighthouse_minimum_release_age.sh; wait_for_log "$$scratch/bump-lighthouse.log" || { echo "Lighthouse dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^minimumReleaseAge: 10080$$" lighthouse-worker/pnpm-workspace.yaml)" -eq 1 || { echo "Lighthouse dependency age gate is not exact" >&2; exit 1; }; grep -Fq -- "- brace-expansion@5.0.9" lighthouse-worker/pnpm-workspace.yaml; grep -Fq "brace-expansion: 5.0.9" lighthouse-worker/pnpm-workspace.yaml'
 
 test-live: dev-image ## Run every configured provider and shipped transport check
 	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-google-analytics RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-google-tag-manager RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-pagespeed RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-cloudflare RANKRAT_DEV_IMAGE_SOURCE=local
+	@$(MAKE) --no-print-directory test-live-clarity RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-bing RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-indexnow RANKRAT_DEV_IMAGE_SOURCE=local
 	@$(MAKE) --no-print-directory test-live-http RANKRAT_DEV_IMAGE_SOURCE=local
@@ -329,11 +333,17 @@ test-live-google-search-console: test-live-one ## Run configured Google Search C
 test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4
 test-live-google-analytics: test-live-one ## Run configured GA4 report and discovery checks
 
+test-live-google-tag-manager: LIVE_SELECTOR := test_live_google_tag_manager
+test-live-google-tag-manager: test-live-one ## Run configured Google Tag Manager account read checks
+
 test-live-pagespeed: LIVE_SELECTOR := test_live_pagespeed
 test-live-pagespeed: test-live-one ## Run configured PageSpeed key and analysis checks
 
 test-live-cloudflare: LIVE_SELECTOR := test_live_cloudflare
 test-live-cloudflare: test-live-one ## Run configured Cloudflare readiness and analytics checks
+
+test-live-clarity: LIVE_SELECTOR := test_live_clarity
+test-live-clarity: test-live-one ## Run configured Microsoft Clarity export checks
 
 test-live-bing: LIVE_SELECTOR := test_live_bing
 test-live-bing: test-live-one ## Run configured Bing Webmaster checks

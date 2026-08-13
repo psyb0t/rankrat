@@ -56,7 +56,9 @@ compose.override.yml
 docker-compose.override.yml
 .dockerignore.local
 .test-image.*/
+.test-image-debug.*/
 .test-live-http.*/
+.test-stdio-debug.*/
 .test-lighthouse-image.*/
 .sbom/
 .grype-db/

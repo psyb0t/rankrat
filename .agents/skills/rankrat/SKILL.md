@@ -1,6 +1,6 @@
 ---
 name: rankrat
-description: Query Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare analytics, and Bing backlink intelligence; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, backlinks, browser scores, performance history, or search traffic for sites they control.
+description: Query Google Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft Clarity, PageSpeed, CrUX, Cloudflare analytics, and Bing backlink intelligence; manage typed tags and safe edge redirects; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, tags, redirects, backlinks, browser scores, performance history, or search traffic for sites they control.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
@@ -9,7 +9,7 @@ metadata:
     requires:
       bins: [docker]
 permissions:
-  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Bing Webmaster Tools, PageSpeed/CrUX, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
+  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Google Tag Manager, Bing Webmaster Tools, Microsoft Clarity, PageSpeed/CrUX, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
   shell: "docker run invocations for the published image or the installed rankrat launcher; no other host access is required."
   filesystem: "reads provider-account config and credentials; writes the configured OAuth token store, persistent SQLite monitor state, locally initialized IndexNow key, and discovered resource inventory in the config file when writable."
 ---
@@ -17,8 +17,9 @@ permissions:
 # rankrat
 
 A self-hosted MCP server over the SEO and search-analytics APIs you already have
-accounts on — Google Search Console, Bing Webmaster Tools, GA4, and PageSpeed
-Insights — so an agent can read your own search data without you handing it a
+accounts on — Google Search Console, Google Tag Manager, Bing Webmaster Tools,
+GA4, Microsoft Clarity, and PageSpeed Insights — so an agent can read and,
+when trusted, manage your own provider resources without you handing it a
 browser session or a service-account key.
 
 Install, credentials and the full environment reference:
@@ -36,7 +37,7 @@ For a human-readable operator manual organized by topic, use the public
 ## Security and safety
 
 Configured provider credentials are Rankrat's authority. A Google OAuth account,
-Bing key or Cloudflare token can reach every supported
+Bing key, Cloudflare token, or Clarity project token can reach every supported
 resource that provider exposes to it. Resource arrays in the config are
 discovered inventory and URL-containment data, not a second permission system.
 Fixed provider origins, typed requests, public-URL validation, and child-URL
@@ -67,6 +68,9 @@ the bearer token if anything else can reach it.
 - GA4 reporting: realtime, content and landing-page performance, organic search
   landing pages, traffic sources, ecommerce, audience segments, user behavior,
   conversion funnels.
+- Google Tag Manager account discovery plus typed containers, workspaces, tags,
+  triggers, variables, versions, and publication in writable mode.
+- Microsoft Clarity Data Export project insights in read-only mode.
 - PageSpeed Insights, CrUX history, and fetching a page's structured-data schema.
 - Whole-site crawling for deterministic metadata, canonical, robots, sitemap,
   duplicate-title, link, and structured-data findings with remediation text.
@@ -81,6 +85,10 @@ the bearer token if anything else can reach it.
 - Cloudflare hourly traffic/cache analytics, plus exact purges and two finite
   cache templates in writable mode. Template mutations are serialized per zone
   within the running Rankrat process.
+- Provider-neutral managed edge redirects. Cloudflare is the current adapter;
+  Rankrat never replaces unrelated provider rulesets.
+- Safe Bing content submission: Rankrat fetches the bounded public HTML page
+  itself rather than accepting caller-provided content or headers.
 - Persistent site-audit monitors, immutable snapshots, issue lifecycle events,
   and explicit acknowledge/resolve operations. The background scheduler runs
   only in the long-lived HTTP process; stdio supports explicit monitor runs and
@@ -240,10 +248,12 @@ Creating provider resources and proving ownership are separate. When a DNS
 provider account is configured, call `site_ownership_verify` after onboarding,
 then poll `site_ownership_check` until `complete` is true. Cloudflare is the
 currently shipped DNS adapter; without a supported adapter, the guide lists the
-manual methods accepted by the property form. Rankrat still cannot deploy the
-GA4 tag or create a GA4 account. `site_onboarding_submit` exists in writable
-mode; when the process is read-only, guide the user through a separate writable
-Rankrat process or the `rankrat onboard-site` terminal command.
+manual methods accepted by the property form. Site onboarding does not deploy a
+GA4 tag, but writable typed Tag Manager tools can do so when the caller supplies
+an explicit container, workspace, tag definition, version, and publication
+request. Rankrat still cannot create a GA4 account. `site_onboarding_submit`
+exists in writable mode; when the process is read-only, guide the user through a
+separate writable Rankrat process or the `rankrat onboard-site` terminal command.
 
 Typical flow for "why did traffic drop":
 

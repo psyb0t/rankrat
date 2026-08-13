@@ -39,7 +39,13 @@ _ATTRIBUTE_PATTERN = re.compile(
     r"(?P<name>[A-Za-z_:][A-Za-z0-9_.:-]*)\s*(?:=\s*(?P<value>\"[^\"]*\"|'[^']*'|[^\s\"'=<>`]+))?",
     re.S,
 )
-_SITEMAP_LOCATION_PATTERN = re.compile(r"<loc\s*>([^<>]{1,4096})</loc\s*>", re.I)
+_XML_DANGEROUS_DECLARATION_PATTERN = re.compile(r"<!\s*(?:DOCTYPE|ENTITY)\b", re.I)
+_SITEMAP_LOCATION_PATTERN = re.compile(
+    r"<(?:[A-Za-z_][A-Za-z0-9_.-]*:)?loc\b[^>]{0,8192}>\s*"
+    r"(?P<value>[^<]{0,2048})\s*"
+    r"</(?:[A-Za-z_][A-Za-z0-9_.-]*:)?loc\s*>",
+    re.I | re.S,
+)
 _MAX_TITLE_CHARS = 60
 _MAX_DESCRIPTION_CHARS = 160
 _MIN_DESCRIPTION_CHARS = 50
@@ -124,6 +130,7 @@ class _ParsedPage:
     links: tuple[str, ...]
     has_open_graph_title: bool
     has_open_graph_description: bool
+    hreflang_languages: tuple[str, ...]
 
 
 class SiteAuditService:
@@ -143,14 +150,17 @@ class SiteAuditService:
 
         self.authorize(request.account_id, request.site_url)
         discovered_sitemaps = await self._discover_sitemaps(request)
+        issues: list[SiteAuditIssue] = []
         seeds = [request.site_url]
         for sitemap_url in discovered_sitemaps:
-            seeds.extend(await self._sitemap_urls(request, sitemap_url))
+            sitemap_urls, sitemap_issue = await self._sitemap_urls(request, sitemap_url)
+            seeds.extend(sitemap_urls)
+            if sitemap_issue is not None:
+                issues.append(sitemap_issue)
         sitemap_seeds = frozenset(seeds[1:])
         queue = deque((url, 0) for url in dict.fromkeys(seeds))
         queued = set(url for url, _ in queue)
         pages: list[SiteAuditPage] = []
-        issues: list[SiteAuditIssue] = []
         titles: dict[str, list[str]] = {}
         truncated = False
         while queue and len(pages) < request.max_pages:
@@ -244,17 +254,21 @@ class SiteAuditService:
         self,
         request: SiteAuditRequest,
         sitemap_url: str,
-    ) -> tuple[str, ...]:
+    ) -> tuple[tuple[str, ...], SiteAuditIssue | None]:
         try:
             fetched = await self._fetcher.fetch(sitemap_url, request.timeout_seconds)
         except SiteFetchError:
-            return ()
+            return (), self._invalid_sitemap_issue(sitemap_url)
         if fetched.status_code != 200:
-            return ()
-        decoded = fetched.body.decode("utf-8", errors="replace")
+            return (), self._invalid_sitemap_issue(sitemap_url)
+        if _XML_DANGEROUS_DECLARATION_PATTERN.search(
+            fetched.body.decode("utf-8", errors="replace")
+        ):
+            return (), self._invalid_sitemap_issue(sitemap_url)
         urls: list[str] = []
-        for raw_url in _SITEMAP_LOCATION_PATTERN.findall(decoded):
-            candidate = html.unescape(raw_url).strip()
+        sitemap = fetched.body.decode("utf-8", errors="replace")
+        for match in _SITEMAP_LOCATION_PATTERN.finditer(sitemap):
+            candidate = html.unescape(match.group("value")).strip()
             try:
                 if configured_site_contains_url(request.site_url, candidate):
                     urls.append(candidate)
@@ -262,7 +276,7 @@ class SiteAuditService:
                 continue
             if len(urls) >= request.max_pages:
                 break
-        return tuple(dict.fromkeys(urls))
+        return tuple(dict.fromkeys(urls)), None
 
     @classmethod
     def _audit_fetched_page(
@@ -271,7 +285,7 @@ class SiteAuditService:
         fetched: SiteFetchResult,
     ) -> tuple[_ParsedPage, tuple[SiteAuditIssue, ...]]:
         if fetched.status_code != 200:
-            empty = _ParsedPage(None, None, None, None, None, 0, 0, 0, (), False, False)
+            empty = _ParsedPage(None, None, None, None, None, 0, 0, 0, (), False, False, ())
             issue = SiteAuditIssue(
                 "http_status",
                 SiteAuditSeverity.ERROR,
@@ -281,7 +295,7 @@ class SiteAuditService:
             )
             return empty, (issue,)
         if fetched.content_type not in _HTML_CONTENT_TYPES:
-            empty = _ParsedPage(None, None, None, None, None, 0, 0, 0, (), False, False)
+            empty = _ParsedPage(None, None, None, None, None, 0, 0, 0, (), False, False, ())
             issue = SiteAuditIssue(
                 "non_html_page",
                 SiteAuditSeverity.WARNING,
@@ -292,7 +306,13 @@ class SiteAuditService:
             return empty, (issue,)
         document = fetched.body.decode("utf-8", errors="replace")
         parsed = cls._parse_page(fetched.url, document)
-        return parsed, cls._page_issues(site_url, fetched.url, fetched.body, parsed)
+        return parsed, cls._page_issues(
+            site_url,
+            fetched.url,
+            fetched.body,
+            dict(fetched.headers),
+            parsed,
+        )
 
     @staticmethod
     def _parse_page(page_url: str, document: str) -> _ParsedPage:
@@ -308,6 +328,7 @@ class SiteAuditService:
         image_without_alt_count = 0
         has_open_graph_title = False
         has_open_graph_description = False
+        hreflang_languages: list[str] = []
         for tag in _TAG_PATTERN.finditer(document):
             if tag.group("closing"):
                 continue
@@ -325,8 +346,12 @@ class SiteAuditService:
                 normalized = _audit_link(page_url, attributes["href"])
                 if normalized is not None:
                     links.append(normalized)
-            elif name == "link" and attributes.get("rel", "").casefold() == "canonical":
-                canonical_url = _audit_link(page_url, attributes.get("href", ""))
+            elif name == "link":
+                relations = frozenset(attributes.get("rel", "").casefold().split())
+                if "canonical" in relations:
+                    canonical_url = _audit_link(page_url, attributes.get("href", ""))
+                if "alternate" in relations and attributes.get("hreflang"):
+                    hreflang_languages.append(attributes["hreflang"].casefold())
             elif name == "meta":
                 key = attributes.get("name", attributes.get("property", "")).casefold()
                 value = attributes.get("content", "").strip()
@@ -350,6 +375,7 @@ class SiteAuditService:
             tuple(dict.fromkeys(links)),
             has_open_graph_title,
             has_open_graph_description,
+            tuple(hreflang_languages),
         )
 
     @staticmethod
@@ -357,6 +383,7 @@ class SiteAuditService:
         site_url: str,
         page_url: str,
         body: bytes,
+        headers: dict[str, str],
         page: _ParsedPage,
     ) -> tuple[SiteAuditIssue, ...]:
         issues: list[SiteAuditIssue] = []
@@ -446,6 +473,42 @@ class SiteAuditService:
                 "Open Graph title or description is missing.",
                 "Add complete Open Graph metadata.",
             )
+        if not headers.get("strict-transport-security"):
+            add(
+                "missing_hsts",
+                SiteAuditSeverity.INFO,
+                "HTTPS response has no Strict-Transport-Security header.",
+                "Set a suitable Strict-Transport-Security header after confirming HTTPS coverage.",
+            )
+        if headers.get("x-content-type-options", "").casefold() != "nosniff":
+            add(
+                "missing_nosniff",
+                SiteAuditSeverity.INFO,
+                "Response does not set X-Content-Type-Options: nosniff.",
+                "Set X-Content-Type-Options to nosniff.",
+            )
+        if not headers.get("referrer-policy"):
+            add(
+                "missing_referrer_policy",
+                SiteAuditSeverity.INFO,
+                "Response has no Referrer-Policy header.",
+                "Set an appropriate Referrer-Policy header.",
+            )
+        content_security_policy = headers.get("content-security-policy", "").casefold()
+        if not headers.get("x-frame-options") and "frame-ancestors" not in content_security_policy:
+            add(
+                "missing_frame_protection",
+                SiteAuditSeverity.INFO,
+                "Response has no framing protection header.",
+                "Set X-Frame-Options or CSP frame-ancestors.",
+            )
+        if len(set(page.hreflang_languages)) != len(page.hreflang_languages):
+            add(
+                "duplicate_hreflang",
+                SiteAuditSeverity.WARNING,
+                "Page repeats a hreflang language value.",
+                "Keep one alternate link per hreflang language value.",
+            )
         eligibility = assess_google_indexing_eligibility(body)
         if not eligibility.eligible:
             add(
@@ -482,6 +545,16 @@ class SiteAuditService:
             url,
             "Page could not be fetched safely.",
             "Fix DNS, TLS, reachability, or the URL and rerun the audit.",
+        )
+
+    @staticmethod
+    def _invalid_sitemap_issue(url: str) -> SiteAuditIssue:
+        return SiteAuditIssue(
+            "invalid_sitemap_xml",
+            SiteAuditSeverity.WARNING,
+            url,
+            "Sitemap is unavailable, invalid XML, or uses prohibited XML declarations.",
+            "Serve a parseable XML sitemap without DTD or entity declarations.",
         )
 
     @staticmethod

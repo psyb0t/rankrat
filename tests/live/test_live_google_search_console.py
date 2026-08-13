@@ -7,11 +7,18 @@ from typing import Final
 import pytest
 
 from rankrat.config import Settings
+from rankrat.constants import (
+    GOOGLE_TAG_MANAGER_DELETE_SCOPE,
+    GOOGLE_TAG_MANAGER_EDIT_SCOPE,
+    GOOGLE_TAG_MANAGER_PUBLISH_SCOPE,
+    GOOGLE_TAG_MANAGER_VERSION_EDIT_SCOPE,
+)
 from rankrat.errors import ConfigurationError
 from rankrat.models.boundaries import ConfiguredAccount, Provider
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.base import AccountId, ProviderReadRequest
 from rankrat.providers.bing import BingWebmasterClient
+from rankrat.providers.clarity import ClarityClient
 from rankrat.providers.cloudflare_performance import CloudflarePerformanceClient
 from rankrat.providers.google_analytics import (
     GOOGLE_ANALYTICS_READ_SCOPE,
@@ -21,6 +28,7 @@ from rankrat.providers.google_search_console import (
     GoogleConfiguredTokenProvider,
     GoogleSearchConsoleClient,
 )
+from rankrat.providers.google_tag_manager import GoogleTagManagerClient
 from rankrat.providers.indexnow import IndexNowClient
 from rankrat.providers.pagespeed import PageSpeedClient
 from rankrat.services.bing import (
@@ -33,6 +41,7 @@ from rankrat.services.bing import (
     BingUrlSubmissionQuotaRequest,
     BingWebmasterService,
 )
+from rankrat.services.clarity import ClarityInsightsRequest, ClarityService
 from rankrat.services.cloudflare_performance import (
     CloudflareAnalyticsRequest,
     CloudflarePerformanceService,
@@ -53,6 +62,7 @@ from rankrat.services.google_search_console import (
     SitemapListRequest,
     UrlInspectionRequest,
 )
+from rankrat.services.google_tag_manager import GoogleTagManagerService
 from rankrat.services.indexnow import IndexNowService, IndexNowSubmissionRequest
 from rankrat.services.pagespeed import (
     PageSpeedAnalysisRequest,
@@ -248,6 +258,43 @@ async def test_live_ga4_unique_read_operations() -> None:
     )
 
     assert isinstance(realtime.rows, tuple)
+
+
+@pytest.mark.asyncio
+async def test_live_google_tag_manager_accounts_match_mocked_contract() -> None:
+    policy = _live_policy()
+    account = _sole_account(policy, Provider.GOOGLE)
+    service = GoogleTagManagerService(
+        GoogleTagManagerClient(
+            policy,
+            GoogleConfiguredTokenProvider(
+                policy,
+                (
+                    GOOGLE_TAG_MANAGER_EDIT_SCOPE,
+                    GOOGLE_TAG_MANAGER_DELETE_SCOPE,
+                    GOOGLE_TAG_MANAGER_VERSION_EDIT_SCOPE,
+                    GOOGLE_TAG_MANAGER_PUBLISH_SCOPE,
+                ),
+            ),
+        )
+    )
+
+    accounts = await service.list_accounts(account.id, timeout_seconds=10.0)
+
+    assert all(item.account_id.isdecimal() for item in accounts)
+
+
+@pytest.mark.asyncio
+async def test_live_clarity_insights_match_mocked_contract() -> None:
+    policy = _live_policy()
+    account = _sole_account(policy, Provider.CLARITY)
+    service = ClarityService(ClarityClient(policy))
+
+    report = await service.live_insights(ClarityInsightsRequest(account.id))
+
+    assert report.num_days == 1
+    assert report.dimensions == ()
+    assert isinstance(report.metrics, tuple)
 
 
 @pytest.mark.asyncio

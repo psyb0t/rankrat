@@ -426,6 +426,7 @@ async def test_site_audit_turns_fetch_and_non_html_failures_into_findings(tmp_pa
     assert {issue.code for issue in report.issues} == {
         "fetch_failed",
         "http_status",
+        "invalid_sitemap_xml",
         "non_html_page",
     }
     assert tuple(page.status_code for page in report.pages) == (503, 200, 0)

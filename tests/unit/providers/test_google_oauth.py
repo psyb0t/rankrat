@@ -89,6 +89,10 @@ def test_google_authorization_requests_every_google_account_data_scope() -> None
         oauth.GOOGLE_ANALYTICS_READ_SCOPE,
         oauth.GOOGLE_ANALYTICS_EDIT_SCOPE,
         oauth.GOOGLE_SITE_VERIFICATION_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_EDIT_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_DELETE_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_VERSION_EDIT_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_PUBLISH_SCOPE,
     )
 
 
@@ -952,6 +956,10 @@ def test_oauth_pure_scope_and_filesystem_guards_are_bounded(
         oauth.GOOGLE_SEARCH_CONSOLE_WRITE_SCOPE,
         oauth.GOOGLE_SITE_VERIFICATION_SCOPE,
         oauth.GOOGLE_ANALYTICS_EDIT_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_EDIT_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_DELETE_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_VERSION_EDIT_SCOPE,
+        oauth.GOOGLE_TAG_MANAGER_PUBLISH_SCOPE,
     )
 
 

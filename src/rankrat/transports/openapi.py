@@ -16,9 +16,10 @@ from rankrat.errors import ConfigurationError
 
 _SPECIFICATION_PACKAGE = "rankrat.api"
 _SPECIFICATION_FILE = "openapi.yaml"
-_SPECIFICATION_FRAGMENT_FILES = ("seo-openapi.yaml",)
+_SPECIFICATION_FRAGMENT_FILES = ("seo-openapi.yaml", "free-seo-openapi.yaml")
 _OPERATION_METHODS = frozenset({"delete", "get", "head", "options", "patch", "post", "put"})
 _MANUAL_OPERATION_FIELDS = frozenset({"security"})
+_MANUAL_COMPONENT_SCHEMAS = frozenset({"ErrorEnvelope", "ProviderFailureCode"})
 _ERROR_ENVELOPE_REFERENCE = "#/components/schemas/ErrorEnvelope"
 
 
@@ -77,10 +78,9 @@ def fastapi_drift_document(document: dict[str, object]) -> dict[str, object]:
         )
         schemas = component_mapping.get("schemas")
         if schemas is not None:
-            _mapping(schemas, "OpenAPI source document has invalid schemas").pop(
-                "ErrorEnvelope",
-                None,
-            )
+            schema_mapping = _mapping(schemas, "OpenAPI source document has invalid schemas")
+            for schema_name in _MANUAL_COMPONENT_SCHEMAS:
+                schema_mapping.pop(schema_name, None)
     paths = _mapping(
         expected_document.get("paths"),
         "OpenAPI source document requires paths",

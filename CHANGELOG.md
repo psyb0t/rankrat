@@ -2,6 +2,29 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.13.0 — 2026-08-12
+
+Adds free, account-authorized SEO controls and diagnostics for the provider
+accounts the operator already owns.
+
+- Adds Microsoft Clarity Data Export insights, including guided setup and a
+  bounded live check for its project-scoped free API.
+- Adds typed Google Tag Manager account discovery and container, workspace,
+  tag, trigger, variable, version, and publication operations. `rankrat
+  auth-google` requests the necessary Tag Manager scopes; existing Google
+  grants must be renewed after upgrading.
+- Adds provider-neutral managed edge redirects. The initial Cloudflare adapter
+  lists and changes only redirects marked as Rankrat-managed, leaving unrelated
+  rulesets intact.
+- Adds safe Bing content submission: Rankrat fetches the bounded public HTML
+  page itself and does not accept caller-provided bodies, headers, or arbitrary
+  destinations.
+- Expands deterministic site-audit diagnostics for missing response security
+  controls, duplicate `hreflang` entries, and malformed sitemaps without XML
+  entity resolution.
+- Adds GitHub Sponsors and the project Monero funding link through
+  `.github/FUNDING.yml`.
+
 ## v0.12.0 — 2026-08-12
 
 Simplifies operator setup around one safe, reusable Rankrat profile and one

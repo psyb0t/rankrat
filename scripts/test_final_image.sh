@@ -30,6 +30,17 @@ readonly CROSS_BOUNDARY_CRUX_REQUEST='{"account_id":"google","site_url":"https:/
 readonly TEST_HTTP_BEARER_SECRET="test-only-not-a-real-secret-value-000000000000"
 readonly PRIVATE_SCHEMA_URL_REQUEST='{"url":"https://127.0.0.1/"}'
 readonly PARENT_BASH_PROCESS_ID="$BASHPID"
+readonly SMOKE_BOUNDARY_DOCUMENT='{
+  "accounts": [
+    {
+      "id": "google",
+      "provider": "google",
+      "credential": "/run/secrets/google/client.json",
+      "pagespeed_sites": ["https://example.com/"]
+    }
+  ],
+  "indexnow_targets": []
+}'
 
 log() {
 	local level="$1"
@@ -110,7 +121,6 @@ script_directory="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly script_directory
 project_directory="$(cd -- "$script_directory/.." && pwd)"
 readonly project_directory
-readonly boundary_example="$project_directory/config/boundaries.json.example"
 
 temporary_directory=$(
 	trap - EXIT ERR
@@ -119,11 +129,6 @@ temporary_directory=$(
 LOG_FILE="${LOG_FILE:-$temporary_directory/final-image.log}"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-[[ -f "$boundary_example" ]] || {
-	log ERROR "public boundary example is missing"
-	exit 1
-}
-
 readonly config_directory="$temporary_directory/config"
 readonly secret_directory="$temporary_directory/secrets"
 readonly oauth_directory="$temporary_directory/oauth"
@@ -131,7 +136,7 @@ readonly state_directory="$temporary_directory/state"
 readonly boundary_file="$config_directory/boundaries.json"
 readonly curl_authorization_config="$temporary_directory/curl-authorization.conf"
 mkdir "$config_directory" "$secret_directory" "$oauth_directory" "$state_directory"
-cp "$boundary_example" "$boundary_file"
+printf '%s\n' "$SMOKE_BOUNDARY_DOCUMENT" >"$boundary_file"
 printf '%s\n' "$TEST_HTTP_BEARER_SECRET" >"$secret_directory/test-http-bearer"
 printf 'header = "Authorization: Bearer %s"\n' "$TEST_HTTP_BEARER_SECRET" \
 	>"$curl_authorization_config"

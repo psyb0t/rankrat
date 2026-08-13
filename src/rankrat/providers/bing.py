@@ -1111,6 +1111,36 @@ class BingWebmasterClient:
             request_payload={"siteUrl": site_url, "urlList": list(urls)},
         )
 
+    async def submit_content(
+        self,
+        request: ProviderReadRequest,
+        site_url: str,
+        page_url: str,
+        http_message: str,
+        dynamic_serving: bool,
+    ) -> None:
+        """Submit one Rankrat-fetched page representation through Bing's fixed API."""
+
+        account = self._boundary_policy.require_resource(
+            str(request.account_id),
+            Provider.BING,
+            ResourceKind.BING_SITE,
+            site_url,
+        )
+        await self._request_json(
+            "SubmitContent",
+            self._load_api_key(account.credential),
+            request.timeout_seconds,
+            {},
+            http_method="POST",
+            request_payload={
+                "siteUrl": site_url,
+                "url": page_url,
+                "httpMessage": http_message,
+                "dynamicServing": dynamic_serving,
+            },
+        )
+
     async def add_site(
         self,
         request: ProviderReadRequest,

@@ -31,6 +31,13 @@ _BODY_CONTENT_TYPES = frozenset(
         "text/xml",
     }
 )
+_AUDIT_RESPONSE_HEADERS = (
+    "content-security-policy",
+    "referrer-policy",
+    "strict-transport-security",
+    "x-content-type-options",
+    "x-frame-options",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +48,7 @@ class SiteFetchResult:
     status_code: int
     content_type: str
     body: bytes
+    headers: tuple[tuple[str, str], ...] = ()
 
 
 class PublicSiteFetcher:
@@ -99,6 +107,11 @@ class PublicSiteFetcher:
                     response.status_code,
                     content_type,
                     body,
+                    tuple(
+                        (header, value)
+                        for header in _AUDIT_RESPONSE_HEADERS
+                        if (value := response.headers.get(header)) is not None
+                    ),
                 )
         except httpx.TimeoutException as error:
             raise SiteFetchError("site audit request timed out") from error

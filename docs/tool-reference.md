@@ -15,6 +15,7 @@ deriving REST paths from MCP names.
 - [Site audit, ownership, schema, and Bing backlinks](#site-audit-ownership-schema-and-bing-backlinks)
 - [Google Search Console and Indexing reads](#google-search-console-and-indexing-reads)
 - [Google Analytics reads](#google-analytics-reads)
+- [Google Tag Manager, Clarity, and edge redirects](#google-tag-manager-clarity-and-edge-redirects)
 - [PageSpeed and Lighthouse reads](#pagespeed-and-lighthouse-reads)
 - [Cross-provider reads](#cross-provider-reads)
 - [Bing reads](#bing-reads)
@@ -82,6 +83,17 @@ deriving REST paths from MCP names.
 | `google_analytics_audience_segments` | Audience segment metrics |
 | `google_analytics_user_behavior` | New-versus-returning engagement |
 | `google_analytics_conversion_funnel` | Closed ordered event funnel |
+
+## Google Tag Manager, Clarity, and edge redirects
+
+| Tool | Purpose |
+| --- | --- |
+| `google_tag_manager_accounts_list` | OAuth-visible Tag Manager accounts |
+| `google_tag_manager_containers_list` | Containers in one Tag Manager account |
+| `google_tag_manager_workspaces_list` | Workspaces in one container |
+| `google_tag_manager_entities_list` | Tags, triggers, or variables in one workspace |
+| `clarity_insights` | Bounded Microsoft Clarity Data Export project insights |
+| `edge_redirects_list` | Rankrat-managed redirects for one configured site |
 
 ## PageSpeed and Lighthouse reads
 
@@ -168,6 +180,23 @@ These appear only with `RANKRAT_READ_ONLY=false`.
 | `google_sitemap_submit` | Submit or delete one approved sitemap |
 | `google_analytics_account_rename` | Rename one reachable GA4 account |
 | `google_analytics_property_rename` | Rename one configured GA4 property |
+
+### Tag, redirect, and content writes
+
+| Tool | Purpose |
+| --- | --- |
+| `bing_content_submission_create` | Fetch one bounded public HTML page and submit that fresh content to Bing |
+| `google_tag_manager_container_create` | Create one container in a reachable Tag Manager account |
+| `google_tag_manager_container_delete` | Delete one container in a reachable Tag Manager account |
+| `google_tag_manager_workspace_create` | Create one workspace in a reachable container |
+| `google_tag_manager_workspace_delete` | Delete one workspace in a reachable container |
+| `google_tag_manager_entity_create` | Create one typed tag, trigger, or variable |
+| `google_tag_manager_entity_update` | Replace one typed tag, trigger, or variable definition |
+| `google_tag_manager_entity_delete` | Delete one typed tag, trigger, or variable |
+| `google_tag_manager_workspace_version_create` | Create one version from a workspace |
+| `google_tag_manager_version_publish` | Publish one existing container version |
+| `edge_redirect_upsert` | Create or replace one Rankrat-managed edge redirect |
+| `edge_redirect_delete` | Delete one Rankrat-managed edge redirect |
 
 ### Ownership and remediation writes
 

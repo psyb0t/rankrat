@@ -17,6 +17,7 @@ HTTP auth still apply.
 - [IndexNow](#indexnow)
 - [Discovery remediation](#discovery-remediation)
 - [Ownership and onboarding writes](#ownership-and-onboarding-writes)
+- [Tag, redirect, and content writes](#tag-redirect-and-content-writes)
 - [Cloudflare cache writes](#cloudflare-cache-writes)
 - [Write checklist](#write-checklist)
 
@@ -161,6 +162,23 @@ failing provider, then retry the idempotent workflow.
 
 Read [Ownership and onboarding](ownership-and-onboarding.md) for DNS propagation,
 GA4 account limits, and partial-failure handling.
+
+## Tag, redirect, and content writes
+
+Google Tag Manager writes are typed and staged: discover an account, create or
+update containers/workspaces/tags/triggers/variables, create a workspace
+version, then publish the chosen version. Rankrat exposes no arbitrary Google
+API request proxy. Re-authorize with `rankrat auth-google` after upgrading to a
+release that adds a Tag Manager scope.
+
+`edge_redirect_upsert` and `edge_redirect_delete` use provider-neutral
+requests. Cloudflare is the current adapter; it modifies only redirect rules
+that Rankrat previously marked as managed. Existing unrelated redirect/ruleset
+configuration is left alone.
+
+`bing_content_submission_create` fetches the bounded public page inside
+Rankrat and submits the newly fetched HTML body to Bing. The caller cannot send
+raw content, arbitrary headers, or an arbitrary remote URL.
 
 ## Cloudflare cache writes
 

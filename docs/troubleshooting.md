@@ -18,6 +18,7 @@ each configured provider account without a second live-test selector file.
 - [Google says the app is unverified or testing](#google-says-the-app-is-unverified-or-testing)
 - [Google authorization callback was not accepted](#google-authorization-callback-was-not-accepted)
 - [OAuth stored, but Google calls fail](#oauth-stored-but-google-calls-fail)
+- [Google Tag Manager writes fail after authorization](#google-tag-manager-writes-fail-after-authorization)
 - [GA4 account/property cannot be found](#ga4-accountproperty-cannot-be-found)
 - [PageSpeed fails while other Google tools work](#pagespeed-fails-while-other-google-tools-work)
 - [Google says a sitemap could not be read](#google-says-a-sitemap-could-not-be-read)
@@ -110,6 +111,22 @@ make test-live-google-analytics
 
 `403` usually means upstream user/property permission or an API not enabled;
 `AUTHENTICATION` usually means missing/invalid/insufficient OAuth state.
+
+## Google Tag Manager writes fail after authorization
+
+Enable the [Google Tag Manager API](https://console.cloud.google.com/apis/library/tagmanager.googleapis.com)
+in the OAuth client's project, then authorize again. A pre-GTM grant lacks the
+container edit/delete, version-edit, and publish scopes used by typed GTM
+writes:
+
+```sh
+rankrat auth-google --print-authorization-url
+make test-live-google-tag-manager
+```
+
+The signed-in user also needs sufficient access to the intended Tag Manager
+account and container. `google_tag_manager_accounts_list` confirms what the
+grant can see; it does not create access to an account the user cannot manage.
 
 ## GA4 account/property cannot be found
 

@@ -8,11 +8,11 @@
 [![license](https://raw.githubusercontent.com/psyb0t/rankrat/badges/license.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
 
-Search Console, Bing Webmaster Tools, GA4, PageSpeed, Cloudflare, CrUX, and
-Bing's backlink data each have their own view of a site. Rankrat puts them
-behind one self-hosted service so a human can tell an agent what outcome they
-want and let the agent inspect, create, update, or remove supported provider
-resources.
+Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft
+Clarity, PageSpeed, Cloudflare, CrUX, and Bing's backlink data each have their
+own view of a site. Rankrat puts them behind one self-hosted service so a human
+can tell an agent what outcome they want and let the agent inspect, create,
+update, or remove supported provider resources.
 
 It is a rat, not a burglar. You provide the provider accounts; those credentials
 are Rankrat's authority. Resource lists in `boundaries.json` are discovered
@@ -43,13 +43,13 @@ if your integration requires stability.
 
 | Area | What Rankrat exposes |
 | --- | --- |
-| Google | Search Console analytics, inspection and sitemaps; GA4 inventory and reports; property, sitemap, indexing, ownership, onboarding, and rename writes |
-| Bing | Search, crawl, indexing, sitemap, backlink, quota, keyword, opportunity, cannibalization, and site/submission operations |
-| Performance | PageSpeed, Core Web Vitals, CrUX history, Cloudflare analytics, and isolated local Lighthouse audits |
+| Google | Search Console analytics, inspection and sitemaps; GA4 inventory and reports; Google Tag Manager containers, workspaces, tags, triggers, variables, versions, and publication; property, sitemap, indexing, ownership, onboarding, and rename writes |
+| Bing | Search, crawl, indexing, sitemap, backlink, quota, keyword, opportunity, cannibalization, site/submission, and safe content-submission operations |
+| Performance | PageSpeed, Core Web Vitals, CrUX history, Microsoft Clarity insights, Cloudflare analytics, provider-neutral managed edge redirects, and isolated local Lighthouse audits |
 | Site intelligence | Whole-site audits, schema eligibility, internal-link graphs, orphan pages, content opportunities, and cross-provider comparisons |
 | Ownership and onboarding | Google/Bing checks, provider-neutral DNS verification through Cloudflare, and idempotent GA4/Search Console/Bing onboarding |
 | Backlinks | Bing Webmaster backlink intelligence for configured sites |
-| Monitoring and remediation | Persistent monitors and issue history, sitemap/URL resubmission, IndexNow, exact Cloudflare purges, and finite cache templates |
+| Monitoring and remediation | Persistent monitors and issue history, sitemap/URL resubmission, IndexNow, exact Cloudflare purges, finite cache templates, and managed edge redirects |
 
 Runtime discovery is authoritative: read-only deployments omit every write;
 writable deployments include onboarding with the other mutations. See the
@@ -130,8 +130,9 @@ The [documentation index](docs/README.md) links the complete operator and
 contributor manual: setup, configuration, providers, transports, workflows,
 security, tools, troubleshooting, and development.
 
-The REST source is YAML-first: [`openapi.yaml`](src/rankrat/api/openapi.yaml)
-and [`seo-openapi.yaml`](src/rankrat/api/seo-openapi.yaml) generate
+The REST source is YAML-first: [`openapi.yaml`](src/rankrat/api/openapi.yaml),
+[`seo-openapi.yaml`](src/rankrat/api/seo-openapi.yaml), and
+[`free-seo-openapi.yaml`](src/rankrat/api/free-seo-openapi.yaml) generate
 [`openapi.json`](openapi.json). Agent clients can use the repository's skill,
 Claude Code and Codex manifests, or OpenClaw integration under [`.agents`](.agents/).
 

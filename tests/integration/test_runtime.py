@@ -28,6 +28,7 @@ async def test_runtime_serves_consistent_boundary_data_without_provider_traffic(
         "google-main",
         "bing-main",
         "pagespeed-main",
+        "clarity-main",
     }
     assert {site["account_id"] for site in sites} == {
         "google-main",
@@ -35,6 +36,69 @@ async def test_runtime_serves_consistent_boundary_data_without_provider_traffic(
         "pagespeed-main",
     }
     assert isinstance(services.local_schema._fetcher, PublicSchemaFetcher)
+
+
+@pytest.mark.asyncio
+async def test_runtime_routes_clarity_and_gtm_through_fixed_provider_boundaries(
+    deployment: tuple[Settings, ApplicationServices],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings, services = deployment
+    provider_requests: list[httpx.Request] = []
+
+    async def access_token(_: Path) -> str:
+        return "test-token"
+
+    async def gtm_response(request: httpx.Request) -> httpx.Response:
+        provider_requests.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "account": [
+                    {
+                        "accountId": "123",
+                        "name": "Example GTM account",
+                        "path": "accounts/123",
+                    }
+                ]
+            },
+        )
+
+    async def clarity_response(request: httpx.Request) -> httpx.Response:
+        provider_requests.append(request)
+        return httpx.Response(
+            200,
+            json=[{"metricName": "Traffic", "information": [{"sessions": 3}]}],
+        )
+
+    gtm_client = services.google_tag_manager._client
+    monkeypatch.setattr(gtm_client, "_access_token_provider", access_token)
+    monkeypatch.setattr(gtm_client, "_transport_factory", lambda: httpx.MockTransport(gtm_response))
+    monkeypatch.setattr(
+        services.clarity._client,
+        "_transport_factory",
+        lambda: httpx.MockTransport(clarity_response),
+    )
+
+    app = create_http_app(settings, services)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app),
+        base_url="http://rankrat.test",
+    ) as client:
+        clarity = await client.post(
+            "/v1/clarity/insights",
+            json={"account_id": "clarity-main", "num_days": 1},
+        )
+        gtm = await client.get("/v1/google-tag-manager/accounts?account_id=google-main")
+
+    assert clarity.status_code == 200
+    assert clarity.json()["metrics"][0]["information"][0]["sessions"] == 3
+    assert gtm.status_code == 200
+    assert gtm.json()[0]["account_id"] == "123"
+    assert [str(request.url) for request in provider_requests] == [
+        "https://www.clarity.ms/export-data/api/v1/project-live-insights?numOfDays=1",
+        "https://tagmanager.googleapis.com/tagmanager/v2/accounts",
+    ]
 
 
 @pytest.mark.asyncio

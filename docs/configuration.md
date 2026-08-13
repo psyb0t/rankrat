@@ -94,7 +94,7 @@ Every account has:
 | Field | Meaning |
 | --- | --- |
 | `id` | Caller-facing stable local account ID |
-| `provider` | `google`, `bing`, or `cloudflare` |
+| `provider` | `google`, `bing`, `cloudflare`, or `clarity` |
 | `credential` | Absolute mounted account-wide credential path |
 
 Provider fields:
@@ -110,10 +110,11 @@ Provider fields:
 | `dns_zones` | Cloudflare | Discovered/cached provider zone ID/name pairs |
 
 Fields from another provider are rejected. Cloudflare accounts contain only DNS
-zone inventory. These arrays do not narrow the configured credential's
-authority. Rankrat discovers or records resources as operations need them,
-while the provider remains the source of truth for what the credential may
-access.
+zone inventory. A Clarity account has only its `id`, `provider`, and
+project-token `credential`: one account represents one Clarity project. These
+arrays do not narrow the configured credential's authority. Rankrat discovers
+or records resources as operations need them, while the provider remains the
+source of truth for what the credential may access.
 
 ## URL containment
 

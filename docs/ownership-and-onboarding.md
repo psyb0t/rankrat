@@ -4,7 +4,8 @@ Creating provider resources and proving ownership are separate workflows.
 Rankrat can create or reuse one GA4 property and stream, add or reuse Google
 Search Console and Bing properties, persist discovered inventory, and—with a supported DNS
 adapter—publish/redeem provider-issued ownership proofs. It cannot create a GA4
-account, deploy the GA4 tag, or modify DNS through an unsupported provider.
+account or modify DNS through an unsupported provider. Site onboarding does not
+automatically deploy a GA4 tag.
 
 ## Contents
 
@@ -44,9 +45,12 @@ For one HTTPS site root:
 5. GA4/Search Console/Bing inventory entries in `boundaries.json` after all
    preceding provider stages succeed.
 
-The GA4 tag is not deployed. Collection begins only after the operator installs
-the returned measurement ID. Search Console and Bing data also begin after
-ownership verification; they are not retroactive.
+Site onboarding does not deploy a GA4 tag. In writable mode, the operator may
+use the typed Tag Manager container, workspace, entity, version, and publication
+tools to deploy an explicit tag using the returned measurement ID, or install it
+through the site's normal integration. Collection begins only after that tag is
+published. Search Console and Bing data also begin after ownership verification;
+they are not retroactive.
 
 ## The GA4 account prerequisite
 
@@ -166,7 +170,9 @@ The runtime onboarding guide returns the currently relevant method list.
 
 After resource creation:
 
-1. Install the returned GA4 measurement ID in the public site `<head>`.
+1. Deploy a tag with the returned GA4 measurement ID through the typed Tag
+   Manager write tools, or install it through the public site's normal
+   integration.
 2. Verify Search Console and Bing through automated DNS or a manual method.
 3. Poll ownership until complete.
 4. Confirm provider readiness before trusting empty reports.

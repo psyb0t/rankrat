@@ -145,8 +145,17 @@ the same narrow proof-only behavior rather than expose generic DNS CRUD.
 - IndexNow URLs must belong to the fixed target host and key location.
 - Cloudflare purges are exact URLs; no whole-zone purge.
 - Cache writes choose one of two named templates; no arbitrary ruleset body.
+- Edge redirects use provider-neutral requests but the current Cloudflare
+  adapter lists and changes only Rankrat-managed redirect rules; it does not
+  replace arbitrary rulesets.
 - GA4 writes rename account-visible resources or create/reuse a property during
   onboarding; no Analytics deletion.
+- Google Tag Manager writes use typed container, workspace, tag, trigger,
+  variable, version, and publication requests; they cannot carry arbitrary
+  upstream URLs or opaque request bodies.
+- Bing content submission fetches a bounded public HTML page itself and sends
+  that fresh content; callers cannot supply raw HTML, headers, or a destination.
+- Microsoft Clarity is a read-only fixed-endpoint project-token integration.
 - Bing backlink intelligence is read-only and operates on a selected Bing
   Webmaster site; it has no separate backlink-provider credential surface.
 

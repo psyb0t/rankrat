@@ -25,7 +25,7 @@ def test_indexnow_make_targets_use_the_pinned_project_python_runtime() -> None:
         "\n\n", maxsplit=1
     )[0]
 
-    assert f"$(DEV_RUN) {_PINNED_PYTHON} {_INITIALIZER_SCRIPT}" in initializer_target
+    assert f"$(INDEXNOW_INIT_RUN) {_PINNED_PYTHON} {_INITIALIZER_SCRIPT}" in initializer_target
     assert f"$(INDEXNOW_VERIFY_RUN) {_PINNED_PYTHON} {_VERIFIER_SCRIPT}" in verifier_target
     assert _CONTAINER_BOUNDARY_FILE in verifier_target
     assert _CONTAINER_KEY_FILE in verifier_target

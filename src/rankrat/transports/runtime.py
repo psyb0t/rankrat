@@ -6,7 +6,13 @@ from dataclasses import dataclass
 
 from rankrat import __version__
 from rankrat.config import Settings
-from rankrat.constants import GOOGLE_SITE_VERIFICATION_SCOPE
+from rankrat.constants import (
+    GOOGLE_SITE_VERIFICATION_SCOPE,
+    GOOGLE_TAG_MANAGER_DELETE_SCOPE,
+    GOOGLE_TAG_MANAGER_EDIT_SCOPE,
+    GOOGLE_TAG_MANAGER_PUBLISH_SCOPE,
+    GOOGLE_TAG_MANAGER_VERSION_EDIT_SCOPE,
+)
 from rankrat.operator.content_opportunities import ContentOpportunityOperator
 from rankrat.operator.internal_links import InternalLinkOperator
 from rankrat.operator.monitoring import MonitoringOperator
@@ -14,6 +20,7 @@ from rankrat.operator.site_onboarding import SiteOnboardingOperator
 from rankrat.operator.site_ownership import SiteOwnershipOperator
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.bing import BingWebmasterClient
+from rankrat.providers.clarity import ClarityClient
 from rankrat.providers.cloudflare import CloudflareDnsClient
 from rankrat.providers.cloudflare_performance import CloudflarePerformanceClient
 from rankrat.providers.crux import CruxHistoryClient
@@ -33,16 +40,20 @@ from rankrat.providers.google_search_console import (
     GoogleSearchConsoleClient,
 )
 from rankrat.providers.google_site_verification import GoogleSiteVerificationClient
+from rankrat.providers.google_tag_manager import GoogleTagManagerClient
 from rankrat.providers.lighthouse import LighthouseWorkerClient
 from rankrat.providers.pagespeed import PageSpeedClient
 from rankrat.providers.schema_fetch import PublicSchemaFetcher
 from rankrat.providers.site_fetch import PublicSiteFetcher
 from rankrat.services.bing import BingWebmasterService
+from rankrat.services.bing_content import BingContentSubmissionService
 from rankrat.services.capabilities import CapabilityService
+from rankrat.services.clarity import ClarityService
 from rankrat.services.cloudflare_performance import CloudflarePerformanceService
 from rankrat.services.cross_provider import CrossProviderService
 from rankrat.services.crux import CruxHistoryService
 from rankrat.services.diagnostics import DiagnosticsService
+from rankrat.services.edge_redirects import EdgeRedirectService
 from rankrat.services.google_analytics import GoogleAnalyticsDataService
 from rankrat.services.google_analytics_admin import GoogleAnalyticsAdminService
 from rankrat.services.google_indexing import GoogleIndexingService
@@ -50,6 +61,7 @@ from rankrat.services.google_indexing_metadata import GoogleIndexingMetadataServ
 from rankrat.services.google_search_console import GoogleSearchConsoleService
 from rankrat.services.google_sitemaps import GoogleSitemapService
 from rankrat.services.google_sites import GoogleSiteService
+from rankrat.services.google_tag_manager import GoogleTagManagerService
 from rankrat.services.indexnow import IndexNowService
 from rankrat.services.lighthouse import LighthouseService
 from rankrat.services.onboarding_guide import OnboardingGuideService
@@ -87,6 +99,8 @@ class ApplicationServices:
     crux: CruxHistoryService
     cloudflare_performance: CloudflarePerformanceService
     content_opportunities: ContentOpportunityOperator
+    clarity: ClarityService
+    google_tag_manager: GoogleTagManagerService
     writes_enabled: bool = False
     indexnow: IndexNowService | None = None
     google_indexing: GoogleIndexingService | None = None
@@ -96,6 +110,8 @@ class ApplicationServices:
     site_ownership: SiteOwnershipService | None = None
     site_remediation: SiteRemediationService | None = None
     site_audit: SiteAuditService | None = None
+    bing_content: BingContentSubmissionService | None = None
+    edge_redirects: EdgeRedirectService | None = None
 
 
 def build_services(settings: Settings) -> ApplicationServices:
@@ -123,14 +139,34 @@ def build_services(settings: Settings) -> ApplicationServices:
     )
     bing_client = BingWebmasterClient(policy)
     cloudflare_client = CloudflareDnsClient(policy)
+    clarity_client = ClarityClient(policy)
     pagespeed_client = PageSpeedClient(policy)
     crux_client = CruxHistoryClient(policy)
     cloudflare_performance_client = CloudflarePerformanceClient(policy)
+    google_tag_manager = GoogleTagManagerService(
+        GoogleTagManagerClient(
+            policy,
+            GoogleConfiguredTokenProvider(
+                policy,
+                (
+                    GOOGLE_TAG_MANAGER_EDIT_SCOPE,
+                    GOOGLE_TAG_MANAGER_DELETE_SCOPE,
+                    GOOGLE_TAG_MANAGER_VERSION_EDIT_SCOPE,
+                    GOOGLE_TAG_MANAGER_PUBLISH_SCOPE,
+                ),
+            ),
+        )
+    )
     indexnow = None
     google_indexing = None
     google_sites = None
     google_sitemaps = None
     site_onboarding = None
+    bing_content = None
+    edge_redirects = EdgeRedirectService(
+        cloudflare_client,
+        cloudflare_performance_client,
+    )
     site_ownership = SiteOwnershipService(
         SiteOwnershipOperator(
             policy,
@@ -179,6 +215,11 @@ def build_services(settings: Settings) -> ApplicationServices:
         site_remediation = SiteRemediationService(
             policy,
             sitemap_client,
+            bing_client,
+        )
+        bing_content = BingContentSubmissionService(
+            policy,
+            PublicSiteFetcher(),
             bing_client,
         )
     if settings.writes_enabled:
@@ -265,6 +306,8 @@ def build_services(settings: Settings) -> ApplicationServices:
             google_analytics,
             site_audit,
         ),
+        clarity=ClarityService(clarity_client),
+        google_tag_manager=google_tag_manager,
         writes_enabled=settings.writes_enabled,
         indexnow=indexnow,
         google_indexing=google_indexing,
@@ -274,4 +317,6 @@ def build_services(settings: Settings) -> ApplicationServices:
         site_ownership=site_ownership,
         site_remediation=site_remediation,
         site_audit=site_audit,
+        bing_content=bing_content,
+        edge_redirects=edge_redirects,
     )

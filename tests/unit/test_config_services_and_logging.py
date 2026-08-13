@@ -110,7 +110,11 @@ def test_services_filter_boundaries_and_report_capabilities(
     server_info = services.capabilities.server_info(ServerInfoRequest())
     assert server_info.name == "rankrat"
     assert server_info.read_only is True
-    assert [item.provider for item in server_info.providers] == [Provider.GOOGLE, Provider.BING]
+    assert [item.provider for item in server_info.providers] == [
+        Provider.GOOGLE,
+        Provider.BING,
+        Provider.CLARITY,
+    ]
 
     accounts = services.sites.accounts_list(AccountsListRequest(provider=Provider.GOOGLE))
     assert [item.account_id for item in accounts.accounts] == ["google-main", "pagespeed-main"]

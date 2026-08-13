@@ -20,6 +20,8 @@ def deployment(tmp_path: Path) -> tuple[Settings, ApplicationServices]:
     secret_root.mkdir()
     oauth_root = tmp_path / "oauth"
     oauth_root.mkdir(mode=0o700)
+    clarity_token_file = secret_root / "clarity-main-token"
+    clarity_token_file.write_text("test-clarity-token", encoding="ascii")
     pagespeed_api_key_file = secret_root / "pagespeed-main-api-key"
     pagespeed_api_key_file.write_text("test-pagespeed-api-key", encoding="utf-8")
     boundary_file = tmp_path / "boundaries.json"
@@ -46,6 +48,11 @@ def deployment(tmp_path: Path) -> tuple[Settings, ApplicationServices]:
                         "credential": str(secret_root / "pagespeed-client.json"),
                         "pagespeed_api_key_file": str(pagespeed_api_key_file),
                         "pagespeed_sites": ["https://example.com/"],
+                    },
+                    {
+                        "id": "clarity-main",
+                        "provider": "clarity",
+                        "credential": str(clarity_token_file),
                     },
                 ]
             }

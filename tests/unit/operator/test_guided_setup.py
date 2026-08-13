@@ -189,6 +189,33 @@ def test_guided_setup_preserves_accounts_for_unselected_providers(tmp_path: Path
     ]
 
 
+def test_guided_setup_stores_a_clarity_project_token_without_echoing_it(
+    tmp_path: Path,
+) -> None:
+    boundary, _, secrets, oauth = _paths(tmp_path)
+    clarity_token = "clarity-token-not-real"
+    output: list[str] = []
+
+    document = configure_interactively(
+        boundary,
+        secrets,
+        oauth,
+        prompt=lambda _: "clarity",
+        secret_prompt=lambda _: clarity_token,
+        output=output.append,
+    )
+
+    assert [(account.id, account.provider.value) for account in document.accounts] == [
+        ("google", "google"),
+        ("bing", "bing"),
+        ("clarity", "clarity"),
+    ]
+    token_file = secrets / "clarity/api-token"
+    assert token_file.read_text(encoding="utf-8").strip() == clarity_token
+    assert os.stat(token_file).st_mode & 0o777 == 0o600
+    assert clarity_token not in "\n".join(output)
+
+
 def test_guided_setup_rejects_ambiguous_existing_provider_before_secret_prompt(
     tmp_path: Path,
 ) -> None:

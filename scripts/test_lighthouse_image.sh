@@ -36,6 +36,17 @@ readonly -a LIGHTHOUSE_REST_ROUTES=(
 	"best-practices-findings"
 )
 readonly PARENT_BASH_PROCESS_ID="$BASHPID"
+readonly SMOKE_BOUNDARY_DOCUMENT='{
+  "accounts": [
+    {
+      "id": "google",
+      "provider": "google",
+      "credential": "/run/secrets/google/client.json",
+      "pagespeed_sites": ["https://example.com/"]
+    }
+  ],
+  "indexnow_targets": []
+}'
 HOST_USER_ID="$(id -u)"
 readonly HOST_USER_ID
 HOST_GROUP_ID="$(id -g)"
@@ -233,8 +244,8 @@ readonly curl_authorization_config="$temporary_directory/curl-authorization.conf
 readonly http_request_body="{\"account_id\":\"google\",\"site_url\":\"https://example.com/\",\"page_url\":\"https://example.com/\",\"timeout_seconds\":${LIVE_AUDIT_TIMEOUT_SECONDS}}"
 install -d -m 755 "$config_directory" "$secret_directory" "$oauth_directory"
 install -d -m 700 "$secret_directory/rankrat"
-install -m 644 "$project_directory/config/boundaries.json.example" \
-	"$config_directory/boundaries.json"
+printf '%s\n' "$SMOKE_BOUNDARY_DOCUMENT" >"$config_directory/boundaries.json"
+chmod 644 "$config_directory/boundaries.json"
 printf '%s\n' "$TEST_HTTP_BEARER_SECRET" >"$secret_directory/rankrat/http-bearer-token"
 printf 'header = "Authorization: Bearer %s"\n' "$TEST_HTTP_BEARER_SECRET" \
 	>"$curl_authorization_config"

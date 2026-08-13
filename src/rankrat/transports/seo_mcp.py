@@ -8,11 +8,29 @@ import mcp.types as types
 from pydantic import BaseModel
 
 from rankrat.constants import (
+    BING_CONTENT_SUBMISSION_OPERATION,
+    CLARITY_INSIGHTS_OPERATION,
     CLOUDFLARE_ANALYTICS_OPERATION,
     CLOUDFLARE_CACHE_PURGE_OPERATION,
     CLOUDFLARE_CACHE_TEMPLATE_OPERATION,
     CONTENT_OPPORTUNITIES_OPERATION,
     CRUX_HISTORY_OPERATION,
+    EDGE_REDIRECT_DELETE_OPERATION,
+    EDGE_REDIRECT_UPSERT_OPERATION,
+    EDGE_REDIRECTS_LIST_OPERATION,
+    GTM_ACCOUNTS_LIST_OPERATION,
+    GTM_CONTAINERS_CREATE_OPERATION,
+    GTM_CONTAINERS_DELETE_OPERATION,
+    GTM_CONTAINERS_LIST_OPERATION,
+    GTM_ENTITIES_CREATE_OPERATION,
+    GTM_ENTITIES_DELETE_OPERATION,
+    GTM_ENTITIES_LIST_OPERATION,
+    GTM_ENTITIES_UPDATE_OPERATION,
+    GTM_VERSION_PUBLISH_OPERATION,
+    GTM_WORKSPACE_VERSION_CREATE_OPERATION,
+    GTM_WORKSPACES_CREATE_OPERATION,
+    GTM_WORKSPACES_DELETE_OPERATION,
+    GTM_WORKSPACES_LIST_OPERATION,
     INTERNAL_LINK_GRAPH_OPERATION,
     INTERNAL_LINK_OPPORTUNITIES_OPERATION,
     ISSUE_EVENTS_OPERATION,
@@ -37,19 +55,55 @@ from rankrat.operator.monitoring import (
     MonitorListRequest,
     MonitorUpdateRequest,
 )
+from rankrat.services.bing_content import BingContentSubmissionRequest
+from rankrat.services.clarity import ClarityInsightsRequest
 from rankrat.services.cloudflare_performance import (
     CloudflareAnalyticsRequest,
     CloudflareCacheTemplateRequest,
     CloudflarePurgeRequest,
 )
 from rankrat.services.crux import CruxHistoryRequest
+from rankrat.services.edge_redirects import (
+    EdgeRedirectDeleteRequest,
+    EdgeRedirectListRequest,
+    EdgeRedirectUpsertRequest,
+)
+from rankrat.services.google_tag_manager import (
+    GtmContainerCreateRequest,
+    GtmContainerRequest,
+    GtmEntityCreateRequest,
+    GtmEntityRequest,
+    GtmEntityUpdateRequest,
+    GtmVersionCreateRequest,
+    GtmVersionPublishRequest,
+    GtmWorkspaceCreateRequest,
+    GtmWorkspaceRequest,
+)
 from rankrat.transports.runtime import ApplicationServices
 from rankrat.transports.seo_contracts import (
+    BingContentSubmissionInput,
+    ClarityInsightsInput,
     CloudflareAnalyticsInput,
     CloudflareCacheTemplateInput,
     CloudflarePurgeInput,
     ContentOpportunityInput,
     CruxHistoryInput,
+    EdgeRedirectDeleteInput,
+    EdgeRedirectListInput,
+    EdgeRedirectUpsertInput,
+    GtmAccountInput,
+    GtmContainerCreateInput,
+    GtmContainerDeleteInput,
+    GtmContainerInput,
+    GtmEntityCreateInput,
+    GtmEntityDeleteInput,
+    GtmEntityInput,
+    GtmEntityUpdateInput,
+    GtmVersionCreateInput,
+    GtmVersionPublishInput,
+    GtmWorkspaceCreateInput,
+    GtmWorkspaceDeleteInput,
+    GtmWorkspaceInput,
     InternalLinkInput,
     IssueEventsInput,
     IssueStatusInput,
@@ -66,6 +120,12 @@ from rankrat.transports.seo_contracts import (
 SEO_TOOL_NOT_HANDLED = object()
 
 _READ_TOOL_MODELS: dict[str, type[StrictInput]] = {
+    CLARITY_INSIGHTS_OPERATION: ClarityInsightsInput,
+    EDGE_REDIRECTS_LIST_OPERATION: EdgeRedirectListInput,
+    GTM_ACCOUNTS_LIST_OPERATION: GtmAccountInput,
+    GTM_CONTAINERS_LIST_OPERATION: GtmContainerInput,
+    GTM_WORKSPACES_LIST_OPERATION: GtmWorkspaceInput,
+    GTM_ENTITIES_LIST_OPERATION: GtmEntityInput,
     INTERNAL_LINK_GRAPH_OPERATION: InternalLinkInput,
     ORPHAN_PAGE_REPORT_OPERATION: OrphanPageInput,
     INTERNAL_LINK_OPPORTUNITIES_OPERATION: InternalLinkInput,
@@ -78,6 +138,18 @@ _READ_TOOL_MODELS: dict[str, type[StrictInput]] = {
     ISSUE_EVENTS_OPERATION: IssueEventsInput,
 }
 _WRITE_TOOL_MODELS: dict[str, type[StrictInput]] = {
+    BING_CONTENT_SUBMISSION_OPERATION: BingContentSubmissionInput,
+    EDGE_REDIRECT_UPSERT_OPERATION: EdgeRedirectUpsertInput,
+    EDGE_REDIRECT_DELETE_OPERATION: EdgeRedirectDeleteInput,
+    GTM_CONTAINERS_CREATE_OPERATION: GtmContainerCreateInput,
+    GTM_CONTAINERS_DELETE_OPERATION: GtmContainerDeleteInput,
+    GTM_WORKSPACES_CREATE_OPERATION: GtmWorkspaceCreateInput,
+    GTM_WORKSPACES_DELETE_OPERATION: GtmWorkspaceDeleteInput,
+    GTM_ENTITIES_CREATE_OPERATION: GtmEntityCreateInput,
+    GTM_ENTITIES_UPDATE_OPERATION: GtmEntityUpdateInput,
+    GTM_ENTITIES_DELETE_OPERATION: GtmEntityDeleteInput,
+    GTM_WORKSPACE_VERSION_CREATE_OPERATION: GtmVersionCreateInput,
+    GTM_VERSION_PUBLISH_OPERATION: GtmVersionPublishInput,
     MONITORS_CREATE_OPERATION: MonitorCreateInput,
     MONITOR_UPDATE_OPERATION: MonitorUpdateInput,
     MONITOR_DELETE_OPERATION: MonitorIdentityInput,
@@ -87,6 +159,30 @@ _WRITE_TOOL_MODELS: dict[str, type[StrictInput]] = {
     CLOUDFLARE_CACHE_TEMPLATE_OPERATION: CloudflareCacheTemplateInput,
 }
 _TOOL_DESCRIPTIONS = {
+    CLARITY_INSIGHTS_OPERATION: (
+        "Read the documented 1-3 day Microsoft Clarity live-insights report."
+    ),
+    EDGE_REDIRECTS_LIST_OPERATION: "List only Rankrat-managed provider-neutral edge redirects.",
+    GTM_ACCOUNTS_LIST_OPERATION: (
+        "List Google Tag Manager accounts available to the configured OAuth account."
+    ),
+    GTM_CONTAINERS_LIST_OPERATION: "List containers in one Google Tag Manager account.",
+    GTM_WORKSPACES_LIST_OPERATION: "List workspaces in one Google Tag Manager container.",
+    GTM_ENTITIES_LIST_OPERATION: "List tags, triggers, or variables in one GTM workspace.",
+    BING_CONTENT_SUBMISSION_OPERATION: (
+        "Fetch and submit one configured HTML page to Bing Webmaster."
+    ),
+    EDGE_REDIRECT_UPSERT_OPERATION: "Create or update one provider-neutral edge redirect.",
+    EDGE_REDIRECT_DELETE_OPERATION: "Delete one previously listed Rankrat-managed edge redirect.",
+    GTM_CONTAINERS_CREATE_OPERATION: "Create one Google Tag Manager container.",
+    GTM_CONTAINERS_DELETE_OPERATION: "Delete one Google Tag Manager container.",
+    GTM_WORKSPACES_CREATE_OPERATION: "Create one Google Tag Manager workspace.",
+    GTM_WORKSPACES_DELETE_OPERATION: "Delete one Google Tag Manager workspace.",
+    GTM_ENTITIES_CREATE_OPERATION: "Create one typed GTM tag, trigger, or variable.",
+    GTM_ENTITIES_UPDATE_OPERATION: "Update one typed GTM tag, trigger, or variable.",
+    GTM_ENTITIES_DELETE_OPERATION: "Delete one typed GTM tag, trigger, or variable.",
+    GTM_WORKSPACE_VERSION_CREATE_OPERATION: "Create one GTM container version from a workspace.",
+    GTM_VERSION_PUBLISH_OPERATION: "Publish one GTM container version.",
     INTERNAL_LINK_GRAPH_OPERATION: "Build a bounded internal-link graph from one configured site.",
     ORPHAN_PAGE_REPORT_OPERATION: "Join crawl, Search Console, and GA4 evidence for orphan pages.",
     INTERNAL_LINK_OPPORTUNITIES_OPERATION: (
@@ -114,6 +210,10 @@ _DESTRUCTIVE_TOOLS = frozenset(
         MONITOR_DELETE_OPERATION,
         CLOUDFLARE_CACHE_PURGE_OPERATION,
         CLOUDFLARE_CACHE_TEMPLATE_OPERATION,
+        EDGE_REDIRECT_DELETE_OPERATION,
+        GTM_CONTAINERS_DELETE_OPERATION,
+        GTM_WORKSPACES_DELETE_OPERATION,
+        GTM_ENTITIES_DELETE_OPERATION,
     }
 )
 _IDEMPOTENT_WRITE_TOOLS = frozenset(
@@ -121,6 +221,8 @@ _IDEMPOTENT_WRITE_TOOLS = frozenset(
         MONITOR_UPDATE_OPERATION,
         ISSUE_STATUS_OPERATION,
         CLOUDFLARE_CACHE_TEMPLATE_OPERATION,
+        EDGE_REDIRECT_UPSERT_OPERATION,
+        GTM_ENTITIES_UPDATE_OPERATION,
     }
 )
 
@@ -210,6 +312,64 @@ async def dispatch_seo_tool(
                 limit=content_arguments.limit,
             )
         )
+    if name == CLARITY_INSIGHTS_OPERATION:
+        clarity_arguments = ClarityInsightsInput.model_validate(raw_arguments)
+        return await services.clarity.live_insights(
+            ClarityInsightsRequest(
+                clarity_arguments.account_id,
+                clarity_arguments.num_days,
+                clarity_arguments.dimensions,
+                clarity_arguments.timeout_seconds,
+            )
+        )
+    if name == EDGE_REDIRECTS_LIST_OPERATION:
+        redirect_arguments = EdgeRedirectListInput.model_validate(raw_arguments)
+        if services.edge_redirects is None:
+            return SEO_TOOL_NOT_HANDLED
+        return await services.edge_redirects.list(
+            EdgeRedirectListRequest(
+                redirect_arguments.account_id,
+                redirect_arguments.site_url,
+                redirect_arguments.timeout_seconds,
+            )
+        )
+    if name == GTM_ACCOUNTS_LIST_OPERATION:
+        gtm_arguments = GtmAccountInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.list_accounts(
+            gtm_arguments.account_id,
+            gtm_arguments.timeout_seconds,
+        )
+    if name == GTM_CONTAINERS_LIST_OPERATION:
+        gtm_arguments = GtmContainerInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.list_containers(
+            GtmContainerRequest(
+                gtm_arguments.account_id,
+                gtm_arguments.gtm_account_id,
+                gtm_arguments.timeout_seconds,
+            )
+        )
+    if name == GTM_WORKSPACES_LIST_OPERATION:
+        gtm_arguments = GtmWorkspaceInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.list_workspaces(
+            GtmWorkspaceRequest(
+                gtm_arguments.account_id,
+                gtm_arguments.gtm_account_id,
+                gtm_arguments.container_id,
+                gtm_arguments.timeout_seconds,
+            )
+        )
+    if name == GTM_ENTITIES_LIST_OPERATION:
+        gtm_arguments = GtmEntityInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.list_entities(
+            GtmEntityRequest(
+                gtm_arguments.account_id,
+                gtm_arguments.gtm_account_id,
+                gtm_arguments.container_id,
+                gtm_arguments.timeout_seconds,
+                gtm_arguments.workspace_id,
+                gtm_arguments.kind,
+            )
+        )
     return await _dispatch_state_or_write(services, name, raw_arguments)
 
 
@@ -218,6 +378,158 @@ async def _dispatch_state_or_write(
     name: str,
     raw_arguments: dict[str, Any],
 ) -> object:
+    if name == BING_CONTENT_SUBMISSION_OPERATION:
+        bing_content_arguments = BingContentSubmissionInput.model_validate(raw_arguments)
+        if services.bing_content is None:
+            return SEO_TOOL_NOT_HANDLED
+        return await services.bing_content.submit(
+            BingContentSubmissionRequest(
+                bing_content_arguments.account_id,
+                bing_content_arguments.site_url,
+                bing_content_arguments.page_url,
+                bing_content_arguments.dynamic_serving,
+                bing_content_arguments.timeout_seconds,
+            )
+        )
+    if name == EDGE_REDIRECT_UPSERT_OPERATION:
+        redirect_upsert_arguments = EdgeRedirectUpsertInput.model_validate(raw_arguments)
+        if services.edge_redirects is None:
+            return SEO_TOOL_NOT_HANDLED
+        return await services.edge_redirects.upsert(
+            EdgeRedirectUpsertRequest(
+                redirect_upsert_arguments.account_id,
+                redirect_upsert_arguments.site_url,
+                redirect_upsert_arguments.timeout_seconds,
+                redirect_upsert_arguments.source_path,
+                redirect_upsert_arguments.target_url,
+                redirect_upsert_arguments.status_code,
+                redirect_upsert_arguments.preserve_query_string,
+            )
+        )
+    if name == EDGE_REDIRECT_DELETE_OPERATION:
+        redirect_delete_arguments = EdgeRedirectDeleteInput.model_validate(raw_arguments)
+        if services.edge_redirects is None:
+            return SEO_TOOL_NOT_HANDLED
+        await services.edge_redirects.delete(
+            EdgeRedirectDeleteRequest(
+                redirect_delete_arguments.account_id,
+                redirect_delete_arguments.site_url,
+                redirect_delete_arguments.timeout_seconds,
+                redirect_delete_arguments.rule_id,
+            )
+        )
+        return {"deleted": True, "rule_id": redirect_delete_arguments.rule_id}
+    if name == GTM_CONTAINERS_CREATE_OPERATION:
+        container_create_arguments = GtmContainerCreateInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.create_container(
+            GtmContainerCreateRequest(
+                container_create_arguments.account_id,
+                container_create_arguments.gtm_account_id,
+                container_create_arguments.timeout_seconds,
+                container_create_arguments.name,
+                container_create_arguments.usage_contexts,
+            )
+        )
+    if name == GTM_CONTAINERS_DELETE_OPERATION:
+        container_delete_arguments = GtmContainerDeleteInput.model_validate(raw_arguments)
+        await services.google_tag_manager.delete_container(
+            GtmContainerRequest(
+                container_delete_arguments.account_id,
+                container_delete_arguments.gtm_account_id,
+                container_delete_arguments.timeout_seconds,
+            ),
+            container_delete_arguments.container_id,
+        )
+        return {"deleted": True, "container_id": container_delete_arguments.container_id}
+    if name == GTM_WORKSPACES_CREATE_OPERATION:
+        workspace_create_arguments = GtmWorkspaceCreateInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.create_workspace(
+            GtmWorkspaceCreateRequest(
+                workspace_create_arguments.account_id,
+                workspace_create_arguments.gtm_account_id,
+                workspace_create_arguments.container_id,
+                workspace_create_arguments.timeout_seconds,
+                workspace_create_arguments.name,
+                workspace_create_arguments.description,
+            )
+        )
+    if name == GTM_WORKSPACES_DELETE_OPERATION:
+        workspace_delete_arguments = GtmWorkspaceDeleteInput.model_validate(raw_arguments)
+        await services.google_tag_manager.delete_workspace(
+            GtmWorkspaceRequest(
+                workspace_delete_arguments.account_id,
+                workspace_delete_arguments.gtm_account_id,
+                workspace_delete_arguments.container_id,
+                workspace_delete_arguments.timeout_seconds,
+            ),
+            workspace_delete_arguments.workspace_id,
+        )
+        return {"deleted": True, "workspace_id": workspace_delete_arguments.workspace_id}
+    if name == GTM_ENTITIES_CREATE_OPERATION:
+        entity_create_arguments = GtmEntityCreateInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.create_entity(
+            GtmEntityCreateRequest(
+                entity_create_arguments.account_id,
+                entity_create_arguments.gtm_account_id,
+                entity_create_arguments.container_id,
+                entity_create_arguments.timeout_seconds,
+                entity_create_arguments.workspace_id,
+                entity_create_arguments.kind,
+                entity_create_arguments.definition,
+            )
+        )
+    if name == GTM_ENTITIES_UPDATE_OPERATION:
+        entity_update_arguments = GtmEntityUpdateInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.update_entity(
+            GtmEntityUpdateRequest(
+                entity_update_arguments.account_id,
+                entity_update_arguments.gtm_account_id,
+                entity_update_arguments.container_id,
+                entity_update_arguments.timeout_seconds,
+                entity_update_arguments.workspace_id,
+                entity_update_arguments.kind,
+                entity_update_arguments.definition,
+                entity_update_arguments.entity_id,
+            )
+        )
+    if name == GTM_ENTITIES_DELETE_OPERATION:
+        entity_delete_arguments = GtmEntityDeleteInput.model_validate(raw_arguments)
+        await services.google_tag_manager.delete_entity(
+            GtmEntityRequest(
+                entity_delete_arguments.account_id,
+                entity_delete_arguments.gtm_account_id,
+                entity_delete_arguments.container_id,
+                entity_delete_arguments.timeout_seconds,
+                entity_delete_arguments.workspace_id,
+                entity_delete_arguments.kind,
+            ),
+            entity_delete_arguments.entity_id,
+        )
+        return {"deleted": True, "entity_id": entity_delete_arguments.entity_id}
+    if name == GTM_WORKSPACE_VERSION_CREATE_OPERATION:
+        version_create_arguments = GtmVersionCreateInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.create_version(
+            GtmVersionCreateRequest(
+                version_create_arguments.account_id,
+                version_create_arguments.gtm_account_id,
+                version_create_arguments.container_id,
+                version_create_arguments.timeout_seconds,
+                version_create_arguments.workspace_id,
+                version_create_arguments.name,
+                version_create_arguments.notes,
+            )
+        )
+    if name == GTM_VERSION_PUBLISH_OPERATION:
+        version_publish_arguments = GtmVersionPublishInput.model_validate(raw_arguments)
+        return await services.google_tag_manager.publish_version(
+            GtmVersionPublishRequest(
+                version_publish_arguments.account_id,
+                version_publish_arguments.gtm_account_id,
+                version_publish_arguments.container_id,
+                version_publish_arguments.timeout_seconds,
+                version_publish_arguments.version_id,
+            )
+        )
     if name == MONITORS_LIST_OPERATION:
         list_arguments = MonitorListInput.model_validate(raw_arguments)
         return services.monitoring.list_monitors(

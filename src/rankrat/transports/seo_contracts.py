@@ -14,11 +14,16 @@ from rankrat.constants import (
     DEFAULT_SITE_AUDIT_DEPTH,
     DEFAULT_SITE_AUDIT_PAGES,
     DEFAULT_STATE_PAGE_SIZE,
+    MAX_CLARITY_DATE_RANGE_DAYS,
+    MAX_CLARITY_DIMENSIONS,
     MAX_CLOUDFLARE_ANALYTICS_GROUPS,
     MAX_CLOUDFLARE_PURGE_URLS,
     MAX_CONTENT_OPPORTUNITIES,
     MAX_CRUX_HISTORY_PERIODS,
     MAX_CRUX_METRICS,
+    MAX_EDGE_REDIRECT_SOURCE_PATH_CHARS,
+    MAX_GTM_NAME_CHARS,
+    MAX_GTM_NOTES_CHARS,
     MAX_INTERNAL_LINK_OPPORTUNITIES,
     MAX_MONITOR_INTERVAL_SECONDS,
     MAX_MONITOR_NAME_CHARS,
@@ -30,8 +35,17 @@ from rankrat.constants import (
     MIN_PROVIDER_TIMEOUT_SECONDS,
 )
 from rankrat.models.boundaries import ACCOUNT_ID_PATTERN
-from rankrat.providers.cloudflare_performance import CloudflareCacheTemplate
+from rankrat.providers.clarity import ClarityDimension
+from rankrat.providers.cloudflare_performance import (
+    CloudflareCacheTemplate,
+    CloudflareRedirectStatus,
+)
 from rankrat.providers.crux import CruxFormFactor, CruxMetric
+from rankrat.providers.google_tag_manager import (
+    GtmEntityDefinition,
+    GtmEntityKind,
+    GtmUsageContext,
+)
 from rankrat.state.sqlite import IssueStatus
 
 _URL_MAX_LENGTH = 2_048
@@ -116,6 +130,99 @@ class CloudflareCacheTemplateInput(StrictInput):
     zone_id: str = Field(pattern=_ZONE_ID_PATTERN)
     template: CloudflareCacheTemplate
     timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+
+class ClarityInsightsInput(StrictInput):
+    account_id: AccountId
+    num_days: int = Field(default=1, ge=1, le=MAX_CLARITY_DATE_RANGE_DAYS)
+    dimensions: tuple[ClarityDimension, ...] = Field(
+        default=(),
+        max_length=MAX_CLARITY_DIMENSIONS,
+    )
+    timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+
+class BingContentSubmissionInput(StrictInput):
+    account_id: AccountId
+    site_url: WebUrl
+    page_url: WebUrl
+    dynamic_serving: bool = False
+    timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+
+class EdgeRedirectListInput(StrictInput):
+    account_id: AccountId
+    site_url: WebUrl
+    timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+
+class EdgeRedirectUpsertInput(EdgeRedirectListInput):
+    source_path: str = Field(min_length=1, max_length=MAX_EDGE_REDIRECT_SOURCE_PATH_CHARS)
+    target_url: WebUrl
+    status_code: CloudflareRedirectStatus = CloudflareRedirectStatus.MOVED_PERMANENTLY
+    preserve_query_string: bool = True
+
+
+class EdgeRedirectDeleteInput(EdgeRedirectListInput):
+    rule_id: str = Field(pattern=_ZONE_ID_PATTERN)
+
+
+class GtmAccountInput(StrictInput):
+    account_id: AccountId
+    timeout_seconds: Timeout = DEFAULT_PROVIDER_TIMEOUT_SECONDS
+
+
+class GtmContainerInput(GtmAccountInput):
+    gtm_account_id: str = Field(pattern=r"^[0-9]{1,64}$")
+
+
+class GtmContainerCreateInput(GtmContainerInput):
+    name: str = Field(min_length=1, max_length=MAX_GTM_NAME_CHARS)
+    usage_contexts: tuple[GtmUsageContext, ...] = Field(min_length=1, max_length=5)
+
+
+class GtmContainerDeleteInput(GtmContainerInput):
+    container_id: str = Field(pattern=r"^[0-9]{1,64}$")
+
+
+class GtmWorkspaceInput(GtmContainerInput):
+    container_id: str = Field(pattern=r"^[0-9]{1,64}$")
+
+
+class GtmWorkspaceCreateInput(GtmWorkspaceInput):
+    name: str = Field(min_length=1, max_length=MAX_GTM_NAME_CHARS)
+    description: str | None = Field(default=None, max_length=MAX_GTM_NOTES_CHARS)
+
+
+class GtmWorkspaceDeleteInput(GtmWorkspaceInput):
+    workspace_id: str = Field(pattern=r"^[0-9]{1,64}$")
+
+
+class GtmEntityInput(GtmWorkspaceInput):
+    workspace_id: str = Field(pattern=r"^[0-9]{1,64}$")
+    kind: GtmEntityKind
+
+
+class GtmEntityCreateInput(GtmEntityInput):
+    definition: GtmEntityDefinition
+
+
+class GtmEntityUpdateInput(GtmEntityCreateInput):
+    entity_id: str = Field(pattern=r"^[0-9]{1,64}$")
+
+
+class GtmEntityDeleteInput(GtmEntityInput):
+    entity_id: str = Field(pattern=r"^[0-9]{1,64}$")
+
+
+class GtmVersionCreateInput(GtmWorkspaceInput):
+    workspace_id: str = Field(pattern=r"^[0-9]{1,64}$")
+    name: str = Field(min_length=1, max_length=MAX_GTM_NAME_CHARS)
+    notes: str | None = Field(default=None, max_length=MAX_GTM_NOTES_CHARS)
+
+
+class GtmVersionPublishInput(GtmWorkspaceInput):
+    version_id: str = Field(pattern=r"^[0-9]{1,64}$")
 
 
 class ContentOpportunityInput(StrictInput):

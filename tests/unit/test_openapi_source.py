@@ -13,6 +13,7 @@ from rankrat.transports.openapi import (
     _merge_fragment,
     _validate_document,
     apply_openapi_operation_ids,
+    fastapi_drift_document,
     load_openapi_document,
     load_openapi_document_for_routes,
 )
@@ -77,6 +78,24 @@ def test_openapi_source_types_every_lighthouse_success_response() -> None:
         "LighthouseCategoryScore",
         "LighthouseFinding",
     }.issubset(schemas)
+
+
+def test_fastapi_drift_document_removes_manual_error_schemas() -> None:
+    document: dict[str, object] = {
+        "components": {
+            "schemas": {
+                "ErrorEnvelope": {"type": "object"},
+                "ProviderFailureCode": {"type": "string"},
+                "Response": {"type": "object"},
+            }
+        },
+        "paths": {},
+    }
+
+    drift_document = fastapi_drift_document(document)
+
+    schemas = _mapping(_mapping(drift_document["components"])["schemas"])
+    assert schemas == {"Response": {"type": "object"}}
 
 
 def test_openapi_operation_ids_are_applied_from_the_source(

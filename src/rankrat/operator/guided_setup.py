@@ -23,11 +23,12 @@ _PROVIDER_ORDER: Final = (
     Provider.GOOGLE,
     Provider.BING,
     Provider.CLOUDFLARE,
+    Provider.CLARITY,
 )
 _PROVIDER_HELP: Final = {
     Provider.GOOGLE: (
         "Google Cloud OAuth desktop client JSON; enable Search Console, Analytics Data/Admin, "
-        "Site Verification, Indexing, and PageSpeed Insights APIs. "
+        "Site Verification, Indexing, PageSpeed Insights, and Tag Manager APIs. "
         "https://console.cloud.google.com/apis/credentials"
     ),
     Provider.BING: (
@@ -38,11 +39,17 @@ _PROVIDER_HELP: Final = {
         "Account token covering all zones with Zone Read, DNS Edit, Analytics Read, Cache Purge, "
         "and Zone Settings/Rules Edit. https://dash.cloudflare.com/profile/api-tokens"
     ),
+    Provider.CLARITY: (
+        "Microsoft Clarity project Data Export API token. In the project: Settings > Data Export "
+        "> Generate new API token. "
+        "https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api"
+    ),
 }
 _SECRET_RELATIVE_PATHS: Final = {
     Provider.GOOGLE: Path("google/oauth-client.json"),
     Provider.BING: Path("bing/api-key"),
     Provider.CLOUDFLARE: Path("cloudflare/api-token"),
+    Provider.CLARITY: Path("clarity/api-token"),
 }
 
 

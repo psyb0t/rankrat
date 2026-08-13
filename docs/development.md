@@ -134,8 +134,10 @@ Rankrat profile. They never need a `.env` selector matrix:
 make test-live
 make test-live-google-search-console
 make test-live-google-analytics
+make test-live-google-tag-manager
 make test-live-pagespeed
 make test-live-cloudflare
+make test-live-clarity
 make test-live-bing
 make test-live-http
 ```
@@ -161,9 +163,12 @@ The REST contract is YAML-first:
   provider/operation surface;
 - [`src/rankrat/api/seo-openapi.yaml`](../src/rankrat/api/seo-openapi.yaml) —
   intelligence, monitoring, Bing backlink, CrUX, and Cloudflare surface;
+- [`src/rankrat/api/free-seo-openapi.yaml`](../src/rankrat/api/free-seo-openapi.yaml) —
+  Google Tag Manager, Microsoft Clarity, provider-neutral edge redirects, and
+  safe Bing content-submission surface;
 - [`openapi.json`](../openapi.json) — generated merged artifact.
 
-After editing either source:
+After editing any source fragment:
 
 ```sh
 make generate-openapi
