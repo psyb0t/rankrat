@@ -39,6 +39,8 @@ from rankrat.providers.base import (
 _BING_API_ROOT = "https://ssl.bing.com/webmaster/api.svc/json"
 _API_KEY_PARAMETER = "apikey"
 _SITE_URL_PARAMETER = "siteUrl"
+_BING_ERROR_CODE_FIELD = "ErrorCode"
+_BING_NOT_AUTHORIZED_ERROR_CODE = 14
 _MAX_API_KEY_BYTES = 512
 _API_KEY_PATTERN = re.compile(r"[!-~]{1,512}\Z")
 _BING_LEGACY_DATE_PATTERN = re.compile(r"/Date\((-?\d+)([+-]\d{4})?\)/")
@@ -1212,7 +1214,7 @@ class BingWebmasterClient:
             ResourceKind.BING_SITE,
             site_url,
         )
-        await self._request_json(
+        response = await self._request_json(
             operation,
             self._load_api_key(account.credential),
             request.timeout_seconds,
@@ -1220,6 +1222,11 @@ class BingWebmasterClient:
             http_method="POST",
             request_payload={"siteUrl": site_url, "feedUrl": feed_url},
         )
+        if response is not None:
+            raise ProviderOperationError(
+                ProviderFailureCode.INVALID_RESPONSE,
+                "Bing Webmaster returned an unexpected feed mutation response",
+            )
 
     async def _mutate_site(
         self,
@@ -1272,8 +1279,10 @@ class BingWebmasterClient:
                     json=request_payload,
                 ) as response,
             ):
-                self._raise_for_status(response)
+                if response.status_code != 400:
+                    self._raise_for_status(response)
                 body = await self._read_bounded_body(response)
+                self._raise_for_status(response, body)
         except httpx.TimeoutException as error:
             raise ProviderOperationError(
                 ProviderFailureCode.TIMEOUT,
@@ -1314,7 +1323,7 @@ class BingWebmasterClient:
         return normalized
 
     @staticmethod
-    def _raise_for_status(response: httpx.Response) -> None:
+    def _raise_for_status(response: httpx.Response, body: bytes | None = None) -> None:
         if response.status_code in {401, 403}:
             raise ProviderOperationError(
                 ProviderFailureCode.AUTHENTICATION,
@@ -1329,6 +1338,11 @@ class BingWebmasterClient:
             raise ProviderOperationError(
                 ProviderFailureCode.UNAVAILABLE,
                 "Bing Webmaster is unavailable",
+            )
+        if response.status_code == 400 and _is_bing_not_authorized_error(body):
+            raise ProviderOperationError(
+                ProviderFailureCode.FORBIDDEN,
+                "Bing Webmaster access to the selected site was denied",
             )
         if response.is_redirect or response.status_code >= 400:
             raise ProviderOperationError(
@@ -1371,6 +1385,19 @@ def _json_list(value: object) -> list[object] | None:
         return _JSON_LIST_ADAPTER.validate_python(value)
     except ValidationError:
         return None
+
+
+def _is_bing_not_authorized_error(body: bytes | None) -> bool:
+    if body is None:
+        return False
+    try:
+        payload: object = json.loads(body)
+    except json.JSONDecodeError:
+        return False
+    typed_payload = _json_object(payload)
+    if typed_payload is None:
+        return False
+    return typed_payload.get(_BING_ERROR_CODE_FIELD) == _BING_NOT_AUTHORIZED_ERROR_CODE
 
 
 def _bing_traffic_row(value: object) -> BingTrafficRow:

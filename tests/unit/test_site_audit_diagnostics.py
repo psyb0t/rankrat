@@ -101,6 +101,31 @@ def test_site_audit_does_not_report_header_issues_when_equivalent_controls_exist
     }.isdisjoint(issue.code for issue in issues)
 
 
+def test_site_audit_retains_a_tokenized_canonical_and_same_site_link() -> None:
+    tokenized_url = "https://example.com/video/?utfc=opaque%3D"
+    result = SiteFetchResult(
+        tokenized_url,
+        200,
+        "text/html",
+        (
+            b'<html lang="en"><head><title>Example</title>'
+            b'<meta name="description" content="A sufficiently descriptive page summary '
+            b'for search results and users.">'
+            b'<meta property="og:title" content="Example">'
+            b'<meta property="og:description" content="Summary">'
+            b'<link rel="canonical" href="https://example.com/video/?utfc=opaque%3D">'
+            b"</head><body><h1>Example</h1>"
+            b'<a href="/video/?utfc=opaque%3D">Watch</a></body></html>'
+        ),
+    )
+
+    parsed, issues = SiteAuditService._audit_fetched_page("https://example.com/", result)
+
+    assert parsed.canonical_url == tokenized_url
+    assert parsed.links == (tokenized_url,)
+    assert "missing_canonical" not in {issue.code for issue in issues}
+
+
 @pytest.mark.asyncio
 async def test_site_audit_rejects_dtd_sitemaps_without_resolving_external_entities(
     tmp_path: Path,

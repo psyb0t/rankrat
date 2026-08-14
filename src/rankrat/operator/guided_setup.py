@@ -5,6 +5,7 @@ from __future__ import annotations
 import getpass
 import json
 import os
+import stat
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -25,24 +26,45 @@ _PROVIDER_ORDER: Final = (
     Provider.CLOUDFLARE,
     Provider.CLARITY,
 )
+_MAX_GOOGLE_OAUTH_CLIENT_BYTES: Final = 1_000_000
 _PROVIDER_HELP: Final = {
     Provider.GOOGLE: (
-        "Google Cloud OAuth desktop client JSON; enable Search Console, Analytics Data/Admin, "
-        "Site Verification, Indexing, PageSpeed Insights, and Tag Manager APIs. "
-        "https://console.cloud.google.com/apis/credentials"
+        "Create one Google Desktop OAuth client JSON. Open "
+        "https://console.cloud.google.com/projectcreate "
+        "→ create a project named rankrat. Open https://console.cloud.google.com/auth/overview → "
+        "configure the app. In Audience, choose External and add your own Google email "
+        "as a test user. Testing refresh tokens expire after seven days; after the first "
+        "authorization, change Publishing status to In production. Enable Search Console, "
+        "Site Verification, Analytics Data/Admin, "
+        "Indexing, PageSpeed Insights, Chrome UX Report, and Tag Manager APIs. Open "
+        "https://console.cloud.google.com/auth/clients → "
+        "Create client → Desktop app → name it rankrat → Create → download the JSON. Paste that "
+        "one-line JSON here, or restart with rankrat setup "
+        "--google-oauth-client-file /absolute/path "
+        "to import the downloaded file. Setup asks separately for an optional API key covering "
+        "PageSpeed Insights and Chrome UX Report."
     ),
     Provider.BING: (
-        "Bing Webmaster API key with access to the whole signed-in Webmaster account. "
-        "https://www.bing.com/webmasters/home"
+        "Open https://www.bing.com/webmasters/home → sign in → Add a Site → finish verification. "
+        "Click the top-right gear → Settings → API Access. Accept the terms if shown, then click "
+        "API Key → Generate API Key. It is one key for the whole Webmaster account; paste it here."
     ),
     Provider.CLOUDFLARE: (
-        "Account token covering all zones with Zone Read, DNS Edit, Analytics Read, Cache Purge, "
-        "and Zone Settings/Rules Edit. https://dash.cloudflare.com/profile/api-tokens"
+        "Create a dedicated Cloudflare User API Token, not an Account API Token: "
+        "https://dash.cloudflare.com/profile/api-tokens → Create Token → Create Custom Token. "
+        "Name it rankrat. Add Zone → Zone → Read, DNS → Edit, Analytics → Read, Cache Purge → "
+        "Purge, Cache Rules → Edit, and Single Redirect → Edit. Add Account → Account Rulesets → "
+        "Edit and Account Filter Lists → Edit. Set Zone Resources to All zones, Account Resources "
+        "to All accounts, then Create Token and paste the one-time value here. "
+        "Zone Resources to All "
+        "zones and Account Resources to All accounts are both required."
     ),
     Provider.CLARITY: (
-        "Microsoft Clarity project Data Export API token. In the project: Settings > Data Export "
-        "> Generate new API token. "
-        "https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api"
+        "Open https://clarity.microsoft.com/ → sign in. If needed, click New project → "
+        "enter the site "
+        "name and URL → Add new project. Open that project → Settings → Data Export → Generate new "
+        "API token → name it rankrat → copy it here. You must be a project admin; one token covers "
+        "one Clarity project."
     ),
 }
 _SECRET_RELATIVE_PATHS: Final = {
@@ -60,6 +82,8 @@ def configure_interactively(
     prompt: Prompt = input,
     secret_prompt: SecretPrompt = getpass.getpass,
     output: Output = print,
+    *,
+    google_oauth_client_file: Path | None = None,
 ) -> BoundaryDocument:
     """Select provider accounts and store their credentials without echoing values."""
 
@@ -84,6 +108,7 @@ def configure_interactively(
             current_accounts[provider][0] if current_accounts[provider] else None,
             secret_root,
             oauth_root,
+            google_oauth_client_file if provider is Provider.GOOGLE else None,
             secret_prompt,
             output,
         )
@@ -132,17 +157,23 @@ def _configure_account(
     current: ConfiguredAccount | None,
     secret_root: Path,
     oauth_root: Path,
+    google_oauth_client_file: Path | None,
     secret_prompt: SecretPrompt,
     output: Output,
 ) -> ConfiguredAccount:
     relative_path = _SECRET_RELATIVE_PATHS[provider]
     credential = secret_root / relative_path
     prompt_label = (
-        "Paste OAuth desktop client JSON"
+        "paste one-line OAuth desktop client JSON"
         if provider is Provider.GOOGLE
         else _credential_prompt_label(provider)
     )
-    value = secret_prompt(f"{provider.value}: {prompt_label} (blank keeps existing file): ")
+    value = ""
+    if provider is Provider.GOOGLE and google_oauth_client_file is not None:
+        value = _load_google_oauth_client_file(google_oauth_client_file)
+        output("Imported Google OAuth desktop client JSON from the host-selected absolute path.")
+    else:
+        value = secret_prompt(f"{provider.value}: {prompt_label} (blank keeps existing file): ")
     if value:
         if provider is Provider.GOOGLE:
             _validate_google_oauth_json(value)
@@ -195,6 +226,41 @@ def _validate_google_oauth_json(value: str) -> None:
     required = ("client_id", "client_secret", "auth_uri", "token_uri", "redirect_uris")
     if any(not typed_client.get(field) for field in required):
         raise ConfigurationError("Google OAuth desktop client JSON is incomplete")
+
+
+def _load_google_oauth_client_file(path: Path) -> str:
+    if not path.is_absolute():
+        raise ConfigurationError("Google OAuth client file path must be absolute")
+    flags = os.O_RDONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if hasattr(os, "O_NONBLOCK"):
+        flags |= os.O_NONBLOCK
+    try:
+        descriptor = os.open(path, flags)
+    except OSError as error:
+        raise ConfigurationError("Google OAuth client file could not be opened") from error
+    try:
+        metadata = os.fstat(descriptor)
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ConfigurationError("Google OAuth client file must be a regular file")
+        if metadata.st_size > _MAX_GOOGLE_OAUTH_CLIENT_BYTES:
+            raise ConfigurationError("Google OAuth client file exceeds the allowed size")
+        with os.fdopen(descriptor, "rb") as stream:
+            descriptor = -1
+            raw_document = stream.read(_MAX_GOOGLE_OAUTH_CLIENT_BYTES + 1)
+        if len(raw_document) > _MAX_GOOGLE_OAUTH_CLIENT_BYTES:
+            raise ConfigurationError("Google OAuth client file exceeds the allowed size")
+        document = raw_document.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise ConfigurationError("Google OAuth client file must be UTF-8 JSON") from error
+    except OSError as error:
+        raise ConfigurationError("Google OAuth client file could not be read") from error
+    finally:
+        if descriptor != -1:
+            os.close(descriptor)
+    _validate_google_oauth_json(document)
+    return document
 
 
 def _read_document(path: Path) -> BoundaryDocument:

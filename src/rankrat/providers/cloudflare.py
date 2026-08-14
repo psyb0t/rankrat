@@ -31,7 +31,6 @@ from rankrat.providers.dns import DnsRecordReceipt, DnsRecordType
 _CLOUDFLARE_API_ROOT = "https://api.cloudflare.com/client/v4"
 _TOKEN_PATTERN = re.compile(r"^[A-Za-z0-9_-]{16,512}$")
 _DNS_RECORD_COMMENT = "Managed by Rankrat site ownership verification"
-_DNS_RECORD_TAG = "rankrat:site-verification"
 _AUTOMATIC_TTL = 1
 _MAX_IDENTIFIER_CHARS = 32
 _ZONE_ID_PATTERN_TEXT = r"^[0-9a-f]{32}$"
@@ -274,7 +273,6 @@ class CloudflareDnsClient:
                 "ttl": _AUTOMATIC_TTL,
                 "proxied": False,
                 "comment": _DNS_RECORD_COMMENT,
-                "tags": [_DNS_RECORD_TAG],
             },
         )
         try:

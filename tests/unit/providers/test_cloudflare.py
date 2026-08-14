@@ -79,6 +79,7 @@ async def test_cloudflare_creates_only_exact_verification_record(tmp_path: Path)
     payload = json.loads(requests[1].content)
     assert payload["proxied"] is False
     assert payload["type"] == "TXT"
+    assert "tags" not in payload
     assert requests[1].headers["authorization"].startswith("Bearer ")
 
 

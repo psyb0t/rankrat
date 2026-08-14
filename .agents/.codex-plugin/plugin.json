@@ -1,6 +1,6 @@
 {
   "name": "rankrat",
-  "version": "0.13.1",
+  "version": "0.14.0",
   "description": "Self-hosted SEO intelligence over Google Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft Clarity, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse — persistent monitoring, internal-link and content opportunities, ownership, remediation, onboarding, managed edge redirects, safe Bing content submission, and Bing backlink intelligence. Writable by default with one read-only switch. MCP over stdio and Streamable HTTP, plus REST.",
   "author": {
     "name": "psyb0t",

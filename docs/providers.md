@@ -43,16 +43,32 @@ account. Manual file creation remains available for automated deployments.
 
 One OAuth Desktop client and one consent flow cover Search Console, Site
 Verification, Google Indexing, GA4 Data, GA4 Admin, and Google Tag Manager
-operations.
+operations. Do this once in the Google account that should own every site,
+Analytics property, and Tag Manager container Rankrat manages.
 
-### Create the Google project
+### Create exactly what Rankrat needs
 
-1. Create or select a project in [Google Cloud Console](https://console.cloud.google.com/).
-2. Configure the [Google Auth platform](https://console.cloud.google.com/auth/overview).
-3. If the app is External/Testing, add every signing-in user under
-   [Audience](https://console.cloud.google.com/auth/audience). Otherwise Google
-   returns `403 access_denied` before Rankrat receives a callback.
-4. Enable the APIs used by your deployment:
+1. Open [Create a Google Cloud project](https://console.cloud.google.com/projectcreate).
+   Enter `rankrat` as the project name and click **Create**. Wait for the new
+   project to become selected in the top bar.
+2. Open [Google Auth Platform](https://console.cloud.google.com/auth/overview).
+   If Google shows **Get started**, click it. In **Branding**, use `rankrat` as
+   the app name and choose your email for the support contact. Save it.
+3. Open [Audience](https://console.cloud.google.com/auth/audience). Select
+   **External**, then use **Add users** to add the same Google email that will
+   authorize Rankrat. This lets you make the first authorization while the app
+   is in testing. If this email is not a test user, Google stops OAuth with
+   `403 access_denied`.
+4. After the first authorization succeeds, return to
+   [Audience](https://console.cloud.google.com/auth/audience). Under
+   **Publishing status**, click **Publish app** (or **In production**) and
+   confirm it. Do this even for a one-person installation: External apps left
+   in **Testing** have refresh tokens that expire after seven days. An
+   unverified production app can still be used by its own operator; Google
+   shows an unverified-app warning. Verification is only necessary before
+   distributing Rankrat to other people.
+5. Open each link below and click **Enable** once. A page that says **Manage**
+   is already enabled.
 
    - [Search Console API](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com)
    - [Site Verification API](https://console.cloud.google.com/apis/library/siteverification.googleapis.com)
@@ -61,10 +77,29 @@ operations.
    - [Google Tag Manager API](https://console.cloud.google.com/apis/library/tagmanager.googleapis.com)
    - [Web Search Indexing API](https://console.cloud.google.com/apis/library/indexing.googleapis.com)
    - [PageSpeed Insights API](https://console.cloud.google.com/apis/library/pagespeedonline.googleapis.com)
+   - [Chrome UX Report API](https://console.cloud.google.com/apis/library/chromeuxreport.googleapis.com)
 
-5. At [OAuth Clients](https://console.cloud.google.com/auth/clients), create a
-   **Desktop app** client. Download the JSON as
-   `secrets/google/oauth-client.json`.
+6. Open [OAuth Clients](https://console.cloud.google.com/auth/clients). Click
+   **Create client**, choose **Desktop app**, name it `rankrat`, then click
+   **Create**. Click **Download JSON** and keep the downloaded file. Do not
+   create a Web client or a service account.
+7. Run setup with the downloaded JSON's host path, then choose `google` when
+   setup asks for providers:
+
+   ```sh
+   rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
+   ```
+
+   From a checkout, use the same one-command flow:
+
+   ```sh
+   RANKRAT_GOOGLE_OAUTH_CLIENT_FILE="$HOME/Downloads/client_secret_...json" make setup
+   ```
+
+   Rankrat reads that host file through a temporary read-only mount, validates
+   it, then copies it into its owner-only secret directory. Do not manually move
+   it or paste multi-line JSON into the terminal. Setup then opens the one
+   browser OAuth consent flow itself.
 
 Do not create a service account for Rankrat. The supported Google identity is
 the user who completes this OAuth consent flow.
@@ -135,37 +170,35 @@ make an ordinary page eligible or guarantee indexing.
 
 ## PageSpeed and CrUX
 
-PageSpeed does not use OAuth. It accepts a query-string API key. Without one,
-PageSpeed analysis may work under tighter anonymous quota; CrUX History requires
-the key.
+PageSpeed does not use OAuth. An API key increases PageSpeed quota and is
+required for CrUX History. `rankrat setup` asks for this key directly after the
+Google client file; it stores it safely, so do not create any secret files by
+hand.
 
 1. Open [Google API Credentials](https://console.cloud.google.com/apis/credentials).
-2. Choose **Create credentials → API key**.
-3. Edit it and set **API restrictions → Restrict key → PageSpeed Insights API**.
-4. Save only the key value:
-
-   ```sh
-   install -m 600 /dev/null secrets/google/pagespeed-api-key
-   read -rsp 'PageSpeed API key: ' RANKRAT_PAGESPEED_KEY
-   printf '%s' "$RANKRAT_PAGESPEED_KEY" > secrets/google/pagespeed-api-key
-   unset RANKRAT_PAGESPEED_KEY
-   printf '\n'
-   ```
-
-5. Use the container path in the Google account:
-
-   ```json
-   "pagespeed_api_key_file": "/run/secrets/google/pagespeed-api-key"
-   ```
+2. Click **Create credentials → API key**.
+3. Open the new key's details. Under **API restrictions**, choose **Restrict
+   key**, then select both **PageSpeed Insights API** and **Chrome UX Report
+   API**. Click **Save**.
+4. Copy the key once. When Rankrat asks for the PageSpeed Insights API key,
+   paste it; leave the prompt blank only when you deliberately want to skip
+   PageSpeed quota identity and CrUX History.
 
 `pagespeed_sites` supplies the public root used to contain local Lighthouse
 requests. Every requested page must be a child of the selected site.
 
 ## Bing Webmaster Tools
 
-1. Add and verify sites in [Bing Webmaster Tools](https://www.bing.com/webmasters/).
-2. Open **Settings → API Access** and create an API key.
-3. Save only the key at `secrets/bing/api-key`.
+1. Open [Bing Webmaster Tools](https://www.bing.com/webmasters/home), sign in,
+   and click **Add a Site**. Enter one website you own and finish Bing's
+   verification flow. You need one verified site before Bing lets the account
+   create its API key.
+2. Click the gear in the top-right corner, then **Settings → API Access**. If
+   Bing shows terms on the first visit, accept them. Click **API Key → Generate
+   API Key**, then copy the value shown.
+3. Run `rankrat setup` (or `make setup`), choose `bing`, and paste that key.
+   Bing creates one key per user, not per site: the same key covers every
+   verified site in that Webmaster account and sites Rankrat later adds there.
 4. Let Rankrat discover the account's sites, or seed known roots:
 
    ```json
@@ -192,25 +225,29 @@ limited to the most recent 24-hour query window, exact URL purges are supported,
 and its two cache templates fit inside the Free plan's ten Cache Rules. Existing
 zone rules still count toward that Cloudflare limit.
 
-1. Open [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens).
-2. Choose **Create Token → Create Custom Token**.
-3. Add **Zone → Zone → Read** plus only the features you use:
+Use a **User API Token**, not Cloudflare's separate **Account API Token**
+screen. Zone DNS record operations are granted through the user-token flow.
 
-   | Feature | Permission |
+1. Open [Cloudflare User API Tokens](https://dash.cloudflare.com/profile/api-tokens).
+2. Click **Create Token → Create Custom Token** and name the token `rankrat`.
+3. Add this complete permission set. It covers every currently shipped
+   Cloudflare feature, so a user never has to return to the dashboard later:
+
+   | Feature | Permission to add |
    | --- | --- |
-   | Ownership verification | DNS → Edit |
-   | Traffic/cache analytics | Analytics → Read |
-   | Exact URL purge | Cache Purge → Purge |
-   | Rankrat cache templates | Cache Rules → Edit; some interfaces call it Cache Settings Write |
-   | Rankrat-managed edge redirects | Zone Rulesets → Edit; some interfaces call it Dynamic Redirects or Rulesets Write |
+   | Discover zones | **Zone → Zone → Read** |
+   | Google/Bing DNS ownership verification | **Zone → DNS → Edit** |
+   | Traffic/cache analytics | **Zone → Analytics → Read** |
+   | Exact URL purge | **Zone → Cache Purge → Purge** |
+   | Rankrat cache templates | **Zone → Cache Rules → Edit** |
+   | Rankrat-managed edge redirects | **Zone → Single Redirect → Edit** |
+   | Cache-rule API support | **Account → Account Rulesets → Edit** and **Account → Account Filter Lists → Edit** |
 
-   Cloudflare changes dashboard labels over time; cross-check the current
-   [API token permission reference](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
-   and choose the zone-scoped permission matching the API operation above.
-
-4. Under Zone Resources, include **All zones** when one Rankrat account must
-   onboard multiple current and future domains. Do not use the Global API Key.
-5. Save the token at `secrets/cloudflare/api-token`.
+4. Under **Zone Resources**, choose **Include → All zones**. Under **Account
+   Resources**, choose **Include → All accounts**. Do not use the Global API
+   Key or the separate Account API Token screen.
+5. Select **Continue to summary → Create Token**. Copy the token value shown
+   once and paste it into Rankrat's hidden setup prompt.
 6. Start with empty zone inventory; Rankrat discovers visible zones:
 
    ```json
@@ -229,19 +266,30 @@ analytics/cache/managed-redirect operations; it does not expose arbitrary
 record bodies, whole-zone purges, or arbitrary existing Cloudflare ruleset
 replacement.
 
+Ownership proof records are DNS-only and untagged. Rankrat does not consume a
+Cloudflare DNS tag quota merely to mark a provider-issued verification record.
+
+Provider readiness can prove that the token reaches Cloudflare and can discover
+zones. It deliberately does not create a throwaway DNS record to prove write
+permission, so a readiness success does not replace the required **Zone → DNS
+→ Edit** setting.
+
 ## Microsoft Clarity
 
 Clarity's free Data Export API is project-scoped. Configure one Rankrat
 `clarity` account for each Clarity project you want to inspect; its credential
 is the project token, not a Microsoft account-wide credential.
 
-1. Open the relevant project in [Microsoft Clarity](https://clarity.microsoft.com/).
-2. Select **Settings → Data Export**.
-3. Choose **Generate new API token** and store only the token at
-   `secrets/clarity/api-token`.
-4. Add an account whose `provider` is `clarity` and whose `credential` is
-   `/run/secrets/clarity/api-token`, or let `make setup` create it from a
-   hidden prompt.
+1. Open [Microsoft Clarity](https://clarity.microsoft.com/) and sign in. If
+   there is no project yet, click **New project**, enter the site name and URL,
+   then click **Add new project**. Install that project's tracking code before
+   expecting data.
+2. Open the project, then choose **Settings → Data Export**. You must be a
+   project admin.
+3. Click **Generate new API token**, name it `rankrat`, and copy the value.
+4. Run `rankrat setup` (or `make setup`), choose `clarity`, and paste the
+   token. The token belongs to this one project; repeat these steps for another
+   Clarity project.
 
 Rankrat calls only Clarity's fixed project-insights endpoint. It does not
 write Clarity configuration or replay session recordings. The upstream export

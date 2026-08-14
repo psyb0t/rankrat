@@ -6,7 +6,7 @@ from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from rankrat.constants import (
     API_PREFIX,
@@ -827,14 +827,20 @@ class _SiteAuditBody(BaseModel):
 class _SiteOwnershipCheckBody(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    google_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
-    bing_account_id: str = Field(pattern=ACCOUNT_ID_PATTERN)
+    google_account_id: str | None = Field(default=None, pattern=ACCOUNT_ID_PATTERN)
+    bing_account_id: str | None = Field(default=None, pattern=ACCOUNT_ID_PATTERN)
     site_url: str = Field(min_length=1, max_length=2_048)
     timeout_seconds: float = Field(
         default=DEFAULT_PROVIDER_TIMEOUT_SECONDS,
         ge=MIN_PROVIDER_TIMEOUT_SECONDS,
         le=MAX_PROVIDER_TIMEOUT_SECONDS,
     )
+
+    @model_validator(mode="after")
+    def validate_provider_selection(self) -> _SiteOwnershipCheckBody:
+        if self.google_account_id is None and self.bing_account_id is None:
+            raise ValueError("site ownership requires a Google or Bing account")
+        return self
 
 
 class _SiteOwnershipVerificationBody(_SiteOwnershipCheckBody):

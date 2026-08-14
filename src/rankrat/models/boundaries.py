@@ -32,21 +32,26 @@ _PERCENT_ENCODED_OCTET_PATTERN = re.compile(r"%([0-9A-Fa-f]{2})")
 _DOMAIN_PATTERN = re.compile(
     r"^(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}\Z"
 )
+_ASCII_CONTROL_MAXIMUM = 31
+_ASCII_DELETE_CODEPOINT = 127
 
 
-def _normalize_https_url(value: str, subject: str) -> str:
+def _normalize_https_url(value: str, subject: str, *, allow_query: bool = False) -> str:
     normalized = value.strip()
     parsed = urlparse(normalized)
     if parsed.scheme.lower() != "https" or not parsed.hostname:
         raise ValueError(f"{subject} must be an absolute HTTPS URL")
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
+    if parsed.username or parsed.password or parsed.fragment:
+        raise ValueError(f"{subject} must not contain credentials, query, or fragment")
+    if parsed.query and not allow_query:
         raise ValueError(f"{subject} must not contain credentials, query, or fragment")
     if parsed.port not in (None, 443):
         raise ValueError(f"{subject} must use the standard HTTPS port")
     hostname = parsed.hostname.lower().encode("idna").decode("ascii")
     netloc = hostname
     path = _normalize_url_path(parsed.path or _ROOT_URL_PATH, subject)
-    return urlunparse(("https", netloc, path, "", "", ""))
+    query = _normalize_url_query(parsed.query, subject) if allow_query else ""
+    return urlunparse(("https", netloc, path, "", query, ""))
 
 
 def _normalize_url_path(path: str, subject: str) -> str:
@@ -69,6 +74,21 @@ def _normalize_url_path(path: str, subject: str) -> str:
     return normalized_path
 
 
+def _normalize_url_query(query: str, subject: str) -> str:
+    if _INVALID_PERCENT_ENCODING_PATTERN.search(query):
+        raise ValueError(f"{subject} must contain valid percent-encoding")
+    if _contains_control_character(query):
+        raise ValueError(f"{subject} must not contain control characters in its query")
+    return query
+
+
+def _contains_control_character(value: str) -> bool:
+    return any(
+        ord(character) <= _ASCII_CONTROL_MAXIMUM or ord(character) == _ASCII_DELETE_CODEPOINT
+        for character in value
+    )
+
+
 def normalize_indexnow_host(value: str) -> str:
     """Normalize one operator-supplied public DNS hostname for an IndexNow target."""
 
@@ -87,6 +107,14 @@ def normalize_indexnow_host(value: str) -> str:
 def normalize_public_https_url(value: str, subject: str) -> str:
     """Normalize a caller-supplied HTTPS URL before a boundary ownership check."""
     return _normalize_https_url(value, subject)
+
+
+def normalize_public_https_audit_url(value: str, subject: str) -> str:
+    """Normalize a public crawl URL while preserving its bounded query identity."""
+
+    if _contains_control_character(value.strip()):
+        raise ValueError(f"{subject} must not contain control characters")
+    return _normalize_https_url(value, subject, allow_query=True)
 
 
 def normalize_public_https_root_url(value: str, subject: str) -> str:

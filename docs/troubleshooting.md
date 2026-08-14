@@ -94,13 +94,30 @@ loopback callback. Confirm:
 Authorization failures write a bounded `google-auth.log` under OAuth storage.
 Treat it as sensitive local diagnostic state; do not publish it. It records the
 failing stage and finite failure category without making OAuth tokens or raw
-upstream responses part of normal service logs.
+upstream responses part of normal service logs. A rejected callback also has a
+fixed `reason` such as `callback_state_rejected`; it never contains the
+callback URL, OAuth state, authorization code, or tokens.
 
 ## OAuth stored, but Google calls fail
 
 Check the required APIs are enabled in the same Google Cloud project as the
-client. Re-run authorization after enabling new APIs/scopes. Then confirm the
-signed-in user can see the exact Search Console/GA4 resources.
+Desktop OAuth client. Open the exact API link, select that project in the top
+bar, and click **Enable**. A button labelled **Manage** means it is already
+enabled.
+
+- Site ownership verification reports Google `accessNotConfigured`: enable
+  [Site Verification API](https://console.cloud.google.com/apis/library/siteverification.googleapis.com).
+- Search Console tools fail: enable
+  [Search Console API](https://console.cloud.google.com/apis/library/searchconsole.googleapis.com).
+- Analytics tools fail: enable both
+  [Google Analytics Data API](https://console.cloud.google.com/apis/library/analyticsdata.googleapis.com)
+  and [Google Analytics Admin API](https://console.cloud.google.com/apis/library/analyticsadmin.googleapis.com).
+- Tag Manager tools fail: enable
+  [Google Tag Manager API](https://console.cloud.google.com/apis/library/tagmanager.googleapis.com).
+
+Wait a few minutes after enabling an API, then rerun the failing live check.
+Re-authorize only after enabling a newly required OAuth scope. Finally, confirm
+the signed-in user can see the exact Search Console/GA4 resources.
 
 Use:
 
@@ -169,10 +186,12 @@ polling; it cannot make Google fetch immediately.
 ## Bing returns no data or cannot access a site
 
 Verify the site in Bing Webmaster Tools and regenerate/check the account API
-key. Use `bing_site_inventory` to confirm the credential can see the site, then
-use `bing_url_information`, `bing_feeds`, and `bing_crawl_issues` to distinguish
-site visibility, sitemap, and URL status. The `sites` array is persisted
-inventory, not a second permission list.
+key. Call `site_ownership_check` with the selected `bing_account_id` to confirm
+the exact site is verified; a site can be visible to the account while still
+being unverified and Bing will reject sitemap writes. Then use `bing_feeds`,
+`bing_url_information`, and `bing_crawl_issues` to distinguish sitemap, URL,
+and crawl state. The `sites` array is persisted inventory, not a second
+permission list.
 
 ```sh
 make test-live-bing

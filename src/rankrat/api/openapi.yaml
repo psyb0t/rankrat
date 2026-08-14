@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: rankrat
-  version: "0.13.1"
+  version: "0.14.0"
   description: >-
     Boundary-limited SEO operations over REST and MCP. The source document lists
     the full writable contract; a read-only runtime removes write routes from
@@ -2039,13 +2039,17 @@ components:
       additionalProperties: false
       properties:
         bing_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Bing Account Id
-          type: string
+          anyOf:
+          - pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+            type: string
+          - type: 'null'
         google_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Google Account Id
-          type: string
+          anyOf:
+          - pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+            type: string
+          - type: 'null'
         site_url:
           maxLength: 2048
           minLength: 1
@@ -2058,8 +2062,6 @@ components:
           title: Timeout Seconds
           type: number
       required:
-      - google_account_id
-      - bing_account_id
       - site_url
       title: _SiteOwnershipCheckBody
       type: object
@@ -2067,17 +2069,21 @@ components:
       additionalProperties: false
       properties:
         bing_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Bing Account Id
-          type: string
+          anyOf:
+          - pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+            type: string
+          - type: 'null'
         dns_account_id:
           pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Dns Account Id
           type: string
         google_account_id:
-          pattern: ^[a-z0-9][a-z0-9-]{0,62}$
           title: Google Account Id
-          type: string
+          anyOf:
+          - pattern: ^[a-z0-9][a-z0-9-]{0,62}$
+            type: string
+          - type: 'null'
         site_url:
           maxLength: 2048
           minLength: 1
@@ -2090,8 +2096,6 @@ components:
           title: Timeout Seconds
           type: number
       required:
-      - google_account_id
-      - bing_account_id
       - site_url
       - dns_account_id
       title: _SiteOwnershipVerificationBody

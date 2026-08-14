@@ -132,6 +132,91 @@ def test_wrapper_setup_bootstraps_a_fresh_default_profile(
     assert "setup" in docker_arguments.read_text(encoding="utf-8").splitlines()
 
 
+def test_wrapper_mounts_a_host_selected_google_oauth_client_for_setup(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    downloaded_client = tmp_path / "client_secret.json"
+    downloaded_client.write_text('{"installed": {}}\n', encoding="utf-8")
+    docker_arguments = tmp_path / "docker-arguments"
+    environment = {
+        **os.environ,
+        "RANKRAT_DATA_DIR": str(data_directory),
+        "RANKRAT_READ_ONLY": "false",
+        "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
+    }
+
+    with _fake_bin_directory() as fake_bin:
+        environment["PATH"] = f"{fake_bin}:{os.environ['PATH']}"
+        result = _run_wrapper(
+            environment,
+            tmp_path,
+            mode="setup",
+            arguments=("--google-oauth-client-file", str(downloaded_client)),
+        )
+
+    assert result.returncode == 0, result.stderr
+    arguments = docker_arguments.read_text(encoding="utf-8").splitlines()
+    assert (
+        f"type=bind,src={downloaded_client},dst=/run/google-oauth-client-import.json,readonly"
+        in arguments
+    )
+    assert "--setup-google-oauth-client-file" in arguments
+    assert "/run/google-oauth-client-import.json" in arguments
+
+
+def test_wrapper_accepts_the_google_oauth_client_path_from_the_environment(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    downloaded_client = tmp_path / "client_secret.json"
+    downloaded_client.write_text('{"installed": {}}\n', encoding="utf-8")
+    docker_arguments = tmp_path / "docker-arguments"
+    environment = {
+        **os.environ,
+        "RANKRAT_DATA_DIR": str(data_directory),
+        "RANKRAT_GOOGLE_OAUTH_CLIENT_FILE": str(downloaded_client),
+        "RANKRAT_READ_ONLY": "false",
+        "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
+    }
+
+    with _fake_bin_directory() as fake_bin:
+        environment["PATH"] = f"{fake_bin}:{os.environ['PATH']}"
+        result = _run_wrapper(environment, tmp_path, mode="setup")
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        f"type=bind,src={downloaded_client},dst=/run/google-oauth-client-import.json,readonly"
+        in docker_arguments.read_text(encoding="utf-8").splitlines()
+    )
+
+
+def test_wrapper_rejects_unsafe_host_google_oauth_client_sources(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    downloaded_client = tmp_path / "client_secret.json"
+    downloaded_client.write_text('{"installed": {}}\n', encoding="utf-8")
+    linked_client = tmp_path / "client-link.json"
+    linked_client.symlink_to(downloaded_client)
+    delimiter_client = tmp_path / "client,readonly.json"
+    delimiter_client.write_text('{"installed": {}}\n', encoding="utf-8")
+    docker_marker = tmp_path / "docker-was-called"
+    base_environment = {
+        **os.environ,
+        "RANKRAT_DATA_DIR": str(data_directory),
+        "RANKRAT_READ_ONLY": "false",
+        "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
+    }
+
+    with _fake_bin_directory() as fake_bin:
+        base_environment["PATH"] = f"{fake_bin}:{os.environ['PATH']}"
+        for source in ("relative-client.json", str(linked_client), str(delimiter_client)):
+            result = _run_wrapper(
+                base_environment,
+                tmp_path,
+                mode="setup",
+                arguments=("--google-oauth-client-file", source),
+            )
+            assert result.returncode != 0
+
+    assert not docker_marker.exists()
+
+
 def test_wrapper_never_bind_mounts_the_boundary_file_on_its_own() -> None:
     """The image bakes /run/config, so a lone file mount there is unreadable."""
 

@@ -23,8 +23,8 @@ _LOGGER = logging.getLogger(__name__)
 class SiteOwnershipCheckRequest:
     """Search-provider accounts and one HTTPS site root to inspect."""
 
-    google_account_id: str
-    bing_account_id: str
+    google_account_id: str | None
+    bing_account_id: str | None
     site_url: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS
 
@@ -33,8 +33,8 @@ class SiteOwnershipCheckRequest:
 class SiteOwnershipVerificationRequest:
     """Search and DNS provider accounts used to establish site ownership."""
 
-    google_account_id: str
-    bing_account_id: str
+    google_account_id: str | None
+    bing_account_id: str | None
     dns_account_id: str
     site_url: str
     timeout_seconds: float = DEFAULT_PROVIDER_TIMEOUT_SECONDS

@@ -22,8 +22,8 @@ from rankrat.constants import (
 from rankrat.errors import InputLimitError, SiteFetchError
 from rankrat.models.boundaries import (
     configured_site_contains_url,
+    normalize_public_https_audit_url,
     normalize_public_https_root_url,
-    normalize_public_https_url,
 )
 from rankrat.policy.boundaries import BoundaryPolicy
 from rankrat.providers.site_fetch import PublicSiteFetcher, SiteFetchResult
@@ -586,9 +586,9 @@ def _audit_link(page_url: str, raw_link: str) -> str | None:
         return None
     absolute = urljoin(page_url, candidate)
     parsed = urlparse(absolute)
-    if parsed.scheme != "https" or parsed.query or parsed.fragment:
+    if parsed.scheme != "https" or parsed.fragment:
         return None
     try:
-        return normalize_public_https_url(absolute, "audit_link")
+        return normalize_public_https_audit_url(absolute, "audit_link")
     except ValueError:
         return None

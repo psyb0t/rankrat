@@ -52,6 +52,22 @@ async def test_schema_fetch_uses_single_resolved_address_and_safe_http_request()
 
 
 @pytest.mark.asyncio
+async def test_schema_fetch_preserves_valid_tokenized_query_identity() -> None:
+    tokenized_url = "https://example.com/video/?utfc=opaque%3D&variant=one"
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == tokenized_url
+        return httpx.Response(200, headers={"content-type": "text/html"}, content=b"<html />")
+
+    result = await PublicSchemaFetcher(
+        lambda _: _immediate(_public_address()),
+        lambda _, __: httpx.MockTransport(handler),
+    ).fetch(tokenized_url, 1.0)
+
+    assert result.url == tokenized_url
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "url",
     (
@@ -59,7 +75,8 @@ async def test_schema_fetch_uses_single_resolved_address_and_safe_http_request()
         "https://example.com:444/",
         "https://user:pass@example.com/",
         "https://example.com/path#fragment",
-        "https://example.com/?query=value",
+        "https://example.com/?query=%",
+        "https://example.com/?query=\x00",
         "https://127.0.0.1/",
     ),
 )

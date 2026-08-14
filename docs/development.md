@@ -48,7 +48,7 @@ configuration, and persistence boundaries. The Lighthouse worker is TypeScript.
 ```sh
 make help
 make version
-make version V=0.13.1
+make version V=X.Y.Z
 ```
 
 Make target help is the command source of truth. Do not invoke host Python/pnpm

@@ -19,6 +19,10 @@ from rankrat.services.bing import (
     BingBacklinkTargetReport,
 )
 from rankrat.services.site_audit import SiteAuditReport
+from rankrat.services.site_ownership import (
+    SiteOwnershipCheckRequest,
+    SiteOwnershipVerificationRequest,
+)
 from rankrat.services.site_remediation import SiteRemediationReceipt
 from rankrat.transports.http import create_http_app
 from rankrat.transports.mcp import build_mcp_server
@@ -72,11 +76,14 @@ def _backlink_report() -> BingBacklinkIntelligenceReport:
 def _patch_read_services(
     services: ApplicationServices,
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
+) -> list[SiteOwnershipCheckRequest]:
+    ownership_requests: list[SiteOwnershipCheckRequest] = []
+
     async def audit(*_: object) -> SiteAuditReport:
         return _audit_report()
 
-    async def ownership(*_: object) -> SiteOwnershipReceipt:
+    async def ownership(request: SiteOwnershipCheckRequest) -> SiteOwnershipReceipt:
+        ownership_requests.append(request)
         return _ownership_receipt()
 
     async def backlinks(*_: object) -> BingBacklinkIntelligenceReport:
@@ -87,6 +94,7 @@ def _patch_read_services(
     monkeypatch.setattr(services.site_audit, "audit", audit)
     monkeypatch.setattr(services.site_ownership, "check", ownership)
     monkeypatch.setattr(services.bing_webmaster, "backlink_intelligence", backlinks)
+    return ownership_requests
 
 
 @pytest.mark.asyncio
@@ -95,7 +103,7 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     settings, services = deployment
-    _patch_read_services(services, monkeypatch)
+    ownership_requests = _patch_read_services(services, monkeypatch)
     app = create_http_app(settings, services)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -113,6 +121,13 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
                 "site_url": "https://example.com/",
             },
         )
+        bing_only_ownership = await client.post(
+            "/v1/site-ownership-checks",
+            json={
+                "bing_account_id": "bing-main",
+                "site_url": "https://example.com/",
+            },
+        )
         backlinks = await client.post(
             "/v1/bing/backlink-intelligence",
             json={
@@ -123,6 +138,7 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
         )
         assert audit.json()["score"] == 100
         assert ownership.json()["complete"] is True
+        assert bing_only_ownership.json()["complete"] is True
         assert backlinks.json()["targets"][0]["referring_domains"] == ["source.example"]
         legacy_ownership = await client.post(
             "/v1/site-ownership-checks",
@@ -134,6 +150,12 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
             },
         )
         assert legacy_ownership.status_code == 422
+        assert (
+            await client.post(
+                "/v1/site-ownership-checks",
+                json={"site_url": "https://example.com/"},
+            )
+        ).status_code == 422
         assert (await client.post("/v1/site-ownership-verifications", json={})).status_code == 404
         assert (await client.post("/v1/site-remediations", json={})).status_code == 404
 
@@ -156,8 +178,26 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
                 "site_url": "https://example.com/",
             },
         )
+        bing_only_ownership = await client.call_tool(
+            "site_ownership_check",
+            {
+                "bing_account_id": "bing-main",
+                "site_url": "https://example.com/",
+            },
+        )
+        missing_provider = await client.call_tool(
+            "site_ownership_check",
+            {"site_url": "https://example.com/"},
+        )
         assert json.loads(audit.content[0].text)["score"] == 100  # type: ignore[union-attr]
         assert json.loads(ownership.content[0].text)["complete"] is True  # type: ignore[union-attr]
+        assert json.loads(bing_only_ownership.content[0].text)["complete"] is True  # type: ignore[union-attr]
+        assert missing_provider.isError is True
+
+    assert ownership_requests[1].google_account_id is None
+    assert ownership_requests[1].bing_account_id == "bing-main"
+    assert ownership_requests[3].google_account_id is None
+    assert ownership_requests[3].bing_account_id == "bing-main"
 
 
 @pytest.mark.asyncio
@@ -169,7 +209,10 @@ async def test_seo_write_operations_have_rest_and_stdio_mcp_parity(
     assert services.site_ownership is not None
     assert services.site_remediation is not None
 
-    async def ownership(*_: object) -> SiteOwnershipReceipt:
+    ownership_requests: list[SiteOwnershipVerificationRequest] = []
+
+    async def ownership(request: SiteOwnershipVerificationRequest) -> SiteOwnershipReceipt:
+        ownership_requests.append(request)
         return _ownership_receipt()
 
     async def remediation(*_: object) -> SiteRemediationReceipt:
@@ -200,11 +243,20 @@ async def test_seo_write_operations_have_rest_and_stdio_mcp_parity(
             "/v1/site-ownership-verifications",
             json=ownership_arguments,
         )
+        bing_only_ownership_response = await client.post(
+            "/v1/site-ownership-verifications",
+            json={
+                "bing_account_id": "bing-main",
+                "dns_account_id": "cloudflare-main",
+                "site_url": "https://example.com/",
+            },
+        )
         remediation_response = await client.post(
             "/v1/site-remediations",
             json=remediation_arguments,
         )
         assert ownership_response.json()["complete"] is True
+        assert bing_only_ownership_response.json()["complete"] is True
         assert remediation_response.json()["bing_urls_submitted"] == 1
         legacy_ownership = await client.post(
             "/v1/site-ownership-verifications",
@@ -216,6 +268,15 @@ async def test_seo_write_operations_have_rest_and_stdio_mcp_parity(
             },
         )
         assert legacy_ownership.status_code == 422
+        assert (
+            await client.post(
+                "/v1/site-ownership-verifications",
+                json={
+                    "dns_account_id": "cloudflare-main",
+                    "site_url": "https://example.com/",
+                },
+            )
+        ).status_code == 422
 
     server = build_mcp_server(services)
     async with create_connected_server_and_client_session(server) as client:
@@ -223,12 +284,34 @@ async def test_seo_write_operations_have_rest_and_stdio_mcp_parity(
         assert {"site_ownership_verify", "site_remediation_apply"} <= catalog
         assert {"site_ownership_status", "site_ownership_apply"}.isdisjoint(catalog)
         ownership_result = await client.call_tool("site_ownership_verify", ownership_arguments)
+        bing_only_ownership_result = await client.call_tool(
+            "site_ownership_verify",
+            {
+                "bing_account_id": "bing-main",
+                "dns_account_id": "cloudflare-main",
+                "site_url": "https://example.com/",
+            },
+        )
+        missing_provider = await client.call_tool(
+            "site_ownership_verify",
+            {
+                "dns_account_id": "cloudflare-main",
+                "site_url": "https://example.com/",
+            },
+        )
         remediation_result = await client.call_tool(
             "site_remediation_apply",
             remediation_arguments,
         )
         assert json.loads(ownership_result.content[0].text)["complete"] is True  # type: ignore[union-attr]
+        assert json.loads(bing_only_ownership_result.content[0].text)["complete"] is True  # type: ignore[union-attr]
+        assert missing_provider.isError is True
         assert json.loads(remediation_result.content[0].text)["bing_urls_submitted"] == 1  # type: ignore[union-attr]
+
+    assert ownership_requests[1].google_account_id is None
+    assert ownership_requests[1].bing_account_id == "bing-main"
+    assert ownership_requests[3].google_account_id is None
+    assert ownership_requests[3].bing_account_id == "bing-main"
 
 
 @pytest.mark.asyncio

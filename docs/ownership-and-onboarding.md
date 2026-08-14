@@ -102,19 +102,22 @@ from both REST and MCP discovery; no other capability switch exists.
 
 `site_ownership_check` / `POST /v1/site-ownership-checks` reads:
 
-- Google Search Console permission/verification state;
-- Bing verification state;
+- Google Search Console permission/verification state when `google_account_id`
+  is selected;
+- Bing verification state when `bing_account_id` is selected;
 - expected public DNS proof presence when known.
 
 It returns no verification token. An added provider resource can exist while
 still being unverified; do not interpret empty reports until ownership is
-complete.
+complete for every selected provider. Select at least one provider. A
+Bing-only request does not call Google, and a Google-only request does not call
+Bing.
 
 ## Automated DNS verification
 
 `site_ownership_verify` / `POST /v1/site-ownership-verifications`:
 
-1. obtains Google/Bing-issued proof values through their APIs;
+1. obtains proof values only from the selected Google and/or Bing APIs;
 2. selects the configured DNS account and exact zone;
 3. creates only those proof records through the DNS adapter;
 4. checks public propagation;
@@ -127,6 +130,20 @@ adapter can implement the same contract.
 
 Application is idempotent: an exact existing record is reused. Conflicting
 CNAMEs are refused. Rankrat exposes no arbitrary DNS name/type/value CRUD.
+
+For example, verify Bing independently when Google Site Verification is not
+available:
+
+```json
+{
+  "bing_account_id": "bing-main",
+  "dns_account_id": "cloudflare-main",
+  "site_url": "https://example.com/"
+}
+```
+
+The receipt contains `null` for an unselected provider; `complete` means every
+selected provider is verified.
 
 DNS propagation is asynchronous:
 

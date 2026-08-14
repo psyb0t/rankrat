@@ -39,10 +39,44 @@ Without access to `/usr/local/bin`, keep it locally and use `./rankrat`.
 
 ## Run guided setup
 
-The standalone launcher is the one-command setup:
+Create credentials before running setup. If you do not use a provider, skip
+its credential; Rankrat asks only for the providers you select.
+
+- **Google:** start at <https://console.cloud.google.com/projectcreate> and
+  create the project, Desktop OAuth client JSON, and optional PageSpeed/CrUX
+  key exactly as described in [Google OAuth](providers.md#google-oauth).
+- **Bing:** start at <https://www.bing.com/webmasters/home> and create the one
+  account-wide API key as described in
+  [Bing Webmaster Tools](providers.md#bing-webmaster-tools).
+- **Microsoft Clarity:** start at <https://clarity.microsoft.com/> and create
+  one Data Export API token for each project as described in
+  [Microsoft Clarity](providers.md#microsoft-clarity).
+
+For Cloudflare, create a dedicated **User API Token** before choosing
+`cloudflare` in setup. Open
+<https://dash.cloudflare.com/profile/api-tokens>, then click **Create Token →
+Create Custom Token**. Name it `rankrat`; add **Zone → Zone → Read**, **Zone →
+DNS → Edit**, **Zone → Analytics → Read**, **Zone → Cache Purge → Purge**,
+**Zone → Cache Rules → Edit**, **Zone → Single Redirect → Edit**, **Account →
+Account Rulesets → Edit**, and **Account → Account Filter Lists → Edit**. Set
+**Zone Resources → Include → All zones** and **Account Resources → Include →
+All accounts**. Select **Continue to summary → Create Token**, copy the value
+shown once, then paste it at Rankrat's hidden prompt. Do not use Cloudflare's
+Account API Token screen or the Global API Key. This one token covers every
+Cloudflare feature Rankrat currently ships; the feature mapping is in
+[Providers and credentials](providers.md#cloudflare).
+
+Now start the standalone launcher:
 
 ```sh
-rankrat setup
+rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
+```
+
+Omit `--google-oauth-client-file` when you are not configuring Google. From a
+checkout, pass the same host path through the environment:
+
+```sh
+RANKRAT_GOOGLE_OAUTH_CLIENT_FILE="$HOME/Downloads/client_secret_...json" make setup
 ```
 
 It creates `$HOME/.config/rankrat` with owner-only permissions, a minimal valid
@@ -58,8 +92,9 @@ It creates missing local paths without overwriting, rejects symlinks,
 normalizes sensitive permissions, then asks which providers to configure. For
 each choice it prints the provider console URL and required account-wide
 permissions, accepts the credential through a hidden prompt, and stores it at
-the standard path with mode `0600`. Google setup accepts the Desktop OAuth
-client JSON, runs one full-scope OAuth flow, and saves the refresh record.
+the standard path with mode `0600`. For Google, it imports the Desktop OAuth
+client JSON file you passed to the wrapper—do not paste its multi-line contents.
+Google setup then runs one full-scope OAuth flow and saves the refresh record.
 
 Setup is safe to rerun. A selected provider is added or refreshed in place;
 accounts for providers you omit remain unchanged, including discovered
@@ -68,7 +103,10 @@ provider, setup stops before reading a secret so you can identify the intended
 account in `config/boundaries.json`.
 
 After credentials are present, setup runs provider readiness. It does not
-create site properties, submit URLs/sitemaps, or send IndexNow notifications.
+create site properties, submit URLs/sitemaps, send IndexNow notifications, or
+create a disposable DNS record solely to test a Cloudflare token. The explicit
+Cloudflare permission above is therefore required even when readiness can list
+zones.
 
 The standalone wrapper provides the same guided setup plus an explicit Google
 OAuth reauthorization command for operators who do not use a checkout:

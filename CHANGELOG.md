@@ -2,6 +2,23 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.14.0 — 2026-08-14
+
+Completes provider-scoped ownership verification and makes the guided setup
+flow usable with the Google OAuth client file downloaded from Google Cloud.
+
+- Accepts a regular, owner-selected Google OAuth client JSON file through the
+  `rankrat setup` wrapper and imports only the client metadata needed for the
+  local OAuth flow.
+- Lets ownership checks and verification target Google, Bing, or both without
+  contacting an unselected provider. Google uses the Site Verification API and
+  Bing uses the provider-issued CNAME proof through the selected DNS adapter.
+- Preserves valid tokenized query URLs during safe public fetching and site
+  audits, so self-contained public video URLs remain distinct crawl targets.
+- Treats Bing Webmaster authorization failures as a typed forbidden result and
+  rejects unexpected successful-looking sitemap response bodies rather than
+  falsely reporting a completed mutation.
+
 ## v0.13.1 — 2026-08-13
 
 Restores a passing coverage gate and makes the release-version workflow atomic.

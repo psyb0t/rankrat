@@ -85,10 +85,10 @@ class _SiteFetcher:
         content="A sufficiently descriptive page summary for search results and users.">
         <meta property="og:title" content="Home"><meta property="og:description" content="Summary">
         <link rel="canonical" href="https://example.com/"></head>
-        <body><h1>Home</h1><a href="/post/">Post</a></body></html>"""
+        <body><h1>Home</h1><a href="/post/?utfc=opaque%3D">Post</a></body></html>"""
         post = page.replace(b"Home", b"Post").replace(
             b'https://example.com/"',
-            b'https://example.com/post/"',
+            b'https://example.com/post/?utfc=opaque%3D"',
         )
         self.responses = {
             "https://example.com/robots.txt": SiteFetchResult(
@@ -102,11 +102,11 @@ class _SiteFetcher:
                 200,
                 "application/xml",
                 b"<urlset><url><loc>https://example.com/</loc></url>"
-                b"<url><loc>https://example.com/post/</loc></url></urlset>",
+                b"<url><loc>https://example.com/post/?utfc=opaque%3D</loc></url></urlset>",
             ),
             "https://example.com/": SiteFetchResult("https://example.com/", 200, "text/html", page),
-            "https://example.com/post/": SiteFetchResult(
-                "https://example.com/post/", 200, "text/html", post
+            "https://example.com/post/?utfc=opaque%3D": SiteFetchResult(
+                "https://example.com/post/?utfc=opaque%3D", 200, "text/html", post
             ),
         }
 
@@ -131,7 +131,7 @@ async def test_site_audit_crawls_sitemap_and_same_site_links(tmp_path: Path) -> 
 
     assert tuple(page.url for page in report.pages) == (
         "https://example.com/",
-        "https://example.com/post/",
+        "https://example.com/post/?utfc=opaque%3D",
     )
     assert report.discovered_sitemaps == ("https://example.com/sitemap.xml",)
     assert report.truncated is False
@@ -269,6 +269,9 @@ class _BingOwnershipClient:
 class _DnsOwnershipClient:
     provider = Provider.CLOUDFLARE
 
+    def __init__(self) -> None:
+        self.record_types: list[DnsRecordType] = []
+
     async def ensure_verification_record(
         self,
         _: object,
@@ -277,6 +280,7 @@ class _DnsOwnershipClient:
         name: str,
         ___: str,
     ) -> DnsRecordReceipt:
+        self.record_types.append(record_type)
         return DnsRecordReceipt("a" * 32, "b" * 32, record_type, name, True)
 
 
@@ -306,6 +310,107 @@ async def test_site_ownership_verifies_and_redeems_without_tokens(tmp_path: Path
 
     assert receipt.complete is True
     assert "verification" not in repr(receipt)
+
+
+class _UnexpectedGoogleOwnershipClient:
+    async def get_token(self, *_: object) -> GoogleVerificationToken:
+        raise AssertionError("Bing-only ownership must not request a Google token")
+
+    async def is_verified(self, *_: object) -> bool:
+        raise AssertionError("Bing-only ownership must not check Google verification")
+
+    async def verify(self, *_: object) -> GoogleVerifiedWebResource:
+        raise AssertionError("Bing-only ownership must not redeem Google verification")
+
+
+class _UnexpectedBingOwnershipClient:
+    provider = BingWebmasterClient.provider
+
+    async def site_verification_for_onboarding(self, *_: object) -> BingSiteVerification:
+        raise AssertionError("Google-only ownership must not request a Bing CNAME")
+
+    async def add_site_for_onboarding(self, *_: object) -> None:
+        raise AssertionError("Google-only ownership must not add a Bing site")
+
+    async def verify_site_for_onboarding(self, *_: object) -> bool:
+        raise AssertionError("Google-only ownership must not redeem Bing verification")
+
+
+@pytest.mark.asyncio
+async def test_site_ownership_verifies_bing_without_contacting_google(tmp_path: Path) -> None:
+    dns = _DnsOwnershipClient()
+    operator = SiteOwnershipOperator(
+        _policy(tmp_path),
+        cast(GoogleSiteVerificationClient, _UnexpectedGoogleOwnershipClient()),
+        cast(BingWebmasterClient, _BingOwnershipClient()),
+        {Provider.CLOUDFLARE: cast(DnsOwnershipClient, dns)},
+        cast(PublicDnsClient, _DnsClient()),
+    )
+
+    receipt = await operator.verify(
+        SiteOwnershipWriteRequest(
+            google_account_id=None,
+            bing_account_id="bing-main",
+            dns_account_id="cloudflare-main",
+            site_url="https://example.com/",
+            timeout_seconds=1.0,
+        )
+    )
+
+    assert receipt.google is None
+    assert receipt.bing is not None
+    assert receipt.bing.verified is True
+    assert receipt.complete is True
+    assert dns.record_types == [DnsRecordType.CNAME]
+
+
+@pytest.mark.asyncio
+async def test_site_ownership_verifies_google_without_contacting_bing(tmp_path: Path) -> None:
+    dns = _DnsOwnershipClient()
+    operator = SiteOwnershipOperator(
+        _policy(tmp_path),
+        cast(GoogleSiteVerificationClient, _GoogleOwnershipClient()),
+        cast(BingWebmasterClient, _UnexpectedBingOwnershipClient()),
+        {Provider.CLOUDFLARE: cast(DnsOwnershipClient, dns)},
+        cast(PublicDnsClient, _DnsClient()),
+    )
+
+    receipt = await operator.verify(
+        SiteOwnershipWriteRequest(
+            google_account_id="google-main",
+            bing_account_id=None,
+            dns_account_id="cloudflare-main",
+            site_url="https://example.com/",
+            timeout_seconds=1.0,
+        )
+    )
+
+    assert receipt.google is not None
+    assert receipt.google.verified is True
+    assert receipt.bing is None
+    assert receipt.complete is True
+    assert dns.record_types == [DnsRecordType.TXT]
+
+
+@pytest.mark.asyncio
+async def test_site_ownership_rejects_empty_provider_selection(tmp_path: Path) -> None:
+    operator = SiteOwnershipOperator(
+        _policy(tmp_path),
+        cast(GoogleSiteVerificationClient, _UnexpectedGoogleOwnershipClient()),
+        cast(BingWebmasterClient, _UnexpectedBingOwnershipClient()),
+        {Provider.CLOUDFLARE: cast(DnsOwnershipClient, _DnsOwnershipClient())},
+        cast(PublicDnsClient, _DnsClient()),
+    )
+
+    with pytest.raises(InputLimitError, match="Google or Bing"):
+        await operator.check(
+            SiteOwnershipRequest(
+                google_account_id=None,
+                bing_account_id=None,
+                site_url="https://example.com/",
+                timeout_seconds=1.0,
+            )
+        )
 
 
 @pytest.mark.asyncio
@@ -512,6 +617,7 @@ async def test_site_ownership_check_handles_absent_bing_site_without_writes(
     receipt = await operator.check(request)
 
     assert receipt.complete is False
+    assert receipt.google is not None
     assert receipt.google.verified is False
     assert bing.added == 0
 

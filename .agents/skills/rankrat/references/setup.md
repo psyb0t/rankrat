@@ -134,32 +134,50 @@ than inferring it from discovery or an empty result. Write tools are the
 exception: they are absent unless writable mode enables them.
 
 - **Google Search Console / Google Analytics 4 / Google Tag Manager / Google
-  Indexing** — OAuth. The CLI runs one authorization flow and stores the
-  resulting token under `RANKRAT_OAUTH_TOKEN_ROOT`. It requests Search Console
-  management, Google Indexing, GA4 read/edit, and Tag Manager container edit,
-  delete, version-edit, and publish scopes; provider-side ownership still
-  controls what the account can do.
-- **Bing Webmaster Tools** — an API key from the Bing Webmaster dashboard,
-  placed under `RANKRAT_SECRET_ROOT`.
-- **Cloudflare** — an account token stored at the configured account's
-  credential path. Grant Zone Read plus the features used: DNS Edit for
-  ownership, Analytics Read for reports, Cache Purge for exact URL purges, and
-  Cache Rules Edit/Cache Settings Write for the two named templates. Select all
-  zones when the credential must onboard current and future domains; Rankrat
-  discovers zone IDs. Add Zone Rulesets Edit (sometimes labelled Dynamic
-  Redirects or Rulesets Write) for managed edge redirects. Rankrat exposes no
-  arbitrary DNS record, whole-zone purge, arbitrary cache-rule body, or
-  arbitrary ruleset replacement.
-- **Microsoft Clarity** — a project Data Export API token. In the Clarity
-  project, use **Settings → Data Export → Generate new API token** and store it
-  at the configured account credential path. One Clarity account represents one
-  project and is read-only in Rankrat. The upstream API allows at most ten
-  requests per project/day; see [Microsoft's documentation](https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api).
-- **PageSpeed Insights** — an API key, same location, and the one Google surface
-  that does not use OAuth: the key goes on the query string, so the Google
-  consent flow grants it nothing. It is optional — with no key configured the
-  call still goes out, unauthenticated, under a much tighter quota.
-  `crux_history` uses the same file and requires the key.
+  Indexing** — create a Google project and Desktop OAuth client JSON using the
+  exact [Google OAuth guide](https://github.com/psyb0t/rankrat/blob/main/docs/providers.md#google-oauth).
+  Start the wrapper with the downloaded host file:
+
+  ```sh
+  rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
+  ```
+
+  The CLI imports that file into `RANKRAT_SECRET_ROOT`, runs one authorization
+  flow, and stores the resulting token under `RANKRAT_OAUTH_TOKEN_ROOT`. It
+  requests Search Console management, Google Indexing, GA4 read/edit, and Tag
+  Manager container edit, delete, version-edit, and publish scopes; provider-side
+  ownership still controls what the account can do.
+- **Bing Webmaster Tools** — open
+  [Bing Webmaster Tools](https://www.bing.com/webmasters/home), add and verify
+  one site, then **Settings → API Access → API Key → Generate API Key**. The
+  resulting key is account-wide, not site-specific; setup stores it under
+  `RANKRAT_SECRET_ROOT`.
+- **Cloudflare** — create one dedicated **User API Token**, not an Account API
+  Token: [open User API Tokens](https://dash.cloudflare.com/profile/api-tokens)
+  → **Create Token → Create Custom Token** → name it `rankrat`. Add **Zone →
+  Zone → Read**, **Zone → DNS → Edit**, **Zone → Analytics → Read**, **Zone →
+  Cache Purge → Purge**, **Zone → Cache Rules → Edit**, **Zone → Single
+  Redirect → Edit**, **Account → Account Rulesets → Edit**, and **Account →
+  Account Filter Lists → Edit**. Set **Zone Resources → Include → All zones**
+  and **Account Resources → Include → All accounts**, then **Continue to
+  summary → Create Token**. Copy the one-time value into Rankrat's hidden
+  prompt. This covers all current Cloudflare features. Rankrat discovers zone
+  IDs; it exposes no arbitrary DNS record, whole-zone purge, arbitrary
+  cache-rule body, or arbitrary ruleset replacement. Ownership records are
+  DNS-only and untagged, so no Cloudflare DNS-tag quota is needed. Readiness
+  confirms account reachability but deliberately does not create a throwaway
+  record to test DNS write access.
+- **Microsoft Clarity** — open [Microsoft Clarity](https://clarity.microsoft.com/),
+  choose a project, then **Settings → Data Export → Generate new API token**.
+  The token belongs to that project; setup stores it at the configured account
+  credential path. One Clarity account represents one project and is read-only
+  in Rankrat. The upstream API allows at most ten requests per project/day; see
+  [Microsoft's documentation](https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api).
+- **PageSpeed Insights and CrUX** — setup separately asks for one optional API
+  key. Create it through [Google API Credentials](https://console.cloud.google.com/apis/credentials)
+  and restrict it to **PageSpeed Insights API** and **Chrome UX Report API**.
+  OAuth does not grant it. Without the key, PageSpeed runs under a tighter
+  anonymous quota and `crux_history` is unavailable.
 - **Local Lighthouse** — no credential. The optional companion image receives
   only a shared Unix socket and outbound browser network access. Rankrat accepts
   only requested URLs beneath the account's `pagespeed_sites` and rejects a

@@ -876,6 +876,54 @@ async def test_feed_mutations_use_only_fixed_post_operations_and_configured_site
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ("submit_feed", "remove_feed"))
+async def test_feed_mutations_classify_legacy_unverified_site_errors_without_leaking_body(
+    tmp_path: Path,
+    operation: str,
+) -> None:
+    provider_message = "provider-error-containing-a-fake-secret-value"
+    client = BingWebmasterClient(
+        _policy(_key_file(tmp_path)),
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _: httpx.Response(
+                400,
+                json={"ErrorCode": 14, "Message": provider_message},
+            )
+        ),
+    )
+
+    with pytest.raises(ProviderOperationError) as error:
+        await getattr(client, operation)(
+            _request(),
+            "https://example.com/",
+            "https://example.com/sitemap.xml",
+        )
+
+    assert error.value.code is ProviderFailureCode.FORBIDDEN
+    assert provider_message not in str(error.value)
+    assert "example-bing-key-not-real" not in str(error.value)
+
+
+@pytest.mark.asyncio
+async def test_feed_mutations_reject_non_null_success_response(tmp_path: Path) -> None:
+    client = BingWebmasterClient(
+        _policy(_key_file(tmp_path)),
+        transport_factory=lambda: httpx.MockTransport(
+            lambda _: httpx.Response(200, json={"d": {"unexpected": True}})
+        ),
+    )
+
+    with pytest.raises(ProviderOperationError) as error:
+        await client.submit_feed(
+            _request(),
+            "https://example.com/",
+            "https://example.com/sitemap.xml",
+        )
+
+    assert error.value.code is ProviderFailureCode.INVALID_RESPONSE
+
+
+@pytest.mark.asyncio
 async def test_feed_mutations_on_account_scope_still_require_a_valid_api_key(
     tmp_path: Path,
 ) -> None:

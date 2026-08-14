@@ -92,6 +92,17 @@ _HTTP_CONTENT_TYPE = "Content-Type: text/html; charset=utf-8"
 _HTTP_CONNECTION_CLOSE = "Connection: close"
 _OAUTH_CALLBACK_SUCCESS_BODY = b"Authorization complete. You may close this window."
 _OAUTH_CALLBACK_FAILURE_BODY = b"Authorization was not accepted. You may close this window."
+_OAUTH_CALLBACK_TIMEOUT_MESSAGE = "Google OAuth callback timed out"
+_OAUTH_CALLBACK_GENERIC_REJECTION_MESSAGE = "Google OAuth callback was rejected"
+_OAUTH_CALLBACK_DIAGNOSTIC_REASONS = {
+    "Google OAuth authorization was not completed": "callback_not_completed",
+    "Google OAuth callback issuer was rejected": "callback_issuer_rejected",
+    "Google OAuth callback state was rejected": "callback_state_rejected",
+    "Google OAuth callback code was rejected": "callback_code_rejected",
+    "Google OAuth callback peer was rejected": "callback_peer_rejected",
+    _OAUTH_CALLBACK_GENERIC_REJECTION_MESSAGE: "callback_rejected",
+    _OAUTH_CALLBACK_TIMEOUT_MESSAGE: "callback_timeout",
+}
 
 HttpTransportFactory = Callable[[], httpx.AsyncBaseTransport | None]
 BrowserOpener = Callable[[str], bool]
@@ -228,6 +239,7 @@ class GoogleOAuthLoopbackReceiver:
         self._server: asyncio.AbstractServer | None = None
         self._session: GoogleOAuthAuthorizationSession | None = None
         self._result: asyncio.Future[str] | None = None
+        self._last_callback_rejection_message: str | None = None
 
     async def start(self) -> GoogleOAuthAuthorizationSession:
         """Bind an ephemeral local port before constructing the exact redirect URI."""
@@ -263,7 +275,7 @@ class GoogleOAuthLoopbackReceiver:
         except TimeoutError as error:
             raise ProviderOperationError(
                 ProviderFailureCode.AUTHENTICATION,
-                "Google OAuth callback timed out",
+                self._last_callback_rejection_message or _OAUTH_CALLBACK_TIMEOUT_MESSAGE,
             ) from error
         finally:
             await self.aclose()
@@ -304,7 +316,12 @@ class GoogleOAuthLoopbackReceiver:
             asyncio.LimitOverrunError,
             ProviderOperationError,
             ValueError,
-        ):
+        ) as error:
+            self._last_callback_rejection_message = (
+                str(error)
+                if isinstance(error, ProviderOperationError)
+                else _OAUTH_CALLBACK_GENERIC_REJECTION_MESSAGE
+            )
             log_event(
                 _LOGGER,
                 logging.DEBUG,
@@ -580,18 +597,19 @@ class GoogleOAuthAuthorizationDiagnosticLog:
 
     def record_failure(self, stage: str, failure: ProviderOperationError) -> None:
         """Best-effort record fixed failure metadata without upstream payloads or secrets."""
-        payload = (
-            json.dumps(
-                {
-                    "event": _OAUTH_AUTH_DIAGNOSTIC_EVENT,
-                    "failure_code": failure.code.value,
-                    "occurred_at": datetime.now(UTC).isoformat(),
-                    "stage": stage,
-                },
-                separators=(",", ":"),
-            ).encode("utf-8")
-            + b"\n"
-        )
+        diagnostic = {
+            "event": _OAUTH_AUTH_DIAGNOSTIC_EVENT,
+            "failure_code": failure.code.value,
+            "occurred_at": datetime.now(UTC).isoformat(),
+            "stage": stage,
+        }
+        if stage == _OAUTH_AUTH_DIAGNOSTIC_STAGE_CALLBACK:
+            reason = _OAUTH_CALLBACK_DIAGNOSTIC_REASONS.get(
+                str(failure),
+                _OAUTH_CALLBACK_DIAGNOSTIC_REASONS[_OAUTH_CALLBACK_GENERIC_REJECTION_MESSAGE],
+            )
+            diagnostic["reason"] = reason
+        payload = json.dumps(diagnostic, separators=(",", ":")).encode("utf-8") + b"\n"
         try:
             _require_owner_only_directory(self._path.parent)
             file_descriptor = os.open(

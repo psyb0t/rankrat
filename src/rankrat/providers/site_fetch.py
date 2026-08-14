@@ -10,7 +10,7 @@ import httpx
 
 from rankrat.constants import MAX_SCHEMA_FETCH_RESPONSE_BYTES, MAX_SCHEMA_FETCH_URL_CHARS
 from rankrat.errors import InputLimitError, SchemaFetchError, SiteFetchError
-from rankrat.models.boundaries import normalize_public_https_url
+from rankrat.models.boundaries import normalize_public_https_audit_url
 from rankrat.providers.schema_fetch import (
     PinnedTransportFactory,
     Resolver,
@@ -67,7 +67,7 @@ class PublicSiteFetcher:
 
         if len(url.encode("utf-8")) > MAX_SCHEMA_FETCH_URL_CHARS:
             raise InputLimitError("site audit URL exceeds the allowed length")
-        normalized_url = normalize_public_https_url(url, "site_audit_url")
+        normalized_url = normalize_public_https_audit_url(url, "site_audit_url")
         parsed = urlparse(normalized_url)
         hostname = parsed.hostname
         if hostname is None:

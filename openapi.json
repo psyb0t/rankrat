@@ -5146,14 +5146,28 @@
         "additionalProperties": false,
         "properties": {
           "bing_account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Bing Account Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bing Account Id"
           },
           "google_account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Google Account Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Google Account Id"
           },
           "site_url": {
             "maxLength": 2048,
@@ -5170,8 +5184,6 @@
           }
         },
         "required": [
-          "google_account_id",
-          "bing_account_id",
           "site_url"
         ],
         "title": "_SiteOwnershipCheckBody",
@@ -5181,9 +5193,16 @@
         "additionalProperties": false,
         "properties": {
           "bing_account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Bing Account Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bing Account Id"
           },
           "dns_account_id": {
             "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
@@ -5191,9 +5210,16 @@
             "type": "string"
           },
           "google_account_id": {
-            "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
-            "title": "Google Account Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9][a-z0-9-]{0,62}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Google Account Id"
           },
           "site_url": {
             "maxLength": 2048,
@@ -5210,8 +5236,6 @@
           }
         },
         "required": [
-          "google_account_id",
-          "bing_account_id",
           "site_url",
           "dns_account_id"
         ],
@@ -5365,7 +5389,7 @@
   "info": {
     "description": "Boundary-limited SEO operations over REST and MCP. The source document lists the full writable contract; a read-only runtime removes write routes from its served OpenAPI document.",
     "title": "rankrat",
-    "version": "0.13.1"
+    "version": "0.14.0"
   },
   "openapi": "3.1.0",
   "paths": {

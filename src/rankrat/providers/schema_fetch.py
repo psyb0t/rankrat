@@ -17,7 +17,7 @@ from rankrat.constants import (
     MAX_SCHEMA_FETCH_URL_CHARS,
 )
 from rankrat.errors import InputLimitError, SchemaFetchError
-from rankrat.models.boundaries import normalize_public_https_url
+from rankrat.models.boundaries import normalize_public_https_audit_url
 
 _HTTPS_PORT = 443
 _HTML_CONTENT_TYPES = frozenset({"application/xhtml+xml", "text/html"})
@@ -196,7 +196,7 @@ class PublicSchemaFetcher:
 
         if len(url.encode("utf-8")) > MAX_SCHEMA_FETCH_URL_CHARS:
             raise InputLimitError("schema URL exceeds the allowed length")
-        normalized_url = normalize_public_https_url(url, "schema_url")
+        normalized_url = normalize_public_https_audit_url(url, "schema_url")
         parsed = urlparse(normalized_url)
         hostname = parsed.hostname
         if hostname is None:

@@ -284,6 +284,46 @@ async def test_loopback_receiver_rejects_a_forged_google_callback_issuer() -> No
 
 
 @pytest.mark.asyncio
+async def test_rejected_callback_records_only_a_fixed_redacted_diagnostic_reason(
+    tmp_path: Path,
+) -> None:
+    oauth_root = tmp_path / "oauth"
+    oauth_root.mkdir(mode=0o700)
+    os.chmod(oauth_root, 0o700)
+    receiver = GoogleOAuthLoopbackReceiver((_SCOPE,))
+    session = await receiver.start()
+    callback = urlparse(session.redirect_uri)
+    rejected_state = "wrong-state-not-for-log"
+    rejected_code = "authorization-code-not-for-log"
+    async with httpx.AsyncClient(trust_env=False) as client:
+        response = await client.get(
+            f"http://{callback.netloc}{callback.path}",
+            params={"state": rejected_state, "code": rejected_code},
+        )
+    assert response.status_code == 400
+
+    with pytest.raises(ProviderOperationError) as error:
+        await receiver.wait_for_code(0.001)
+    assert str(error.value) == "Google OAuth callback state was rejected"
+
+    GoogleOAuthAuthorizationDiagnosticLog(oauth_root / "google-main.json").record_failure(
+        oauth._OAUTH_AUTH_DIAGNOSTIC_STAGE_CALLBACK,
+        error.value,
+    )
+    diagnostic_contents = (oauth_root / "google-auth.log").read_text(encoding="utf-8")
+    assert rejected_state not in diagnostic_contents
+    assert rejected_code not in diagnostic_contents
+    diagnostic = json.loads(diagnostic_contents)
+    assert isinstance(diagnostic.pop("occurred_at"), str)
+    assert diagnostic == {
+        "event": oauth._OAUTH_AUTH_DIAGNOSTIC_EVENT,
+        "failure_code": ProviderFailureCode.AUTHENTICATION.value,
+        "reason": "callback_state_rejected",
+        "stage": oauth._OAUTH_AUTH_DIAGNOSTIC_STAGE_CALLBACK,
+    }
+
+
+@pytest.mark.asyncio
 async def test_rejected_callback_does_not_consume_the_valid_callback() -> None:
     receiver = GoogleOAuthLoopbackReceiver((_SCOPE,))
     session = await receiver.start()

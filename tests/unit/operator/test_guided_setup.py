@@ -78,6 +78,9 @@ def test_guided_setup_stores_selected_credentials_without_echoing_values(
     assert os.stat(bing_secret).st_mode & 0o777 == 0o600
     assert os.stat(boundary).st_mode & 0o777 == 0o600
     rendered_output = "\n".join(output)
+    assert "Add a Site → finish verification" in rendered_output
+    assert "Settings → API Access" in rendered_output
+    assert "API Key → Generate API Key" in rendered_output
     assert "bing-key-value" not in rendered_output
     assert "not-a-real-secret" not in rendered_output
 
@@ -213,7 +216,141 @@ def test_guided_setup_stores_a_clarity_project_token_without_echoing_it(
     token_file = secrets / "clarity/api-token"
     assert token_file.read_text(encoding="utf-8").strip() == clarity_token
     assert os.stat(token_file).st_mode & 0o777 == 0o600
-    assert clarity_token not in "\n".join(output)
+    rendered_output = "\n".join(output)
+    assert "New project" in rendered_output
+    assert "Settings → Data Export → Generate new API token" in rendered_output
+    assert clarity_token not in rendered_output
+
+
+def test_guided_setup_explains_cloudflare_custom_token_creation(
+    tmp_path: Path,
+) -> None:
+    boundary, _, secrets, oauth = _paths(tmp_path)
+    cloudflare_token = "cloudflare-token-not-real"
+    output: list[str] = []
+
+    document = configure_interactively(
+        boundary,
+        secrets,
+        oauth,
+        prompt=lambda _: "cloudflare",
+        secret_prompt=lambda _: cloudflare_token,
+        output=output.append,
+    )
+
+    assert [(account.id, account.provider.value) for account in document.accounts] == [
+        ("google", "google"),
+        ("bing", "bing"),
+        ("cloudflare", "cloudflare"),
+    ]
+    rendered_output = "\n".join(output)
+    assert "Create a dedicated Cloudflare User API Token" in rendered_output
+    assert "Create Token → Create Custom Token" in rendered_output
+    assert "Zone → Zone → Read, DNS → Edit, Analytics → Read" in rendered_output
+    assert "Cache Purge → Purge, Cache Rules → Edit" in rendered_output
+    assert "Single Redirect → Edit" in rendered_output
+    assert "Account Rulesets → Edit and Account Filter Lists → Edit" in rendered_output
+    assert "Zone Resources to All zones and Account Resources to All accounts" in rendered_output
+    assert cloudflare_token not in rendered_output
+
+
+def test_guided_setup_imports_google_oauth_client_from_absolute_file_path(
+    tmp_path: Path,
+) -> None:
+    boundary, _, secrets, oauth = _paths(tmp_path)
+    downloaded_client = tmp_path / "client_secret.json"
+    downloaded_client.write_text(_OAUTH_CLIENT, encoding="utf-8")
+    output: list[str] = []
+
+    configure_interactively(
+        boundary,
+        secrets,
+        oauth,
+        prompt=lambda _: "google",
+        secret_prompt=lambda _: "",
+        output=output.append,
+        google_oauth_client_file=downloaded_client,
+    )
+
+    stored = secrets / "google/oauth-client.json"
+    assert stored.read_text(encoding="utf-8").strip() == _OAUTH_CLIENT
+    assert os.stat(stored).st_mode & 0o777 == 0o600
+    rendered_output = "\n".join(output)
+    assert "https://console.cloud.google.com/projectcreate" in rendered_output
+    assert "https://console.cloud.google.com/auth/clients" in rendered_output
+    assert "Chrome UX Report" in rendered_output
+    assert "Testing refresh tokens expire after seven days" in rendered_output
+    assert "absolute path" in rendered_output
+    assert "not-a-real-secret" not in rendered_output
+
+
+def test_guided_setup_rejects_relative_google_oauth_client_path(tmp_path: Path) -> None:
+    boundary, _, secrets, oauth = _paths(tmp_path)
+
+    with pytest.raises(ConfigurationError, match="path must be absolute"):
+        configure_interactively(
+            boundary,
+            secrets,
+            oauth,
+            prompt=lambda _: "google",
+            secret_prompt=lambda _: pytest.fail("secret prompt must not run"),
+            output=lambda _: None,
+            google_oauth_client_file=Path("client_secret.json"),
+        )
+
+
+def test_guided_setup_rejects_symlinked_google_oauth_client_path(tmp_path: Path) -> None:
+    boundary, _, secrets, oauth = _paths(tmp_path)
+    downloaded_client = tmp_path / "client_secret.json"
+    downloaded_client.write_text(_OAUTH_CLIENT, encoding="utf-8")
+    client_link = tmp_path / "client-link.json"
+    client_link.symlink_to(downloaded_client)
+
+    with pytest.raises(ConfigurationError, match="could not be opened"):
+        configure_interactively(
+            boundary,
+            secrets,
+            oauth,
+            prompt=lambda _: "google",
+            secret_prompt=lambda _: pytest.fail("secret prompt must not run"),
+            output=lambda _: None,
+            google_oauth_client_file=client_link,
+        )
+
+
+def test_guided_setup_rejects_nonregular_google_oauth_client_path(tmp_path: Path) -> None:
+    boundary, _, secrets, oauth = _paths(tmp_path)
+    client_fifo = tmp_path / "client.json"
+    os.mkfifo(client_fifo)
+
+    with pytest.raises(ConfigurationError, match="must be a regular file"):
+        configure_interactively(
+            boundary,
+            secrets,
+            oauth,
+            prompt=lambda _: "google",
+            secret_prompt=lambda _: pytest.fail("secret prompt must not run"),
+            output=lambda _: None,
+            google_oauth_client_file=client_fifo,
+        )
+
+
+def test_guided_setup_rejects_oversized_google_oauth_client_path(tmp_path: Path) -> None:
+    boundary, _, secrets, oauth = _paths(tmp_path)
+    downloaded_client = tmp_path / "client_secret.json"
+    with downloaded_client.open("wb") as stream:
+        stream.truncate(1_000_001)
+
+    with pytest.raises(ConfigurationError, match="exceeds the allowed size"):
+        configure_interactively(
+            boundary,
+            secrets,
+            oauth,
+            prompt=lambda _: "google",
+            secret_prompt=lambda _: pytest.fail("secret prompt must not run"),
+            output=lambda _: None,
+            google_oauth_client_file=downloaded_client,
+        )
 
 
 def test_guided_setup_rejects_ambiguous_existing_provider_before_secret_prompt(

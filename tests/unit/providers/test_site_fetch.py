@@ -34,11 +34,11 @@ async def test_site_fetch_pins_public_dns_and_returns_bounded_text() -> None:
         )
 
     result = await PublicSiteFetcher(_public_resolver, transport_factory).fetch(
-        "https://EXAMPLE.com:443/path",
+        "https://EXAMPLE.com:443/path?utfc=opaque%3D",
         1.0,
     )
 
-    assert result.url == "https://example.com/path"
+    assert result.url == "https://example.com/path?utfc=opaque%3D"
     assert result.content_type == "text/html"
     assert result.body == b"<html />"
     assert calls == [("example.com", "93.184.216.34")]
@@ -52,8 +52,9 @@ async def test_site_fetch_pins_public_dns_and_returns_bounded_text() -> None:
         "https://127.0.0.1/",
         "https://example.com:444/",
         "https://user:pass@example.com/",
-        "https://example.com/?query=value",
         "https://example.com/#fragment",
+        "https://example.com/?query=%ZZ",
+        "https://example.com/?query=value\rx",
     ),
 )
 async def test_site_fetch_rejects_unsafe_urls_before_network(url: str) -> None:

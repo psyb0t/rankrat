@@ -378,10 +378,11 @@ _SITE_ONBOARDING_SUBMIT_DESCRIPTION = (
 )
 _SITE_AUDIT_DESCRIPTION = "Crawl and score one configured site under strict public-fetch bounds."
 _SITE_OWNERSHIP_CHECK_DESCRIPTION = (
-    "Check Google and Bing DNS ownership without returning verification tokens."
+    "Check selected Google and/or Bing DNS ownership without returning verification tokens."
 )
 _SITE_OWNERSHIP_VERIFY_DESCRIPTION = (
-    "Create provider-issued DNS records through the configured DNS adapter and redeem proofs."
+    "Create selected provider-issued DNS records through the configured DNS adapter "
+    "and redeem proofs."
 )
 _SITE_REMEDIATION_APPLY_DESCRIPTION = (
     "Resubmit a configured sitemap and changed URLs to Google and Bing."

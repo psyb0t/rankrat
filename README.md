@@ -58,21 +58,69 @@ writable deployments include onboarding with the other mutations. See the
 
 ## Quick start
 
-Docker and GNU Make are the only checkout setup requirements. The guided setup
-prints the provider console URL and account-wide permissions for each selected
-provider, accepts credentials through hidden terminal prompts, stores them in
-standard owner-only paths, completes Google OAuth, and runs live capability
-checks before declaring the installation ready.
-
-Rerunning setup is additive: selected providers are added or refreshed, while
-unselected accounts and their discovered inventory stay unchanged. If a
-provider already has multiple account entries, choose the intended entry in
-`config/boundaries.json` before refreshing that provider.
+Docker and GNU Make are the only checkout setup requirements. You do not need
+a database or local configuration before cloning. Before setup, create the
+credential only for each provider you actually want to use; setup asks which
+ones to configure and hides every value you paste.
 
 ```sh
 git clone https://github.com/psyb0t/rankrat.git
 cd rankrat
-make setup
+```
+
+### Create provider credentials once
+
+| Provider | Exact first link | Create exactly this | Full click-by-click guide |
+| --- | --- | --- | --- |
+| Google | <https://console.cloud.google.com/projectcreate> | A project, a Desktop OAuth client JSON, and an optional PageSpeed/CrUX API key | [Google OAuth](docs/providers.md#google-oauth) |
+| Bing | <https://www.bing.com/webmasters/home> | One account-wide Webmaster API key | [Bing Webmaster Tools](docs/providers.md#bing-webmaster-tools) |
+| Cloudflare | <https://dash.cloudflare.com/profile/api-tokens> | One account-wide User API Token | Steps below |
+| Microsoft Clarity | <https://clarity.microsoft.com/> | One Data Export token per Clarity project | [Microsoft Clarity](docs/providers.md#microsoft-clarity) |
+
+The linked provider guides say precisely which buttons to click, which APIs or
+permissions to add, and what Rankrat asks you to paste. Do not create a Google
+service account, a Cloudflare Account API Token, or a Cloudflare Global API
+Key: those are the wrong credential types for Rankrat.
+
+### Create the Cloudflare token
+
+When you want Rankrat to manage Cloudflare-backed sites, create one dedicated
+token exactly like this:
+
+1. Open <https://dash.cloudflare.com/profile/api-tokens>.
+2. Click **Create Token → Create Custom Token** and name it `rankrat`.
+3. Add these permissions:
+   - **Zone → Zone → Read**
+   - **Zone → DNS → Edit**
+   - **Zone → Analytics → Read**
+   - **Zone → Cache Purge → Purge**
+   - **Zone → Cache Rules → Edit**
+   - **Zone → Single Redirect → Edit**
+   - **Account → Account Rulesets → Edit**
+   - **Account → Account Filter Lists → Edit**
+4. Set **Zone Resources → Include → All zones** and **Account Resources →
+   Include → All accounts**.
+5. Click **Continue to summary → Create Token**, copy the value shown once,
+   and keep it ready to paste at Rankrat's hidden prompt.
+
+Use a **User API Token**, never the Account API Token screen or Global API Key.
+This one token covers every Cloudflare feature Rankrat currently ships:
+ownership DNS, analytics, exact purges, cache templates, and managed redirects.
+
+Now run setup and select only the providers you want to configure. If you are
+configuring Google, give the wrapper the downloaded Desktop OAuth JSON's host
+path. For Bing, Cloudflare, and Clarity, setup asks you to paste the newly
+created token/key:
+
+```sh
+RANKRAT_GOOGLE_OAUTH_CLIENT_FILE="$HOME/Downloads/client_secret_...json" make setup
+```
+
+If you are not configuring Google, omit that environment variable and run
+`make setup`. Installed users can use the identical direct command:
+
+```sh
+rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
 ```
 
 `make setup` uses `$HOME/.config/rankrat`. Set
