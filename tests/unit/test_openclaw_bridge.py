@@ -36,6 +36,9 @@ _LIGHTHOUSE_OPERATIONS = (
         LIGHTHOUSE_BEST_PRACTICES_FINDINGS_PATH,
     ),
 )
+_MCP_REGISTRY_DESCRIPTION_MAXIMUM_LENGTH = 100
+_OPENCLAW_BUILD_VERSION = "2026.3.24-beta.2"
+_OPENCLAW_PLUGIN_API_COMPATIBILITY = f">={_OPENCLAW_BUILD_VERSION}"
 
 
 def test_openclaw_manifest_declares_a_static_stdio_server() -> None:
@@ -108,17 +111,26 @@ process.exitCode = status;
     assert "RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3" in arguments
 
 
-def test_bridge_package_has_no_runtime_extension_or_http_proxy_dependency() -> None:
+def test_bridge_package_declares_clawhub_compatibility_without_runtime_dependencies() -> None:
     package = json.loads((_PLUGIN_ROOT / "package.json").read_text(encoding="utf-8"))
     source = _BRIDGE.read_text(encoding="utf-8")
 
     assert _BRIDGE.stat().st_mode & 0o111 == 0o111
-    assert "openclaw" not in package
+    assert package["openclaw"] == {
+        "compat": {"pluginApi": _OPENCLAW_PLUGIN_API_COMPATIBILITY},
+        "build": {"openclawVersion": _OPENCLAW_BUILD_VERSION},
+    }
     assert package.get("dependencies", {}) == {}
     assert "mcp-remote" not in source
     assert "RANKRAT_TRANSPORT" not in source
     assert "RANKRAT_AUTH_TOKEN" not in source
     assert "RANKRAT_URL" not in source
+
+
+def test_mcp_registry_description_fits_the_published_limit() -> None:
+    server = json.loads(Path("server.json").read_text(encoding="utf-8"))
+
+    assert 0 < len(server["description"]) <= _MCP_REGISTRY_DESCRIPTION_MAXIMUM_LENGTH
 
 
 def test_bridge_rejects_missing_boundary_directory_without_stdout() -> None:

@@ -2,6 +2,19 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.14.1 — 2026-08-15
+
+Repairs release publication validation without changing Rankrat's HTTP, MCP, or
+provider contracts.
+
+- Updates the isolated Chrome for Testing binary used by the Lighthouse image
+  to its patched release and refreshes the final base-image packages, so the
+  image vulnerability gate no longer reports fixable high or critical findings.
+- Makes the MCP registry descriptor comply with its description-length limit
+  and locks that limit into a regression test.
+- Declares the OpenClaw plugin compatibility and build metadata ClawHub
+  requires, while keeping the plugin a dependency-free stdio launcher.
+
 ## v0.14.0 — 2026-08-14
 
 Completes provider-scoped ownership verification and makes the guided setup

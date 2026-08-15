@@ -1,5 +1,5 @@
-ARG CHROME_FOR_TESTING_VERSION=151.0.7922.72
-ARG CHROME_FOR_TESTING_SHA256=08254455dc5154fefa0165dc1dea16e496c8298f98c14d89bf38463810d21649
+ARG CHROME_FOR_TESTING_VERSION=151.0.7922.109
+ARG CHROME_FOR_TESTING_SHA256=920efa0a56b47835a5dcdb3e90ae75b9723b63b91d6f4aa086617b9f4d212d7e
 
 FROM mcr.microsoft.com/playwright:v1.62.1-noble@sha256:dcc5531e97840b9b5e794f2814476b21571c5124a3fca2267d73041f56e7580e AS lock
 
@@ -48,7 +48,10 @@ ENV NODE_ENV=production \
     LIGHTHOUSE_SOCKET_PATH=/run/lighthouse/lighthouse.sock \
     HOME=/tmp/lighthouse
 
-RUN rm --recursive --force /ms-playwright /usr/lib/node_modules \
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get --yes upgrade \
+    && apt-get clean \
+    && rm --recursive --force /var/lib/apt/lists/* /ms-playwright /usr/lib/node_modules \
     && rm --force /usr/bin/corepack /usr/bin/npm /usr/bin/npx /usr/bin/pnpm \
         /usr/bin/pnpx /usr/bin/yarn /usr/bin/yarnpkg \
     && groupadd --gid 10001 lighthouse \

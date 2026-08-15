@@ -702,14 +702,18 @@ def test_lighthouse_dependency_lifecycle_is_sandboxed_and_age_gated() -> None:
     assert "FROM lock AS dependencies" in dockerfile
     assert dockerfile.count("mcr.microsoft.com/playwright:v1.62.1-noble@sha256:") == 2
     assert "mcr.microsoft.com/playwright:v1.62.0-noble" not in dockerfile
-    assert "ARG CHROME_FOR_TESTING_VERSION=151.0.7922.72" in dockerfile
-    assert "ARG CHROME_FOR_TESTING_SHA256=" in dockerfile
+    assert "ARG CHROME_FOR_TESTING_VERSION=151.0.7922.109" in dockerfile
+    assert (
+        "ARG CHROME_FOR_TESTING_SHA256="
+        "920efa0a56b47835a5dcdb3e90ae75b9723b63b91d6f4aa086617b9f4d212d7e"
+    ) in dockerfile
     assert "sha256sum --check --strict" in dockerfile
     assert "python3 -m zipfile -e" in dockerfile
     assert "unzip" not in dockerfile
     assert "chmod 0755 /opt/chrome/chrome /opt/chrome/chrome_crashpad_handler" in dockerfile
     assert 'grep -Fq "${CHROME_FOR_TESTING_VERSION}"' in dockerfile
-    assert "rm --recursive --force /ms-playwright /usr/lib/node_modules" in dockerfile
+    assert "DEBIAN_FRONTEND=noninteractive apt-get --yes upgrade" in dockerfile
+    assert "rm --recursive --force /var/lib/apt/lists/* /ms-playwright" in dockerfile
     assert "pnpm@10.34.5" in dockerfile
     assert "LIGHTHOUSE_LOCK_IMAGE :=" in makefile
     assert "$(LIGHTHOUSE_LOCK_IMAGE)" in makefile
