@@ -43,9 +43,9 @@ if your integration requires stability.
 
 | Area | What Rankrat exposes |
 | --- | --- |
-| Google | Search Console analytics, inspection and sitemaps; GA4 inventory and reports; Google Tag Manager containers, workspaces, tags, triggers, variables, versions, and publication; property, sitemap, indexing, ownership, onboarding, and rename writes |
+| Google | Search Console analytics, inspection and sitemaps; GA4 inventory, historical and realtime reports, ecommerce, funnels, and audiences; Google Tag Manager containers, workspaces, tags, triggers, variables, versions, and publication; property, sitemap, indexing, ownership, onboarding, and rename writes |
 | Bing | Search, crawl, indexing, sitemap, backlink, quota, keyword, opportunity, cannibalization, site/submission, and safe content-submission operations |
-| Performance | PageSpeed, Core Web Vitals, CrUX history, Microsoft Clarity insights, Cloudflare analytics, provider-neutral managed edge redirects, and isolated local Lighthouse audits |
+| Performance | PageSpeed, Core Web Vitals, CrUX history, Microsoft Clarity insights, Cloudflare analytics, and isolated local Lighthouse audits |
 | Site intelligence | Whole-site audits, schema eligibility, internal-link graphs, orphan pages, content opportunities, and cross-provider comparisons |
 | Ownership and onboarding | Google/Bing checks, provider-neutral DNS verification through Cloudflare, and idempotent GA4/Search Console/Bing onboarding |
 | Backlinks | Bing Webmaster backlink intelligence for configured sites |
@@ -60,7 +60,7 @@ writable deployments include onboarding with the other mutations. See the
 
 Docker and GNU Make are the only checkout setup requirements. You do not need
 a database or local configuration before cloning. Before setup, create the
-credential only for each provider you actually want to use; setup asks which
+credential only for each provider you want to use; setup asks which
 ones to configure and hides every value you paste.
 
 ```sh
@@ -174,9 +174,18 @@ before enabling writes or exposing HTTP beyond loopback.
 
 ## Documentation
 
-The [documentation index](docs/README.md) links the complete operator and
-contributor manual: setup, configuration, providers, transports, workflows,
-security, tools, troubleshooting, and development.
+- [Getting started](docs/getting-started.md) — install, file locations, verifying setup
+- [Configuration](docs/configuration.md) — every boundary field and runtime switch
+- [Providers and credentials](docs/providers.md) — obtaining each credential and its permissions
+- [Transports and deployment](docs/transports.md) — stdio MCP, Streamable HTTP MCP, REST, Compose, agent integrations
+- [Feature workflows](docs/features.md) — operations for common SEO, analytics, backlink, and indexing questions
+- [Lighthouse](docs/lighthouse.md) — the browser worker and its security limits
+- [Ownership and onboarding](docs/ownership-and-onboarding.md) — Google/Bing property creation and DNS verification
+- [Monitoring and remediation](docs/monitoring-and-remediation.md) — persistent monitors and provider-write behavior
+- [Security](docs/security.md) — trust boundaries and production rules
+- [MCP tool reference](docs/tool-reference.md) — every discoverable MCP tool
+- [Troubleshooting](docs/troubleshooting.md) — startup, OAuth, provider, sitemap, and browser-audit failures
+- [Development](docs/development.md) — build, test, generate contracts, audit dependencies, contribute
 
 The REST source is YAML-first: [`openapi.yaml`](src/rankrat/api/openapi.yaml),
 [`seo-openapi.yaml`](src/rankrat/api/seo-openapi.yaml), and
