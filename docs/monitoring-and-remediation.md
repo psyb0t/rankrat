@@ -1,10 +1,12 @@
 # Monitoring and remediation
 
-You choose whether the process is trusted for writes at startup. In read-only
-mode, write tools and REST routes are absent from discovery. In writable mode,
-configured account credentials authorize their reachable resources; fixed
-provider origins, request limits, URL containment, upstream permissions, and
-HTTP auth still apply.
+Persistent monitors, issue history, and the provider-write operations that fix what they find — sitemap and URL resubmission, IndexNow, exact Cloudflare purges, finite cache templates, and managed edge redirects.
+
+You decide at startup whether the process is trusted to write. Read-only mode
+hides every write tool and REST route from discovery. Writable mode lets the
+configured account credentials touch what they can reach — but the fixed provider
+origins, request limits, URL containment, upstream permissions, and HTTP auth are
+all still in force.
 
 ## Contents
 
@@ -29,11 +31,12 @@ RANKRAT_READ_ONLY=false rankrat http     # writable REST + HTTP MCP
 RANKRAT_READ_ONLY=false rankrat http -d  # persistent restartable scheduler
 ```
 
-Writable mode includes site onboarding; read-only mode omits it.
+Writable mode carries site onboarding; read-only mode leaves it out.
 
 ## Persistent monitors
 
-Monitors schedule the deterministic bounded `site_audit` workflow.
+A monitor schedules the deterministic, bounded `site_audit` workflow — nothing
+looser.
 
 Read operations:
 
@@ -58,36 +61,36 @@ The REST equivalents live under `/v1/monitors` and `/v1/issues`.
 
 ## Scheduler behavior
 
-The scheduler runs only in the long-lived HTTP process. At each configured wake
-interval it:
+The scheduler only runs inside the long-lived HTTP process. At each configured
+wake interval it:
 
 1. claims due enabled monitors;
 2. renews the claim while the bounded crawl runs;
 3. persists an immutable snapshot;
 4. opens or refreshes matching issues;
-5. resolves system-managed issues that disappear;
+5. resolves system-managed issues that have disappeared;
 6. applies snapshot/event retention.
 
-Stdio supports explicit monitor management and `monitor_run`, but a stdio child
-cannot perform future due work after its caller exits.
+Stdio still does explicit monitor management and `monitor_run`, but a stdio child
+can't do future due work after its caller exits — nobody's home to fire it.
 
-Use `rankrat http -d` for an unattended scheduler. Its Compose services use
-`restart: unless-stopped`, while an attached `rankrat http` exits with the
-foreground Compose process.
+Use `rankrat http -d` for an unattended scheduler. Its Compose services run
+`restart: unless-stopped`; an attached `rankrat http` dies with the foreground
+Compose process.
 
-Rankrat sends no email, webhook, or pager notification. Agents poll issue/event
-tools and decide how to notify. The built-in scheduler monitors site-audit
+Rankrat sends no email, no webhook, no pager — none of it. Agents poll the
+issue/event tools and decide how to shout. And the scheduler watches site-audit
 findings, not every backlink or provider-indexing metric.
 
 ## State and backup
 
-State uses SQLite at `RANKRAT_STATE_DATABASE`. The wrapper maps owner-only
-`state/`; Compose uses a named volume. Empty database path disables persistence
-and monitor calls return `UNAVAILABLE`.
+State is SQLite at `RANKRAT_STATE_DATABASE`. The wrapper maps owner-only
+`state/`; Compose uses a named volume. An empty database path disables
+persistence, and monitor calls then return `UNAVAILABLE`.
 
-Back up with SQLite's online-backup mechanism or while Rankrat is stopped.
-Copying only the live main file can omit WAL state. Deleting a monitor cascades
-only its local Rankrat history; it does not delete provider data.
+Back up through SQLite's online-backup mechanism, or while Rankrat is stopped.
+Copy the live main file alone and you can miss WAL state. Deleting a monitor
+cascades only its local Rankrat history — it does not delete provider data.
 
 ## Google writes
 
@@ -101,16 +104,16 @@ only its local Rankrat history; it does not delete provider data.
 | `google_analytics_property_rename` | Rename one account-visible property |
 
 Provider acceptance is asynchronous. A successful sitemap submit means Google
-accepted the API request, not that it fetched or processed the sitemap. Poll
-`google_sitemap_get`/`google_sitemaps_list` and inspect warnings/errors.
+took the API request — not that it fetched or processed the sitemap. Poll
+`google_sitemap_get` / `google_sitemaps_list` and read the warnings and errors.
 
-The Indexing API applies only to Google's eligible structured-data content. It
-is not a general "force index" API. Rankrat validates supported eligibility
-before publishing and exposes notification metadata afterward, but Google still
-decides crawl/index behavior.
+The Indexing API only covers Google's eligible structured-data content. It is
+not a "force index" button. Rankrat checks supported eligibility before
+publishing and hands back the notification metadata afterward, but Google still
+decides what it crawls and indexes.
 
-GA4 renames change display names only. Numeric IDs and report boundaries stay
-the same. Rankrat does not expose Analytics deletion.
+GA4 renames change the display name only. Numeric IDs and report boundaries stay
+put. Analytics deletion isn't exposed.
 
 ## Bing writes
 
@@ -120,17 +123,18 @@ the same. Rankrat does not expose Analytics deletion.
 | `bing_sitemap_submit` | Submit or delete one sitemap for one selected site |
 | `bing_site_submit` | Add or delete one account-visible site |
 
-Check `bing_url_submission_quota` before large submissions. Site/sitemap
-deletion is destructive and remains constrained to exact configured resources.
-Acceptance does not guarantee crawl or ranking.
+Check `bing_url_submission_quota` before a big push. Site and sitemap deletion
+is destructive and stays pinned to the exact configured resources. Acceptance
+buys you nothing on crawl or ranking.
 
 ## IndexNow
 
 `indexnow_submit` sends bounded changed URLs with the target's configured key
-and public key location. It is a notification protocol: participating engines
-share accepted notifications but independently decide crawl/index timing.
+and public key location. It's a notification protocol: participating engines
+share accepted notifications, then each decides crawl and index timing on its
+own.
 
-Live-test submission requires two independent opt-ins:
+Live-test submission demands two independent opt-ins — one flag isn't enough:
 
 ```sh
 RANKRAT_READ_ONLY=false \
@@ -138,80 +142,81 @@ RANKRAT_RUN_LIVE_INDEXNOW_SUBMISSION=true \
 make test-live-indexnow
 ```
 
-Use a harmless, already-public URL. General setup/readiness never submits.
+Point it at a harmless, already-public URL. Ordinary setup and readiness checks
+never submit.
 
 ## Discovery remediation
 
-`site_remediation_apply` performs a finite sequence for one configured site:
+`site_remediation_apply` runs one finite sequence for one configured site:
 
 - resubmit one bounded sitemap to Google;
 - resubmit it to Bing;
 - submit bounded changed URLs to Bing.
 
-It does not rewrite pages, robots, sitemap XML, CMS content, or source code.
-Each provider write is sequential and not transactional. If a later stage
-fails, earlier accepted writes remain accepted. Check returned status, fix the
-failing provider, then retry the idempotent workflow.
+It does not rewrite pages, robots, sitemap XML, CMS content, or source code — it
+only re-pokes the providers. Each write is sequential and not transactional. A
+later stage failing leaves the earlier accepted writes accepted. Read the
+returned status, fix the provider that broke, retry — the workflow is
+idempotent.
 
 ## Ownership and onboarding writes
 
 - `site_ownership_verify` creates only provider-issued DNS proofs through a
-  configured DNS adapter and redeems propagated ownership.
+  configured DNS adapter and redeems ownership once they propagate.
 - `site_onboarding_submit` creates or reuses GA4/Search Console/Bing resources
   in writable mode and records the discovered inventory.
 
-Read [Ownership and onboarding](ownership-and-onboarding.md) for DNS propagation,
+See [Ownership and onboarding](ownership-and-onboarding.md) for DNS propagation,
 GA4 account limits, and partial-failure handling.
 
 ## Tag, redirect, and content writes
 
 Google Tag Manager writes are typed and staged: discover an account, create or
-update containers/workspaces/tags/triggers/variables, create a workspace
-version, then publish the chosen version. Rankrat exposes no arbitrary Google
-API request proxy. Re-authorize with `rankrat auth-google` after upgrading to a
-release that adds a Tag Manager scope.
+update containers/workspaces/tags/triggers/variables, cut a workspace version,
+then publish the version you chose. There is no arbitrary Google API proxy here.
+Re-authorize with `rankrat auth-google` after upgrading to a release that adds a
+Tag Manager scope.
 
-`edge_redirect_upsert` and `edge_redirect_delete` use provider-neutral
-requests. Cloudflare is the current adapter; it modifies only redirect rules
-that Rankrat previously marked as managed. Existing unrelated redirect/ruleset
-configuration is left alone.
+`edge_redirect_upsert` and `edge_redirect_delete` use provider-neutral requests.
+Cloudflare is the current adapter, and it only touches redirect rules that carry
+Rankrat's ownership marker — your other redirects and rulesets are left alone.
 
-`bing_content_submission_create` fetches the bounded public page inside
-Rankrat and submits the newly fetched HTML body to Bing. The caller cannot send
-raw content, arbitrary headers, or an arbitrary remote URL.
+`bing_content_submission_create` fetches the bounded public page inside Rankrat
+and submits that freshly fetched HTML body to Bing. The caller can't hand it raw
+content, arbitrary headers, or some other remote URL.
 
 ## Cloudflare cache writes
 
-`cloudflare_cache_purge` purges exact URLs within a configured site. Rankrat
-does not expose a whole-zone purge.
+`cloudflare_cache_purge` purges exact URLs inside a configured site. No
+whole-zone purge is exposed — that blast radius isn't yours to trigger.
 
-`cloudflare_cache_template_apply` accepts only:
+`cloudflare_cache_template_apply` accepts exactly two templates:
 
 - `cache_static_assets`;
 - `bypass_html`.
 
-It finds one Rankrat-marked rule, rejects ambiguous duplicate markers, and
-creates or patches only that rule through Cloudflare's per-rule API. It does not
-replace an entire ruleset and preserves unrelated operator rules. Applying an
-already matching template is idempotent.
+It finds the one Rankrat-marked rule, refuses ambiguous duplicate markers, and
+creates or patches only that rule through Cloudflare's per-rule API. It never
+replaces a whole ruleset, and it preserves your unrelated rules. Applying a
+template that already matches is a no-op.
 
-Template mutations are serialized per zone inside one Rankrat process. That
-prevents concurrent callers in that process from both creating the first rule;
-it is not a distributed lock across multiple Rankrat deployments.
+Template mutations are serialized per zone within a single Rankrat process. That
+stops two callers in that process from both racing to create the first rule — it
+is not a distributed lock across separate Rankrat deployments.
 
 ## Write checklist
 
-Before enabling writes:
+Before you enable writes:
 
-1. Confirm every configured credential belongs to the intended provider
-   account and has the intended account-wide permissions.
+1. Confirm every configured credential belongs to the intended provider account
+   and carries the intended account-wide permissions.
 2. Give provider tokens only the permissions in
    [Providers and credentials](providers.md).
-3. Keep HTTP on loopback/private networking with bearer auth.
-4. Call read tools first to confirm current state and quotas.
-5. Understand whether the operation is idempotent, asynchronous, or destructive.
-6. Poll provider status after accepted sitemap, ownership, indexing, or DNS
-   operations.
+3. Keep HTTP on loopback or private networking with bearer auth.
+4. Call the read tools first, to confirm current state and quotas.
+5. Know whether the operation is idempotent, asynchronous, or destructive.
+6. Poll provider status after any accepted sitemap, ownership, indexing, or DNS
+   write.
 7. Back up monitoring state and the boundary before onboarding.
 
-See [Security](security.md) for the complete production checklist.
+See [Security](security.md) for the full production checklist.

@@ -8,25 +8,27 @@
 [![license](https://raw.githubusercontent.com/psyb0t/rankrat/badges/license.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
 
-Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft
-Clarity, PageSpeed, Cloudflare, CrUX, and Bing's backlink data each have their
-own view of a site. Rankrat puts them behind one self-hosted service so a human
-can tell an agent what outcome they want and let the agent inspect, create,
-update, or remove supported provider resources.
+Every SEO signal lives in its own walled garden with its own dashboard, its own
+API, and its own bullshit auth dance: Search Console over here, GA4 over there,
+Bing Webmaster somewhere else, plus Cloudflare, Clarity, PageSpeed, CrUX, GTM,
+and Bing's backlink data. Point an agent at your rankings and it drowns juggling
+eight consoles. Rankrat drags all of them behind one self-hosted service, so you
+tell an agent the outcome you want and it inspects, creates, updates, or rips
+out provider resources through a single surface — REST and MCP, no dashboards.
 
-It is a rat, not a burglar. You provide the provider accounts; those credentials
-are Rankrat's authority. Resource lists in `boundaries.json` are discovered
-inventory and URL-containment data, not a second permission system. Rankrat is
-writable by default. Set `RANKRAT_READ_ONLY=true` when a deployment must omit
-every mutating REST route and MCP tool.
+It's a rat, not a burglar. You hand it the provider accounts; those credentials
+are the only authority it has. The resource lists in `boundaries.json` are
+inventory and URL-containment data — not a second permission system pretending
+to keep you safe. Rankrat writes by default; set `RANKRAT_READ_ONLY=true` and
+every mutating route and tool disappears from discovery. That's the one switch.
 
-Rankrat speaks MCP over stdio, MCP over Streamable HTTP at `/mcp`, and a
-FastAPI JSON API under `/v1/`. Wrapper-managed HTTP uses a bearer; a custom
-loopback-only launch may explicitly omit it.
+It speaks MCP over stdio, MCP over Streamable HTTP at `/mcp`, and a FastAPI JSON
+API under `/v1/`. Wrapper-managed HTTP gets a bearer; a hand-rolled loopback-only
+launch can drop it if you know what you're doing.
 
-**Status:** alpha. The API and tool surface may change before 1.0; minor
-releases can include documented incompatible changes, so pin an exact release
-if your integration requires stability.
+**Status:** alpha. The API and tool surface can still move before 1.0 — minor
+releases may break things on purpose (documented), so pin an exact release if
+you need it to hold still.
 
 ## Contents
 
@@ -51,110 +53,79 @@ if your integration requires stability.
 | Backlinks | Bing Webmaster backlink intelligence for configured sites |
 | Monitoring and remediation | Persistent monitors and issue history, sitemap/URL resubmission, IndexNow, exact Cloudflare purges, finite cache templates, and managed edge redirects |
 
-Runtime discovery is authoritative: read-only deployments omit every write;
-writable deployments include onboarding with the other mutations. See the
-[MCP tool catalog](docs/tool-reference.md) and generated
-[OpenAPI document](openapi.json).
+What the runtime advertises is what it does — no hidden endpoints. A read-only
+deployment drops every write from discovery; a writable one exposes onboarding
+alongside the rest. The whole list is the [MCP tool catalog](docs/tool-reference.md)
+and the generated [OpenAPI document](openapi.json).
 
 ## Quick start
 
-Docker and GNU Make are the only checkout setup requirements. You do not need
-a database or local configuration before cloning. Before setup, create the
-credential only for each provider you want to use; setup asks which
-ones to configure and hides every value you paste.
+Install the `rankrat` command, create the credentials for the providers you
+want, then run it. Docker is the only runtime requirement.
+
+### Install
+
+Download the installer, read it, then run it — per-user (no root) or
+system-wide:
 
 ```sh
-git clone https://github.com/psyb0t/rankrat.git
-cd rankrat
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh -o rankrat-install.sh
+less rankrat-install.sh
+bash rankrat-install.sh                # per-user   -> ~/.local/bin/rankrat
+sudo bash rankrat-install.sh --system  # system-wide -> /usr/local/bin/rankrat
 ```
 
-### Create provider credentials once
+The mode auto-detects from who runs it; `--user` / `--system` force it and
+`--uninstall` removes the command. This puts the `rankrat` wrapper — a readable
+script that drives the published Docker images — on your PATH. Prefer to work
+from a source checkout? Clone the repo and use `./rankrat` or the `make` targets
+instead; see [Getting started](docs/getting-started.md).
 
-| Provider | Exact first link | Create exactly this | Full click-by-click guide |
-| --- | --- | --- | --- |
-| Google | <https://console.cloud.google.com/projectcreate> | A project, a Desktop OAuth client JSON, and an optional PageSpeed/CrUX API key | [Google OAuth](docs/providers.md#google-oauth) |
-| Bing | <https://www.bing.com/webmasters/home> | One account-wide Webmaster API key | [Bing Webmaster Tools](docs/providers.md#bing-webmaster-tools) |
-| Cloudflare | <https://dash.cloudflare.com/profile/api-tokens> | One account-wide User API Token | Steps below |
-| Microsoft Clarity | <https://clarity.microsoft.com/> | One Data Export token per Clarity project | [Microsoft Clarity](docs/providers.md#microsoft-clarity) |
+### Set up
 
-The linked provider guides say precisely which buttons to click, which APIs or
-permissions to add, and what Rankrat asks you to paste. Do not create a Google
-service account, a Cloudflare Account API Token, or a Cloudflare Global API
-Key: those are the wrong credential types for Rankrat.
-
-### Create the Cloudflare token
-
-When you want Rankrat to manage Cloudflare-backed sites, create one dedicated
-token exactly like this:
-
-1. Open <https://dash.cloudflare.com/profile/api-tokens>.
-2. Click **Create Token → Create Custom Token** and name it `rankrat`.
-3. Add these permissions:
-   - **Zone → Zone → Read**
-   - **Zone → DNS → Edit**
-   - **Zone → Analytics → Read**
-   - **Zone → Cache Purge → Purge**
-   - **Zone → Cache Rules → Edit**
-   - **Zone → Single Redirect → Edit**
-   - **Account → Account Rulesets → Edit**
-   - **Account → Account Filter Lists → Edit**
-4. Set **Zone Resources → Include → All zones** and **Account Resources →
-   Include → All accounts**.
-5. Click **Continue to summary → Create Token**, copy the value shown once,
-   and keep it ready to paste at Rankrat's hidden prompt.
-
-Use a **User API Token**, never the Account API Token screen or Global API Key.
-This one token covers every Cloudflare feature Rankrat currently ships:
-ownership DNS, analytics, exact purges, cache templates, and managed redirects.
-
-Now run setup and select only the providers you want to configure. If you are
-configuring Google, give the wrapper the downloaded Desktop OAuth JSON's host
-path. For Bing, Cloudflare, and Clarity, setup asks you to paste the newly
-created token/key:
+Run setup. It lists every provider, you pick the ones you actually use, and it
+walks you through creating each credential — the exact console clicks for Google
+OAuth, the Bing Webmaster key, the Cloudflare token, the Clarity token — then
+hides every value you paste. No copying token permissions out of a README:
 
 ```sh
-RANKRAT_GOOGLE_OAUTH_CLIENT_FILE="$HOME/Downloads/client_secret_...json" make setup
+rankrat setup
 ```
 
-If you are not configuring Google, omit that environment variable and run
-`make setup`. Installed users can use the identical direct command:
+Configuring Google? Paste the one-line Desktop OAuth JSON when it asks, or hand
+it the downloaded file up front so you don't have to:
 
 ```sh
 rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
 ```
 
-`make setup` uses `$HOME/.config/rankrat`. Set
-`RANKRAT_PROFILE=/absolute/path/to/rankrat-profile` only when this checkout
-must use a different existing profile; installed users use the clearer
-`rankrat --data-dir ...` form instead.
-
-Setup does not submit URLs or create site properties. It validates account
-access so a later agent session can do those jobs through the normal API/MCP
-tools. Exact provider details and the standalone-wrapper path are in
-[Getting started](docs/getting-started.md) and
-[Providers and credentials](docs/providers.md).
+Setup validates account access — it does not submit URLs or create properties.
+Your profile lives in `~/.config/rankrat`; override it per launch with
+`rankrat --data-dir /absolute/path` or `RANKRAT_DATA_DIR` for a separate profile
+per account or workspace. Want to read the credential steps ahead of time, or
+what each provider actually gives you? See
+[Providers and credentials](docs/providers.md). From a source checkout the setup
+step is `make setup`.
 
 ## Run it
 
 ```sh
-make run             # MCP over stdio
-make run-http        # Rankrat + Lighthouse over HTTP, attached to Compose
-rankrat http -d      # same HTTP stack detached with automatic restarts
+rankrat            # MCP over stdio (default)
+rankrat http -d    # REST + Streamable-HTTP MCP + Lighthouse, detached with restarts
 ```
 
-For HTTP, MCP is at `http://127.0.0.1:8080/mcp`; REST is under `/v1/`.
-Stdio uses no port or bearer. HTTP uses the selected data directory as its
-Compose project, creates `docker-compose.yml` there when missing, and preserves
-an existing operator file. The wrapper, plain `docker run`, Docker Compose,
-HTTP authentication, and client configurations are in
-[Transports and deployment](docs/transports.md).
+From a source checkout: `make run` (stdio) and `make run-http` (HTTP over
+Compose, attached).
 
-Compose runs two
-long-lived services plus one one-shot volume initializer; details are in the
-deployment guide.
+Over HTTP, MCP lives at `http://127.0.0.1:8080/mcp` and REST under `/v1/`; stdio
+needs no port and no bearer. HTTP treats your data directory as its Compose
+project — it drops a `docker-compose.yml` in there if one's missing and never
+touches yours if it isn't. Under the hood that's two long-lived services plus a
+one-shot volume init. The wrapper, plain `docker run`, raw Compose, HTTP auth,
+and client wiring all live in [Transports and deployment](docs/transports.md).
 
-Local browser audits use the separate `psyb0t/rankrat-lighthouse` image over a
-Unix socket; it receives no provider credentials. See [Lighthouse](docs/lighthouse.md).
+Browser audits run in a separate `psyb0t/rankrat-lighthouse` image over a Unix
+socket, and it never sees a single provider credential. See [Lighthouse](docs/lighthouse.md).
 
 ## Safety model
 
@@ -232,7 +203,7 @@ Streamable HTTP endpoint. See [Transports](docs/transports.md#agent-integrations
 
 ## Development
 
-All project tooling runs in containers:
+Everything runs in containers — no "works on my machine" roulette:
 
 ```sh
 make help
@@ -240,8 +211,9 @@ make lint
 make test
 ```
 
-Mocked tests need no provider credentials. Live tests are explicit and derive
-their sole account plus a safe target from the selected profile. See
+Mocked tests need zero credentials. Live tests are opt-in and pull their one
+account plus a safe target straight from your profile, so they can't wander off
+and touch something they shouldn't. Full contributor guide in
 [Development](docs/development.md).
 
 ## Project information

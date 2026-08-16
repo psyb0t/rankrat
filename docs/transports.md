@@ -1,8 +1,10 @@
 # Transports and deployment
 
-Rankrat is one application with three public transports. MCP stdio and MCP
-Streamable HTTP expose the same tools under the same startup policy. REST uses
-the same services and schemas through OpenAPI-defined routes.
+One application, three ways in. MCP stdio and MCP Streamable HTTP expose the
+exact same tools under the exact same startup policy — the wire format is the
+only difference. REST rides the same services and schemas through
+OpenAPI-defined routes. Pick a transport for how you run it, not for what it can
+do.
 
 ## Contents
 
@@ -20,21 +22,25 @@ the same services and schemas through OpenAPI-defined routes.
 
 | Transport | Best for | Authentication | Scheduler |
 | --- | --- | --- | --- |
-| MCP stdio | One agent client spawning its own child | Host process/mount access | No persistent scheduler |
+| MCP stdio | One agent client spawning its own child | Host process/mount access | None |
 | MCP Streamable HTTP | Multiple clients or a long-lived agent service | HTTP bearer when configured | Yes |
-| REST | Scripts, applications, and OpenAPI clients | HTTP bearer when configured | Yes |
+| REST | Scripts, apps, and OpenAPI clients | HTTP bearer when configured | Yes |
 
-The long-lived HTTP process runs the monitor scheduler. Stdio can create, run,
-and inspect monitors when writable, but nothing remains alive to claim later
-scheduled work after the child exits.
+Only the long-lived HTTP process runs the monitor scheduler. Stdio can create,
+run, and inspect monitors when writable — but the child exits and nothing stays
+alive to pick up scheduled work later. Want monitors that actually fire? Run
+HTTP.
 
 ## Wrapper commands
+
+`rankrat` is a readable host script that drives the published images: HTTP goes
+through Compose, stdio and the operator commands go through plain `docker run`.
 
 ```sh
 rankrat              # stdio MCP (default)
 rankrat stdio        # explicit stdio
 rankrat http         # attached Rankrat + Lighthouse Compose stack
-rankrat http -d      # detached restartable HTTP stack
+rankrat http -d      # detached, restartable HTTP stack
 rankrat setup        # bootstrap profile, credentials, Google OAuth, readiness
 rankrat auth-google --print-authorization-url
 rankrat revoke-google
@@ -42,22 +48,24 @@ rankrat onboard-site --help
 rankrat --help
 ```
 
-The wrapper uses one persistent host profile:
+Everything hangs off one persistent host profile:
 
 ```sh
 rankrat --data-dir /absolute/path/to/rankrat-profile stdio
 ```
 
-The fixed layout beneath it is `config/boundaries.json`, `secrets/`, `oauth/`,
-`state/`, and the HTTP deployment's `docker-compose.yml`. With no override,
-the launcher uses `$HOME/.config/rankrat`. `RANKRAT_IMAGE`,
-`RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, and
-`RANKRAT_OAUTH_CALLBACK_PORT` select images and published ports;
-`RANKRAT_READ_ONLY=true` is the only capability switch. HTTP creates the
-reviewed Compose file atomically when it is missing and never overwrites an
-existing regular file.
+The layout under it is fixed: `config/boundaries.json`, `secrets/`, `oauth/`,
+`state/`, and the HTTP deployment's `docker-compose.yml`. No `--data-dir` and it
+lands in `$HOME/.config/rankrat`. `RANKRAT_IMAGE`, `RANKRAT_LIGHTHOUSE_IMAGE`,
+`RANKRAT_HTTP_PORT`, and `RANKRAT_OAUTH_CALLBACK_PORT` pick images and published
+ports; `RANKRAT_READ_ONLY=true` is the only capability switch. When the Compose
+file is missing, HTTP writes the reviewed default atomically — and never
+overwrites one you already have.
 
 ## Plain Docker: stdio MCP
+
+Don't want the wrapper? Run the image yourself. This is what `rankrat stdio`
+expands to:
 
 ```sh
 export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
@@ -77,30 +85,29 @@ docker run -i --rm --init --read-only \
   psyb0t/rankrat:latest stdio
 ```
 
-Stdout is exclusively MCP protocol traffic. Write logs to the configured log
-file/stderr path; do not wrap the command with anything that prints to stdout.
+Stdout is MCP protocol traffic and nothing else. Logs go to the configured log
+file or stderr — do not wrap this command in anything that prints to stdout, or
+you corrupt the stream.
 
-Mount the configuration directory, not one file. OAuth, state, and normal
-writable-mode inventory are writable; provider secrets are read-only. For a
-read-only deployment, set `RANKRAT_READ_ONLY=true` and add `readonly` to the
-config mount.
+Mount the config directory, not the single boundary file. OAuth, state, and
+writable-mode inventory are read-write; provider secrets are read-only, always.
+For a read-only deployment, set `RANKRAT_READ_ONLY=true` and add `readonly` to
+the config mount.
 
 ## Plain Docker: HTTP
 
-Use the stdio command with these changes:
+Same command, five edits:
 
-- remove `-i`;
+- drop `-i`;
 - publish `-p 127.0.0.1:8080:8080`;
 - add `-e RANKRAT_HTTP_HOST=0.0.0.0`;
 - add `-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/rankrat/http-bearer-token`;
-- replace the final `stdio` with `http`.
+- swap the trailing `stdio` for `http`.
 
-`0.0.0.0` is the bind **inside** the container. The host publish stays on
-`127.0.0.1`. If another machine must reach Rankrat, place a TLS-authenticated,
-access-controlled proxy or private network in front; do not casually publish
-the bearer-protected service to the public internet.
-
-Endpoints:
+`0.0.0.0` binds **inside** the container — the host publish still pins to
+`127.0.0.1`. If another machine has to reach Rankrat, put a TLS-authenticated,
+access-controlled proxy or a private network in front of it. Do not fling the
+bearer-protected service at the public internet and call it a day.
 
 | Endpoint | Purpose | Bearer configured |
 | --- | --- | --- |
@@ -109,6 +116,9 @@ Endpoints:
 | `/mcp` | Streamable HTTP MCP | Required |
 | `/v1/...` | JSON API | Required |
 | `/openapi.json` and docs UI | Runtime contract/UI when enabled | Required |
+
+`/healthz` is the one route that skips the bearer. Everything else — `/ready`
+included — gets rejected without a valid token.
 
 ## HTTP bearer
 
@@ -125,38 +135,37 @@ Clients send:
 Authorization: Bearer REPLACE_ME
 ```
 
-Do not put the real bearer in a URL, command history, tracked client config, or
-log. Prefer client environment expansion or a secret manager.
+Never put the real bearer in a URL, shell history, tracked client config, or a
+log line. Expand it from the client environment or a secret manager instead.
 
 ## REST and OpenAPI
 
-The complete committed contract is [`openapi.json`](../openapi.json). It is
-generated from the [base](../src/rankrat/api/openapi.yaml) and
-[SEO](../src/rankrat/api/seo-openapi.yaml) and
-[free SEO](../src/rankrat/api/free-seo-openapi.yaml) YAML sources.
+The committed contract is [`openapi.json`](../openapi.json), generated from three
+YAML sources: [base](../src/rankrat/api/openapi.yaml),
+[SEO](../src/rankrat/api/seo-openapi.yaml), and
+[free SEO](../src/rankrat/api/free-seo-openapi.yaml).
 
-Set `RANKRAT_ENABLE_OPENAPI=true` to serve the runtime contract. The runtime
-document reflects startup policy: read-only removes every write operation,
-including site onboarding.
+Set `RANKRAT_ENABLE_OPENAPI=true` to serve the contract at runtime. It mirrors
+startup policy: read-only strips every write operation, site onboarding
+included — the doc never advertises a route the runtime won't honor.
 
-Health/readiness are GETs, but only `/healthz` bypasses configured bearer auth.
-Most provider reads use POST because their typed filters and date ranges are
-request bodies. Use the OpenAPI schema rather than guessing JSON fields. Error
-responses expose finite categories without raw provider bodies or
-credential-bearing upstream URLs.
+Health and readiness are GETs, but only `/healthz` bypasses the bearer. Most
+provider reads are POST because their typed filters and date ranges live in the
+request body — read the schema instead of guessing field names. Errors come back
+as finite categories, never raw provider bodies or credential-bearing upstream
+URLs.
 
 ## Docker Compose
 
-The repository's runnable [`docker-compose.yml`](../docker-compose.yml), also
-embedded in `rankrat` as the default profile deployment, runs:
+The repository's [`docker-compose.yml`](../docker-compose.yml) — the same file
+`rankrat` embeds as the default profile deployment — runs three things:
 
 - one Rankrat HTTP service;
 - one isolated Lighthouse worker;
-- one networkless Lighthouse-socket-volume initializer.
+- one networkless, one-shot Lighthouse-socket-volume initializer.
 
-The normal launcher path needs only the selected profile. Foreground mode stays
-attached to logs; detached mode uses `restart: unless-stopped` for both
-long-lived services:
+The normal path only needs the selected profile. Foreground stays attached to
+logs; detached runs the two long-lived services with `restart: unless-stopped`:
 
 ```sh
 rankrat --data-dir /absolute/path/to/rankrat-profile http
@@ -164,47 +173,45 @@ rankrat --data-dir /absolute/path/to/rankrat-profile http -d
 ```
 
 From a checkout, `make run-http` builds both local images and starts the same
-Compose stack in the foreground:
+stack in the foreground:
 
 ```sh
 make run-http
 ```
 
-To run Compose directly, export `RANKRAT_DATA_DIR`, `RANKRAT_UID`, and
-`RANKRAT_GID` in the shell, then run `docker compose up` or
-`docker compose up -d`. The committed deployment uses published image defaults;
-the Make target exports locally built tags.
+To drive Compose directly, export `RANKRAT_DATA_DIR`, `RANKRAT_UID`, and
+`RANKRAT_GID`, then `docker compose up` (or `up -d`). The committed file defaults
+to the published images; the Make target exports the locally built tags.
 
-The selected profile is the Compose project directory, not a wholesale bind
-mount. Only its fixed `config`, `secrets`, `oauth`, and `state` children enter
-containers. A pre-existing profile Compose file is operator-controlled and is
-used unchanged. The launcher requires the project directory and Compose file to
-be owned by the current UID and not group/world writable, and rejects symlinked
-or non-regular Compose paths.
+The profile is the Compose project directory — not a wholesale bind mount of it.
+Only its fixed `config`, `secrets`, `oauth`, and `state` children ever reach a
+container. A profile that already has a Compose file is operator-controlled and
+used unchanged. The launcher demands the project directory and Compose file be
+owned by your UID and not group- or world-writable, and rejects a symlinked or
+otherwise non-regular Compose path outright.
 
-The deployment uses loopback HTTP, read-only roots, dropped
-capabilities, no-new-privileges, explicit limits, a named socket volume, and
-the same profile bind mounts as `rankrat`. Normal writable mode persists
-discovered inventory, OAuth refresh records, and monitor state. Provider
-secrets are always read-only. Set `RANKRAT_READ_ONLY=true`; the default Compose
-file then mounts config read-only and the application omits every write route
-and MCP tool.
+The deployment is loopback-only HTTP, read-only roots, all capabilities dropped,
+no-new-privileges, explicit PID/CPU/memory limits, a named socket volume, and
+the same profile mounts as the wrapper. Writable mode persists discovered
+inventory, OAuth refresh records, and monitor state; provider secrets stay
+read-only regardless. Set `RANKRAT_READ_ONLY=true` and the default Compose file
+mounts config read-only while the app drops every write route and MCP tool.
 
-The Lighthouse socket initializer is the only root process. It is networkless,
-has only `CHOWN`/`FOWNER`, prepares one private volume, and exits.
+The socket initializer is the only root process in the whole stack. It's
+networkless, holds only `CHOWN`/`FOWNER`, preps one private volume, and exits.
 
 ## Lighthouse deployment
 
-One-container Rankrat remains functional without the browser worker; the five
-Lighthouse tools return finite `UNAVAILABLE` responses rather than falling back
-to PageSpeed. For the two-image topology and browser threat model, read
+One-container Rankrat runs fine without the browser worker — the five Lighthouse
+tools just return a finite `UNAVAILABLE` instead of silently degrading to
+PageSpeed. For the two-image topology and the browser threat model, read
 [Lighthouse](lighthouse.md).
 
 ## Agent integrations
 
-Installing an integration adds instructions or an MCP server definition. It
-does not create a boundary, provider credentials, OAuth authorization, or
-state paths.
+Installing an integration adds instructions or an MCP server definition. It does
+not create a boundary, provider credentials, OAuth authorization, or state paths
+— those are still yours to set up.
 
 ### Claude Code
 
@@ -213,8 +220,8 @@ claude plugin marketplace add psyb0t/agents
 claude plugin install rankrat@psyb0t
 ```
 
-Register the actual stdio MCP server once at user scope when every project
-should use the same Rankrat login:
+Register the actual stdio MCP server once at user scope when every project should
+share one Rankrat login:
 
 ```sh
 claude mcp add --transport stdio --scope user \
@@ -247,8 +254,8 @@ openclaw skills install @psyb0t/rankrat
 openclaw plugins install clawhub:@psyb0t/rankrat
 ```
 
-The static plugin starts the published image directly in writable stdio mode
-and uses:
+The static plugin starts the published image directly in writable stdio mode and
+uses:
 
 ```text
 $HOME/.config/rankrat/config/boundaries.json
@@ -257,15 +264,16 @@ $HOME/.config/rankrat/oauth/
 $HOME/.config/rankrat/state/
 ```
 
-Set `RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile` in the plugin
-environment to select another shared profile. The launcher requires the four
-directories and the boundary file, validates them before Docker, and never
-mounts the profile root wholesale. `RANKRAT_IMAGE` selects another image.
+Point it at another shared profile with
+`RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile` in the plugin environment.
+The launcher requires the four directories and the boundary file, checks them
+before touching Docker, and never mounts the profile root wholesale.
+`RANKRAT_IMAGE` selects another image.
 
-The static plugin does not start Lighthouse. Use a shared HTTP deployment for
-browser audits, automatic scheduling, multiple clients, or centralized bearer
-authentication. Set `RANKRAT_READ_ONLY=true` in a direct launcher environment
-when OpenClaw should see reads only.
+The static plugin does not start Lighthouse. Use a shared HTTP deployment when
+you want browser audits, automatic scheduling, multiple clients, or one central
+bearer. Set `RANKRAT_READ_ONLY=true` in a direct launcher environment when
+OpenClaw should see reads only.
 
 ### OpenClaw Streamable HTTP
 
@@ -275,11 +283,10 @@ openclaw mcp set rankrat '{"url":"http://127.0.0.1:8080/mcp","transport":"stream
 openclaw mcp doctor rankrat --probe
 ```
 
-The command loads the secret from its owner-readable file instead of placing it
-in shell history. Single quotes preserve `${RANKRAT_AUTH_TOKEN}` for OpenClaw
-expansion. Remove the override with `openclaw mcp unset rankrat` to return to
-plugin stdio.
+The secret loads from its owner-readable file, so it never hits shell history.
+Single quotes keep `${RANKRAT_AUTH_TOKEN}` intact for OpenClaw to expand.
+`openclaw mcp unset rankrat` drops the override and returns to plugin stdio.
 
 See the repository [agent setup reference](../.agents/skills/rankrat/references/setup.md)
-and [OpenClaw plugin README](../.agents/plugins/rankrat/README.md) for their
+and [OpenClaw plugin README](../.agents/plugins/rankrat/README.md) for the
 distribution-specific details.

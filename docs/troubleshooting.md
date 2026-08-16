@@ -1,14 +1,15 @@
 # Troubleshooting
 
-Start with the smallest layer that can fail: local paths → boundary parsing →
-credential readiness → one provider live test → production transport test.
+Start at the smallest layer that can fail and work up: local paths → boundary
+parsing → credential readiness → one provider live test → production transport
+test. Don't debug OAuth when the boundary file won't parse.
 
 ```sh
 rankrat setup
 ```
 
 From a checkout, `make setup` runs the same guided profile setup. It validates
-each configured provider account without a second live-test selector file.
+each configured provider account — no separate live-test selector file needed.
 
 ## Contents
 
@@ -35,18 +36,18 @@ each configured provider account without a second live-test selector file.
 
 ## Startup says configuration is invalid
 
-Check:
+Check, in order:
 
 - `config/boundaries.json` is valid JSON;
-- an empty document is expected only before guided setup has added a provider;
-- no example account remains with a missing credential;
-- provider-specific fields are not mixed;
+- an empty document is fine only before guided setup has added a provider;
+- no example account is left behind with a missing credential;
+- provider-specific fields aren't mixed;
 - credential/OAuth/key paths are absolute container paths;
 - account/target/resource IDs are unique;
 - public roots are HTTPS with no query, fragment, credentials, or nonstandard
   port;
-- every intended `RANKRAT_*` name matches `.env.example` (unknown/misspelled
-  environment variables are ignored);
+- every `RANKRAT_*` name matches `.env.example` — an unknown or misspelled
+  environment variable is silently ignored, not honored;
 - `RANKRAT_READ_ONLY` is exactly `true` or `false`.
 
 Use [`boundaries.json.example`](../config/boundaries.json.example) and
@@ -54,21 +55,21 @@ Use [`boundaries.json.example`](../config/boundaries.json.example) and
 
 ## A required config, secret, OAuth, or state path is missing
 
-The wrapper requires a boundary file plus real `secrets/`, `oauth/`, and
-`state/` directories beneath one profile. Do not create or repair that tree by
-hand: run `rankrat setup`, or `rankrat --data-dir /absolute/profile setup` for
-a separate profile. Setup creates only missing owner-only paths and never
-replaces an existing secret or boundary document.
+The wrapper needs a boundary file plus real `secrets/`, `oauth/`, and `state/`
+directories under one profile. Don't hand-build or hand-repair that tree — run
+`rankrat setup`, or `rankrat --data-dir /absolute/profile setup` for a separate
+profile. Setup creates only the missing owner-only paths and never overwrites an
+existing secret or boundary document.
 
-The profile must be absolute and canonical. Do not replace the profile, a
-required child, or the boundary file with a symlink. Writable config/state
-paths must be owned by the current user and owner-only.
+The profile must be absolute and canonical. Don't swap the profile, a required
+child, or the boundary file for a symlink. Writable config/state paths must be
+owned by the current user and owner-only.
 
 ## Boundary file permission denied inside Docker
 
-Mount `config/` at `/run/config`, not the file directly. A single-file bind
-leaves the image's baked `/run/config` ownership in place and may prevent the
-host UID from traversing it.
+Mount `config/` at `/run/config` — the directory, not the file. A single-file
+bind leaves the image's baked `/run/config` ownership in place, and the host UID
+may not be able to traverse it.
 
 Use the published wrapper or the plain command in
 [Transports and deployment](transports.md#plain-docker-stdio-mcp).
@@ -77,33 +78,33 @@ Use the published wrapper or the plain command in
 
 For an External OAuth app in Testing status, add the signing-in Google user at
 [Google Auth Audience](https://console.cloud.google.com/auth/audience). The
-client is intended for the operator's own deployment; the user must be an
-approved tester until the Google app's publishing status changes.
+client is meant for your own deployment; that user stays an approved tester
+until the app's publishing status changes.
 
 ## Google authorization callback was not accepted
 
 Keep the authorization command alive until the browser redirects to the exact
-loopback callback. Confirm:
+loopback callback — kill it early and the handshake never completes. Confirm:
 
 - the OAuth client type is Desktop app;
-- the printed URL is from the current command, not an older attempt;
-- callback port `49152` is free, or set `RANKRAT_OAUTH_CALLBACK_PORT`;
-- no proxy/browser extension rewrote state, issuer, code, or callback;
-- the user approved rather than canceled.
+- the printed URL is from the current command, not a stale attempt;
+- callback port `49152` is free, or set `RANKRAT_OAUTH_CALLBACK_PORT` (the
+  wrapper publishes that exact port, so it has to be free on the host);
+- no proxy or browser extension rewrote state, issuer, code, or callback;
+- the user approved instead of canceling.
 
 Authorization failures write a bounded `google-auth.log` under OAuth storage.
-Treat it as sensitive local diagnostic state; do not publish it. It records the
-failing stage and finite failure category without making OAuth tokens or raw
-upstream responses part of normal service logs. A rejected callback also has a
-fixed `reason` such as `callback_state_rejected`; it never contains the
-callback URL, OAuth state, authorization code, or tokens.
+Treat it as sensitive local diagnostic state — do not publish it. It records the
+failing stage and a finite failure category without dragging OAuth tokens or raw
+upstream responses into normal service logs. A rejected callback also carries a
+fixed `reason` such as `callback_state_rejected`; it never contains the callback
+URL, OAuth state, authorization code, or tokens.
 
 ## OAuth stored, but Google calls fail
 
-Check the required APIs are enabled in the same Google Cloud project as the
+The required APIs have to be enabled in the same Google Cloud project as the
 Desktop OAuth client. Open the exact API link, select that project in the top
-bar, and click **Enable**. A button labelled **Manage** means it is already
-enabled.
+bar, and click **Enable**. A button labelled **Manage** means it's already on.
 
 - Site ownership verification reports Google `accessNotConfigured`: enable
   [Site Verification API](https://console.cloud.google.com/apis/library/siteverification.googleapis.com).
@@ -115,9 +116,10 @@ enabled.
 - Tag Manager tools fail: enable
   [Google Tag Manager API](https://console.cloud.google.com/apis/library/tagmanager.googleapis.com).
 
-Wait a few minutes after enabling an API, then rerun the failing live check.
-Re-authorize only after enabling a newly required OAuth scope. Finally, confirm
-the signed-in user can see the exact Search Console/GA4 resources.
+Enabling an API isn't instant — wait a few minutes, then rerun the failing live
+check. Re-authorize only after enabling a newly required OAuth scope. Last,
+confirm the signed-in user can actually see the exact Search Console/GA4
+resources.
 
 Use:
 
@@ -126,41 +128,43 @@ make test-live-google-search-console
 make test-live-google-analytics
 ```
 
-`403` usually means upstream user/property permission or an API not enabled;
-`AUTHENTICATION` usually means missing/invalid/insufficient OAuth state.
+`403` usually means upstream user/property permission or an API that isn't
+enabled; `AUTHENTICATION` usually means missing, invalid, or insufficient OAuth
+state.
 
 ## Google Tag Manager writes fail after authorization
 
 Enable the [Google Tag Manager API](https://console.cloud.google.com/apis/library/tagmanager.googleapis.com)
-in the OAuth client's project, then authorize again. A pre-GTM grant lacks the
-container edit/delete, version-edit, and publish scopes used by typed GTM
-writes:
+in the OAuth client's project, then authorize again. A pre-GTM grant is missing
+the container edit/delete, version-edit, and publish scopes the typed GTM writes
+need:
 
 ```sh
 rankrat auth-google --print-authorization-url
 make test-live-google-tag-manager
 ```
 
-The signed-in user also needs sufficient access to the intended Tag Manager
-account and container. `google_tag_manager_accounts_list` confirms what the
-grant can see; it does not create access to an account the user cannot manage.
+The signed-in user also needs real access to the intended Tag Manager account
+and container. `google_tag_manager_accounts_list` shows what the grant can see;
+it does not conjure access to an account the user can't manage.
 
 ## GA4 account/property cannot be found
 
-Call `google_analytics_account_inventory`; properties may live under an
-unexpected Analytics account. Call `google_analytics_data_streams` and compare
-its `G-` ID with the site tag. A correctly installed tag can send to a different
-property.
+Call `google_analytics_account_inventory` — the property may live under an
+Analytics account you didn't expect. Call `google_analytics_data_streams` and
+compare its `G-` ID against the site tag; a correctly installed tag can be
+feeding a different property.
 
 Rankrat cannot create a GA4 account. Create one in
-[Google Analytics](https://analytics.google.com/), accept terms, then use its
-numeric account ID for onboarding.
+[Google Analytics](https://analytics.google.com/), accept the terms, then use
+its numeric account ID for onboarding.
 
 ## PageSpeed fails while other Google tools work
 
-PageSpeed does not use OAuth. Configure a PageSpeed Insights API key or accept
-tighter anonymous quota. CrUX History requires the key. Confirm the target is
-inside `pagespeed_sites` and the key is restricted to the enabled PageSpeed API.
+PageSpeed doesn't use OAuth — that's the catch. Configure a PageSpeed Insights
+API key or live with tighter anonymous quota. CrUX History requires the key.
+Confirm the target is inside `pagespeed_sites` and the key is restricted to the
+enabled PageSpeed API.
 
 ```sh
 make test-live-pagespeed
@@ -168,30 +172,30 @@ make test-live-pagespeed
 
 ## Google says a sitemap could not be read
 
-A successful submission means the API accepted the sitemap URL, not that Google
+A successful submission means the API accepted the sitemap URL — not that Google
 fetched it. Check the exact public sitemap with a normal unauthenticated client:
 
 - direct HTTPS returns `200`;
 - no login, cookie challenge, bot challenge, or redirect loop;
 - content is valid XML with an XML content type;
 - every nested sitemap is publicly reachable;
-- robots/firewall/CDN rules permit Googlebot;
+- robots/firewall/CDN rules let Googlebot through;
 - canonical host/scheme match the Search Console property;
-- the sitemap URL appears in `google_sitemap_get` and its warning/error counts
-  are polled after processing delay.
+- the sitemap URL shows up in `google_sitemap_get`, and you poll its
+  warning/error counts after the processing delay.
 
-For a sitemap index, check each child independently. Rankrat exposes status for
-polling; it cannot make Google fetch immediately.
+For a sitemap index, check each child on its own. Rankrat exposes status for
+polling; it can't make Google fetch on command.
 
 ## Bing returns no data or cannot access a site
 
 Verify the site in Bing Webmaster Tools and regenerate/check the account API
 key. Call `site_ownership_check` with the selected `bing_account_id` to confirm
-the exact site is verified; a site can be visible to the account while still
-being unverified and Bing will reject sitemap writes. Then use `bing_feeds`,
-`bing_url_information`, and `bing_crawl_issues` to distinguish sitemap, URL,
-and crawl state. The `sites` array is persisted inventory, not a second
-permission list.
+the exact site is verified — a site can be visible to the account yet unverified,
+and Bing will reject sitemap writes on it. Then use `bing_feeds`,
+`bing_url_information`, and `bing_crawl_issues` to tell sitemap, URL, and crawl
+state apart. The `sites` array is persisted inventory, not a second permission
+list.
 
 ```sh
 make test-live-bing
@@ -201,15 +205,16 @@ make test-live-bing
 
 Confirm:
 
-- token has Zone Read across the intended account zones;
-- `dns_zone_inventory` can discover the selected zone and its 32-character
-  provider zone ID;
-- feature permission exists: DNS Edit, Analytics Read, Cache Purge, or Cache
-  Rules Edit as appropriate;
-- account ID in the request selects the intended Cloudflare credential.
+- the token has Zone Read across the intended account zones;
+- the selected zone's 32-character `provider_zone_id` in the boundary matches a
+  zone that token can actually read;
+- the feature permission exists — DNS Edit, Analytics Read, Cache Purge, or
+  Cache Rules Edit, as appropriate;
+- the account ID in the request selects the intended Cloudflare credential.
 
-Rankrat will refuse arbitrary records, whole-zone purge, unknown templates, and
-ambiguous duplicate managed-rule markers even if Cloudflare would allow them.
+Rankrat refuses arbitrary records, whole-zone purge, unknown templates, and
+ambiguous duplicate managed-rule markers even when Cloudflare itself would allow
+them. That's deliberate — don't file it as a bug.
 
 ```sh
 make test-live-cloudflare
@@ -220,73 +225,76 @@ make test-live-cloudflare
 Confirm the configured `key_location`:
 
 - uses direct HTTPS on the configured host;
-- returns `200` without redirect;
-- contains exactly the key and no HTML/newline transformation;
-- is public without authentication/challenge;
-- matches the local key file selected by the target.
+- returns `200` with no redirect;
+- contains exactly the key, with no HTML or newline transformation;
+- is public — no authentication or challenge;
+- matches the local key file the target selects.
 
 ```sh
 make verify-indexnow-key INDEXNOW_TARGET_ID=example
 ```
 
-This verifies only public key deployment. Live submission requires separate
-writable and submission opt-ins.
+This checks public key deployment only. Live submission needs separate writable
+and submission opt-ins.
 
 ## HTTP returns 401
 
-Read the token file without printing it to shared logs and configure the client
-to send `Authorization: Bearer <token>`. Ensure the service and client reference
-the same file/secret. MCP Streamable HTTP uses the same bearer as REST.
+Read the token file without printing it into shared logs, and configure the
+client to send `Authorization: Bearer <token>`. Make sure the service and the
+client point at the same file/secret. MCP Streamable HTTP uses the same bearer
+as REST.
 
-Stdio never uses the bearer. `/healthz` remains public for liveness probes;
-`/ready` and every other HTTP route require the bearer when one is configured.
+Stdio never uses the bearer. `/healthz` stays public for liveness probes;
+`/ready` and every other HTTP route require the bearer once one is configured.
 
 ## REST write route or MCP write tool is missing
 
-That is expected in read-only mode. Restart with `RANKRAT_READ_ONLY=false`.
-Runtime `/openapi.json` and MCP `tools/list` reflect that choice.
+Expected in read-only mode — nothing's broken. Restart with
+`RANKRAT_READ_ONLY=false`. Runtime `/openapi.json` and MCP `tools/list` reflect
+whichever you chose.
 
 ## Runtime OpenAPI is missing
 
 Set `RANKRAT_ENABLE_OPENAPI=true` before starting HTTP. The committed
-[`openapi.json`](../openapi.json) is available without enabling runtime docs.
+[`openapi.json`](../openapi.json) is available without enabling runtime docs at
+all.
 
 ## Lighthouse returns unavailable
 
 Check:
 
-- worker is running and healthy;
+- the worker is running and healthy;
 - both services share `/run/lighthouse/lighthouse.sock`;
 - socket volume ownership matches the configured UID/GID;
 - `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` is not empty;
-- requested page is within `pagespeed_sites`.
+- the requested page is within `pagespeed_sites`.
 
 Busy, timeout, final-URL, and private-address failures are intentional finite
-errors. See [Lighthouse](lighthouse.md).
+errors, not glitches. See [Lighthouse](lighthouse.md).
 
 ## Docker build fails with registry 401
 
-An invalid cached Docker Hub login can cause anonymous public base-image pulls
-to fail with `401 Unauthorized`. Inspect your local Docker credential setup,
-log in with a valid account or remove only the stale registry credential, then
-retry. Do not weaken digest pinning or rewrite Dockerfiles to random mirrors as
-the first response.
+A stale cached Docker Hub login can make anonymous public base-image pulls fail
+with `401 Unauthorized`. Inspect your local Docker credential setup, log in with
+a valid account or remove just the stale registry credential, then retry. Do not
+weaken digest pinning or repoint Dockerfiles at random mirrors as a first
+move — that trades a login glitch for a supply-chain hole.
 
-Rankrat already resolves selected bases/tools through reviewed public mirrors;
-a credential error may still affect an image whose registry is Docker Hub.
+Rankrat already resolves selected bases/tools through reviewed public mirrors; a
+credential error can still hit an image whose registry is Docker Hub.
 
 ## Provider readiness passes but a report fails
 
-Readiness proves a minimal account call, not every resource, date range, quota,
-or product feature. Run the provider-specific live target against the same
+Readiness proves one minimal account call — not every resource, date range,
+quota, or product feature. Run the provider-specific live target against the same
 profile, then inspect:
 
 - provider inventory can discover the resource;
-- the upstream account can access it;
+- the upstream account can actually access it;
 - date range and pagination limits are valid;
 - free-tier rate limits and quotas allow the request;
-- requested feature is enabled for the provider account;
-- provider has data for that interval.
+- the requested feature is enabled for that provider account;
+- the provider even has data for that interval.
 
 ## Collect useful diagnostics safely
 
@@ -294,11 +302,11 @@ Record:
 
 - Rankrat image/version;
 - tool/operation name;
-- finite error category;
+- the finite error category;
 - account/resource IDs that are safe to disclose;
 - whether stdio, HTTP MCP, or REST was used;
-- relevant configuration field names, never values of secrets;
-- reproducibility with `diagnostics`, `provider_readiness`, or a mocked test.
+- relevant configuration field names — never secret values;
+- whether `diagnostics`, `provider_readiness`, or a mocked test reproduces it.
 
 Never paste bearer tokens, OAuth records, provider keys, downloaded OAuth client
 secrets, or raw `google-auth.log` into a public issue.

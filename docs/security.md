@@ -1,10 +1,11 @@
 # Security
 
-Rankrat is designed for an operator's own accounts and sites. It is not a
-public arbitrary-URL proxy, competitor crawler, generic DNS API, or public
-multi-tenant gateway. Its safety depends on intentional account-wide provider
-credentials, controlled transport access, validated input, fixed provider
-origins, and hardened mounts working together.
+Rankrat runs on your own accounts and your own sites — nobody else's. It is not
+a public arbitrary-URL proxy, a competitor crawler, a generic DNS API, or a
+multi-tenant gateway. Point it at any of those and you're holding the wrong
+tool. Its safety rests on five things holding at once: account-wide credentials
+you chose on purpose, controlled transport access, validated input, fixed
+provider origins, and hardened mounts. Knock one out and the model leaks.
 
 ## Contents
 
@@ -26,145 +27,153 @@ origins, and hardened mounts working together.
 
 Trusted:
 
-- the operator who creates boundaries and mounts;
+- the operator who writes the boundaries and owns the mounts;
 - callers allowed to reach stdio or authenticated HTTP;
-- the provider accounts/permissions intentionally configured.
+- the provider accounts and permissions you configured on purpose.
 
-Untrusted:
+Untrusted — everything else, always:
 
 - all HTTP/MCP request data;
 - provider responses;
 - public DNS and web content;
 - redirects and page subresources;
-- mounted files until type, ownership, permissions, and roots are validated.
+- mounted files, until type, ownership, permissions, and roots check out.
 
 ## Boundary enforcement
 
-The strict startup document fixes credential accounts and records discovered
-resource inventory. Rankrat validates account IDs, provider-specific fields, URLs, child
-containment, DNS zones, GA4 IDs, IndexNow hosts/key locations, and duplicate
-ownership. Unknown fields fail startup.
+The strict startup document pins credential accounts and records the resource
+inventory it discovers. Rankrat validates account IDs, provider-specific fields,
+URLs, child containment, DNS zones, GA4 IDs, IndexNow hosts and key locations,
+and duplicate ownership. An unknown field kills startup — no silent shrug.
 
-Normal callers cannot choose provider origins or credential paths. A configured
+A normal caller cannot pick provider origins or credential paths. A configured
 account credential deliberately authorizes every supported operation and every
-resource that provider account can reach. Inventory arrays are not per-site
-permission lists. Onboarding may persist newly discovered resource IDs.
+resource that account can reach — that's the deal, not a bug. The inventory
+arrays are not a per-site permission list. Onboarding may persist newly
+discovered resource IDs.
 
-Read [Configuration](configuration.md) for the field and mode matrix.
+See [Configuration](configuration.md) for the field and mode matrix.
 
 ## Read-only discovery
 
-`RANKRAT_READ_ONLY=true` is stronger than returning "forbidden": write services,
-MCP tools, and REST routes are not mounted or listed. Agents cannot discover a
-write schema on that process.
+`RANKRAT_READ_ONLY=true` does more than return "forbidden": write services, MCP
+tools, and REST routes are never mounted or listed. An agent on that process
+can't discover a write schema — there's nothing there to find. It's the one
+capability switch.
 
 Writable mode trusts its caller to invoke account-authorized provider actions.
-If you do not trust a caller with every visible write tool, give it a read-only
-process instead.
+Don't trust a caller with every visible write tool? Hand it a read-only process
+instead. That's the whole decision.
 
 ## HTTP exposure
 
 - The wrapper publishes HTTP on `127.0.0.1`.
-- Inside the container Rankrat binds `0.0.0.0` so Docker port publishing works.
-- Non-loopback process binds require `RANKRAT_HTTP_BEARER_SECRET_FILE`.
+- Inside the container Rankrat binds `0.0.0.0` so Docker port publishing works —
+  the container is the boundary, not the bind address.
+- A non-loopback process bind refuses to start without
+  `RANKRAT_HTTP_BEARER_SECRET_FILE`.
 - Only `/healthz` bypasses a configured bearer. `/ready`, `/v1/`, `/mcp`,
-  runtime OpenAPI, and the docs UI use the same bearer policy.
-- Stdio authorization is the ability to start the process and access mounts.
+  runtime OpenAPI, and the docs UI all sit behind the same bearer.
+- Stdio "auth" is the ability to start the process and reach its mounts. That's
+  it — guard the mounts.
 
-Keep HTTP on loopback or a private network. For remote access, use TLS,
-network-level restriction, and secret-backed bearer injection. Never place a
-real bearer in a URL, tracked file, shell example, or child-process argument.
+Keep HTTP on loopback or a private network. Going remote means TLS,
+network-level restriction, and secret-backed bearer injection. Never put a real
+bearer in a URL, a tracked file, a shell example, or a child-process argument.
 
 ## Secret handling
 
-- Provider secrets live in owner-only files under `secrets/` and are mounted
-  read-only.
-- Google OAuth records live under the separate writable `oauth/` mount because
-  refresh rotation must persist.
-- Monitoring state uses a separate writable owner-only mount.
-- Credential paths must be absolute, within configured roots, and cannot be
+- Provider secrets live in owner-only files under `secrets/`, mounted
+  **read-only**.
+- Google OAuth records live under the separate **writable** `oauth/` mount —
+  refresh rotation has to persist somewhere.
+- Monitoring state gets its own separate writable owner-only mount.
+- Credential paths must be absolute, inside configured roots, and cannot be
   shared in ways the boundary model forbids.
-- `make setup` temporarily mounts the secret/config trees writable, rejects
-  symlinks, stores credentials with owner-only modes, then normal runtime mounts
-  provider secrets read-only.
+- `make setup` mounts the secret/config trees writable just long enough to write
+  them: it rejects symlinks, stores credentials owner-only, and then normal
+  runtime remounts provider secrets read-only.
 - Provider credential values, refresh records, raw bodies, and key-bearing URLs
-  are not returned or logged.
+  are never returned and never logged.
 
-Provider errors crossing REST or either MCP transport retain a finite category
-such as authentication, authorization, rate limit, not found, invalid response,
-or upstream failure, but replace upstream text with `provider operation failed`.
+Provider errors crossing REST or either MCP transport keep a finite category —
+authentication, authorization, rate limit, not found, invalid response, upstream
+failure — but the upstream text is replaced with `provider operation failed`.
+Your logs don't get to see their prose.
 
-If a credential ever enters tracked history or logs, treat it as compromised:
-rotate it and audit provider access.
+If a credential ever lands in tracked history or a log, it's burned: rotate it
+and audit provider access.
 
 ## Public fetch and SSRF controls
 
-The site crawler and URL schema validator accept only authorized public HTTPS
-targets. They reject:
+The site crawler and URL schema validator accept authorized public HTTPS targets
+and nothing else. They reject:
 
 - credentials, query/fragment where the boundary forbids them, and nonstandard
   ports;
 - IP literals;
-- loopback, private, link-local, multicast, reserved, documentation, and other
-  non-public address classes;
-- mixed DNS answers containing any disallowed address;
+- loopback, private, link-local, multicast, reserved, documentation, and every
+  other non-public address class;
+- mixed DNS answers that contain any disallowed address;
 - encoded traversal, dot segments, and backslash separators;
-- out-of-bound origins/paths;
-- redirects for the strict site-audit fetch path.
+- out-of-bound origins and paths;
+- redirects, on the strict site-audit fetch path.
 
-Resolution is pinned for the request so a name cannot pass one check then
-rebind to an internal address during the fetch.
+Resolution is pinned for the request, so a name can't pass one check and then
+rebind to an internal address before the fetch lands.
 
 ## Lighthouse isolation
 
 The browser runs in a separate image with no provider-secret mounts and no TCP
-listener. A local proxy performs public-address-only resolution and traffic
-control; Rankrat reauthorizes requested and final URLs.
+listener. A local proxy does public-address-only resolution plus traffic
+control; Rankrat reauthorizes both the requested and the final URL.
 
-Chromium uses `--no-sandbox` in the non-root, capability-free worker. Container
-limits and the proxy are not equivalent to Chromium's renderer sandbox. Audit
-only trusted operator-controlled pages, or place the worker in a stronger outer
-runtime such as gVisor/Kata. Public third-party subresources and a public
-cross-origin redirect can still be fetched. Read [Lighthouse](lighthouse.md).
+Chromium runs `--no-sandbox` in the non-root, capability-free worker. Container
+limits and the proxy are **not** a substitute for Chromium's renderer sandbox.
+So audit only trusted operator-controlled pages, or drop the worker inside a
+stronger outer runtime like gVisor/Kata. Public third-party subresources and a
+public cross-origin redirect can still be fetched. Read
+[Lighthouse](lighthouse.md).
 
 ## DNS write limits
 
-Cloudflare tokens may have DNS Edit, but Rankrat exposes no arbitrary record
-name/type/value operation. Ownership verification obtains proof records from
-Google/Bing, authorizes an exact configured zone, reuses exact records, refuses
-conflicting CNAMEs, and does not return proof values.
+A Cloudflare token may carry DNS Edit, but Rankrat exposes no arbitrary
+record name/type/value operation — there is no generic DNS CRUD here. Ownership
+verification pulls proof records from Google/Bing, authorizes one exact
+configured zone, reuses exact records, refuses conflicting CNAMEs, and never
+returns proof values.
 
-The public contract is provider-neutral. Adding another adapter must preserve
-the same narrow proof-only behavior rather than expose generic DNS CRUD.
+The public contract is provider-neutral. Any future adapter has to keep the same
+narrow proof-only behavior — adding one is not an excuse to open generic DNS.
 
 ## Provider write limits
 
-- Search Console/Bing sites are resolved through the selected account; child
-  URLs and sitemaps must remain inside the selected site/property.
-- Google Indexing submissions must pass supported eligibility checks.
+- Search Console/Bing sites resolve through the selected account; child URLs and
+  sitemaps must stay inside the selected site/property.
+- Google Indexing submissions must pass the supported eligibility checks.
 - IndexNow URLs must belong to the fixed target host and key location.
-- Cloudflare purges are exact URLs; no whole-zone purge.
-- Cache writes choose one of two named templates; no arbitrary ruleset body.
-- Edge redirects use provider-neutral requests but the current Cloudflare
+- Cloudflare purges are exact URLs — no whole-zone purge.
+- Cache writes pick one of two named templates; no arbitrary ruleset body.
+- Edge redirects use provider-neutral requests, but the current Cloudflare
   adapter lists and changes only Rankrat-managed redirect rules; it does not
   replace arbitrary rulesets.
 - GA4 writes rename account-visible resources or create/reuse a property during
-  onboarding; no Analytics deletion.
+  onboarding — no Analytics deletion, ever.
 - Google Tag Manager writes use typed container, workspace, tag, trigger,
-  variable, version, and publication requests; they cannot carry arbitrary
+  variable, version, and publication requests; they cannot smuggle arbitrary
   upstream URLs or opaque request bodies.
 - Bing content submission fetches a bounded public HTML page itself and sends
   that fresh content; callers cannot supply raw HTML, headers, or a destination.
 - Microsoft Clarity is a read-only fixed-endpoint project-token integration.
-- Bing backlink intelligence is read-only and operates on a selected Bing
-  Webmaster site; it has no separate backlink-provider credential surface.
+- Bing backlink intelligence is read-only against a selected Bing Webmaster site;
+  it has no separate backlink-provider credential surface.
 
-Upstream acceptance may be asynchronous and does not guarantee indexing,
-ownership completion, or ranking.
+Upstream accepting a write is not the same as it landing. Acceptance may be
+async and guarantees nothing about indexing, ownership completion, or ranking.
 
 ## Container hardening
 
-The wrapper and Compose examples use:
+The wrapper and Compose examples run with:
 
 - non-root UID/GID;
 - read-only root filesystems;
@@ -178,42 +187,43 @@ The wrapper and Compose examples use:
 - health checks and init processes.
 
 Compose's two volume initializers run as root only long enough to set volume
-ownership. They are networkless, get only `CHOWN`/`FOWNER`, and exit.
+ownership. They're networkless, get only `CHOWN`/`FOWNER`, and exit.
 
-Do not add Docker socket mounts, host PID/network namespaces, privileged mode,
-or provider credentials to the Lighthouse worker.
+Do not bolt on Docker socket mounts, host PID/network namespaces, privileged
+mode, or provider credentials for the Lighthouse worker. None of those belong
+here.
 
 ## Logs and diagnostics
 
-Structured logs should go to the configured file/stderr path. Stdio stdout is
-reserved for MCP framing. OAuth authorization failures may write bounded
-diagnostic information to `google-auth.log` in the OAuth area; protect it like
-OAuth state and inspect it locally rather than pasting it publicly.
+Structured logs go to the configured file/stderr path. Stdio stdout is reserved
+for MCP framing — nothing else writes there. OAuth authorization failures may
+drop bounded diagnostic info into `google-auth.log` in the OAuth area; guard it
+like OAuth state and read it locally instead of pasting it into a public thread.
 
-`diagnostics` returns local non-secret checks. `provider_readiness` performs a
-bounded provider call and returns typed state rather than raw responses.
+`diagnostics` returns local non-secret checks. `provider_readiness` does a
+bounded provider call and returns typed state, not raw responses.
 
 ## Production checklist
 
-- [ ] Config, secrets, OAuth, and state are owner-only real paths without
+- [ ] Config, secrets, OAuth, and state are owner-only real paths with no
   symlinks.
-- [ ] Unused example provider accounts are removed.
-- [ ] Provider tokens cover the intended account and every Rankrat feature the
-  operator expects; unrelated provider products remain excluded where the
-  provider supports that distinction.
+- [ ] Unused example provider accounts are gone.
+- [ ] Provider tokens cover the intended account and every Rankrat feature you
+  expect; unrelated provider products stay excluded where the provider lets you
+  draw that line.
 - [ ] `RANKRAT_READ_ONLY=true` is set for any caller that must not mutate state.
-- [ ] Writable callers are intentionally trusted with all visible Rankrat
-  mutations, including onboarding.
+- [ ] Writable callers are intentionally trusted with every visible Rankrat
+  mutation, onboarding included.
 - [ ] HTTP is loopback/private, bearer-protected, and TLS-proxied if remote.
 - [ ] Provider secrets are never mounted into Lighthouse.
 - [ ] State and the boundary are backed up before onboarding.
-- [ ] `rankrat setup` and intended provider live checks pass.
+- [ ] `rankrat setup` and the intended provider live checks pass.
 - [ ] Production image, MCP, REST, and security regression tests pass for the
-  release being deployed.
+  exact release you're shipping.
 - [ ] Dependency/image audits and secret scanning are green.
 
 ## Reporting security issues
 
-Open a private security report through the repository's GitHub Security page
-when the issue would expose credentials, cross boundaries, or permit arbitrary
-network/file access. Do not place live secrets or exploit data in a public issue.
+Open a private security report through the repository's GitHub Security page for
+anything that would expose credentials, cross a boundary, or permit arbitrary
+network/file access. Do not put live secrets or exploit data in a public issue.

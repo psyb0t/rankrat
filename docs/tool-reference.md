@@ -1,13 +1,13 @@
 # MCP tool reference
 
-MCP `tools/list` from the running process is authoritative. Read-only mode
-exposes only read tools. Writable mode adds every supported mutation, including
-site onboarding. Counts are deliberately not duplicated here because the
-catalog evolves and runtime discovery is exact.
+The authority is `tools/list` on the running process — this page tracks it, it
+doesn't replace it. Read-only mode exposes reads only. Writable mode adds every
+mutation, site onboarding included. No counts are printed here on purpose: the
+catalog moves, and runtime discovery is the exact number.
 
-REST uses the same services and schemas, but route names are defined by the
-generated [`openapi.json`](../openapi.json). Use that document rather than
-deriving REST paths from MCP names.
+REST rides the same services and schemas, but the route names come from the
+generated [`openapi.json`](../openapi.json). Read that for paths — don't guess
+them from MCP names, they aren't a 1:1 mapping.
 
 ## Contents
 
@@ -164,7 +164,8 @@ deriving REST paths from MCP names.
 
 ## Ordinary write tools
 
-These appear only with `RANKRAT_READ_ONLY=false`.
+These show up only with `RANKRAT_READ_ONLY=false`. In read-only mode they don't
+exist in discovery at all.
 
 ### Search engine and analytics writes
 
@@ -225,7 +226,7 @@ These appear only with `RANKRAT_READ_ONLY=false`.
 
 ## MCP resources
 
-In addition to tools, Rankrat serves:
+Beyond tools, Rankrat serves:
 
 | Resource | Purpose |
 | --- | --- |
@@ -236,7 +237,7 @@ Clients without MCP resource support call `onboarding_guide` instead.
 
 ## Tool annotations
 
-Read/write, destructive, idempotent, and open-world hints are emitted in MCP
-tool annotations. They are guidance for clients, not a replacement for startup
-policy or boundary enforcement. Provider acceptance and DNS/indexing progress
-can remain asynchronous even when a request itself is idempotent.
+Read/write, destructive, idempotent, and open-world hints ride in the MCP tool
+annotations. They're guidance for clients — not a stand-in for startup policy or
+boundary enforcement. And an idempotent request still doesn't mean instant:
+provider acceptance and DNS/indexing progress stay asynchronous regardless.
