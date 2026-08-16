@@ -21,9 +21,7 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 FROM public.ecr.aws/docker/library/python:3.14.6-slim-trixie@sha256:d4fea6e20c09820028eea3f5c17f5b8ebd2ecb9c2bf28e561681a74a96090e4f AS runtime
 
-# The MCP registry verifies namespace ownership of an oci package by reading this
-# label off the pushed image and matching it against server.json's "name".
-# Without it, mcp-registry-publish rejects the entry.
+# Required for MCP Registry namespace verification.
 LABEL io.modelcontextprotocol.server.name="io.github.psyb0t/rankrat"
 
 ENV PATH="/app/.venv/bin:${PATH}" \

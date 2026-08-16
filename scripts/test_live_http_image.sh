@@ -52,7 +52,7 @@ cleanup() {
 		return
 	fi
 	if [[ "$container_started" == true ]]; then
-		# This exact name is generated here and only assigned after docker run succeeds.
+		# Remove only this script's container.
 		docker rm -f "$container_name" >/dev/null 2>&1 || :
 	fi
 	if [[ -n "$temporary_directory" ]]; then
@@ -118,8 +118,7 @@ readonly -a production_security_args=(
 	--tmpfs "/tmp:rw,noexec,nosuid,size=32m"
 	--mount "type=bind,src=$runtime_config_directory,dst=/run/config,readonly"
 	--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly"
-	# Google may rotate a refresh token while satisfying a read request, so this
-	# private state path matches the documented production compose contract.
+	# OAuth refresh may rotate the token.
 	--mount "type=bind,src=$oauth_directory,dst=/run/oauth"
 )
 

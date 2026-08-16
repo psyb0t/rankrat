@@ -638,10 +638,10 @@ def test_lighthouse_image_target_drives_the_production_transport() -> None:
     assert script.count('--user "$HOST_USER_ID:$HOST_GROUP_ID"') == 5
 
 
-def test_reusable_workflows_are_pinned_to_one_reviewed_commit() -> None:
+def test_reusable_workflows_follow_the_current_shared_release_line() -> None:
     workflow_paths = tuple(Path(".github/workflows").glob("*.yml"))
     reusable_prefix = "psyb0t/reusable-github-workflows/"
-    expected_revision = "9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e"
+    expected_revision = "master"
     references: list[str] = []
 
     for workflow_path in workflow_paths:
@@ -702,10 +702,10 @@ def test_lighthouse_dependency_lifecycle_is_sandboxed_and_age_gated() -> None:
     assert "FROM lock AS dependencies" in dockerfile
     assert dockerfile.count("mcr.microsoft.com/playwright:v1.62.1-noble@sha256:") == 2
     assert "mcr.microsoft.com/playwright:v1.62.0-noble" not in dockerfile
-    assert "ARG CHROME_FOR_TESTING_VERSION=151.0.7922.109" in dockerfile
+    assert "ARG CHROME_FOR_TESTING_VERSION=152.0.7977.42" in dockerfile
     assert (
         "ARG CHROME_FOR_TESTING_SHA256="
-        "920efa0a56b47835a5dcdb3e90ae75b9723b63b91d6f4aa086617b9f4d212d7e"
+        "cb77f4781cad7d5e06fcc78b4476e6a6375616e7278dc313abaa9db22ed4674e"
     ) in dockerfile
     assert "sha256sum --check --strict" in dockerfile
     assert "python3 -m zipfile -e" in dockerfile
@@ -725,8 +725,8 @@ def test_lighthouse_dependency_lifecycle_is_sandboxed_and_age_gated() -> None:
     assert "minimumReleaseAge: 10080" in workspace
     assert "- brace-expansion@5.0.9" in workspace
     assert "brace-expansion: 5.0.9" in workspace
-    assert "- nanoid@3.3.17" in workspace
-    assert "nanoid: 3.3.17" in workspace
+    assert "- nanoid@3.3.18" in workspace
+    assert "nanoid: 3.3.18" in workspace
     tooling_target = _target(makefile, "test-tooling")
     assert "bump_lighthouse_minimum_release_age.sh" in tooling_target
     assert "minimumReleaseAge: 10080" in tooling_target

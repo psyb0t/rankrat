@@ -2,6 +2,7 @@
   "id": "@psyb0t/rankrat",
   "name": "rankrat",
   "version": "0.0.0",
+  "extensions": ["./bin/cli.js"],
   "description": "Self-hosted, account-authorized SEO audits, monitoring, Google Tag Manager, Microsoft Clarity, managed edge redirects, safe Bing content submission, internal links, Bing backlink intelligence, CrUX, ownership, remediation, analytics, Cloudflare performance, PageSpeed, and optional local Lighthouse tools. The default server starts the published Rankrat image over MCP stdio.",
   "mcpServers": {
     "rankrat": {

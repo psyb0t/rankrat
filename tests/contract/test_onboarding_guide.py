@@ -76,8 +76,6 @@ async def test_guide_tells_the_caller_how_to_create_a_ga4_account_by_hand(
     assert "Create" in joined and "Account" in joined
     assert "google_analytics_account_inventory" in joined
 
-    # The adjacent API must be described as not removing the browser step, so a
-    # model does not go looking for it as an automation escape hatch.
     assert "provisionAccountTicket" in account["api_note"]
     assert "redirectUri" in account["api_note"]
     assert "analytics.edit" in account["api_note"]

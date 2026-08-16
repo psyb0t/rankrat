@@ -63,9 +63,7 @@ export RANKRAT_RELEASE_VERSION
 UID := $(shell id -u)
 GID := $(shell id -g)
 
-# Every production-image invocation goes through the same wrapper users install,
-# so `make run` exercises the path they actually take and the docker run flags
-# exist in exactly one place. The wrapper reads all of this from the environment.
+# Keep the published wrapper as the single production invocation.
 WRAPPER := RANKRAT_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG) \
 	RANKRAT_LIGHTHOUSE_IMAGE=$(LIGHTHOUSE_IMAGE) \
 	RANKRAT_HTTP_PORT=$(HTTP_PORT) \
@@ -327,7 +325,7 @@ test-security: dev-image ## Run security regression tests in the dev container
 
 test-tooling: dev-image ## Exercise dependency age-gate tooling in container-local scratch
 	$(DEV_RUN) sh -ec 'require_fragment() { grep -Fq -- "$$2" "/work/$$1" || { echo "missing required $$1 fragment: $$2" >&2; exit 1; }; }; wait_for_log() { attempts=1; while ! test -s "$$1" && [ "$$attempts" -le "$(TOOLING_LOG_FLUSH_ATTEMPTS)" ]; do sleep "$(TOOLING_LOG_FLUSH_DELAY_SECONDS)"; attempts=$$((attempts + 1)); done; test -s "$$1"; }; scratch=$$(mktemp -d); cp pyproject.toml scripts/bump-exclude-newer.sh "$$scratch"; cd "$$scratch"; LOG_FILE="$$scratch/bump.log" bash bump-exclude-newer.sh; wait_for_log "$$scratch/bump.log" || { echo "dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^exclude-newer =" pyproject.toml)" -eq 1 || { echo "dependency age-gate setting is not unique" >&2; exit 1; }; require_fragment Makefile "RANKRAT_PROFILE ?= \$$(HOME)/.config/rankrat"; require_fragment Makefile "./rankrat --data-dir \"\$$(RANKRAT_PROFILE)\""; require_fragment Makefile "RANKRAT_LIGHTHOUSE_IMAGE=\$$(LIGHTHOUSE_IMAGE)"; require_fragment Makefile "INDEXNOW_TARGET_ID is required"; require_fragment Makefile "--boundary-file /profile/config/boundaries.json"; require_fragment Makefile "RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth"; require_fragment Makefile "test-live-google-analytics: LIVE_SELECTOR := test_live_google_analytics or test_live_ga4"; require_fragment Makefile "WRAPPER) stdio"; require_fragment Makefile "WRAPPER) http"; require_fragment rankrat "CONTAINER_OAUTH_TOKEN_ROOT=\"/run/oauth\""; require_fragment rankrat "COMPOSE_FILE_RELATIVE_PATH=\"docker-compose.yml\""; require_fragment rankrat "--project-directory \"\$$profile_directory\""; require_fragment rankrat "--detach"; grep -Fq '"'"'"accounts"'"'"' /work/config/boundaries.json.example; grep -Fq "\$${RANKRAT_DATA_DIR:-.}/secrets:/run/secrets:ro" /work/docker-compose.yml'
-	$(DEV_RUN) sh -ec 'wait_for_log() { attempts=1; while ! test -s "$$1" && [ "$$attempts" -le "$(TOOLING_LOG_FLUSH_ATTEMPTS)" ]; do sleep "$(TOOLING_LOG_FLUSH_DELAY_SECONDS)"; attempts=$$((attempts + 1)); done; test -s "$$1"; }; scratch=$$(mktemp -d); mkdir -p "$$scratch/lighthouse-worker"; cp scripts/bump_lighthouse_minimum_release_age.sh "$$scratch"; cp lighthouse-worker/pnpm-workspace.yaml "$$scratch/lighthouse-worker"; cd "$$scratch"; LOG_FILE="$$scratch/bump-lighthouse.log" bash bump_lighthouse_minimum_release_age.sh; wait_for_log "$$scratch/bump-lighthouse.log" || { echo "Lighthouse dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^minimumReleaseAge: 10080$$" lighthouse-worker/pnpm-workspace.yaml)" -eq 1 || { echo "Lighthouse dependency age gate is not exact" >&2; exit 1; }; grep -Fq -- "- brace-expansion@5.0.9" lighthouse-worker/pnpm-workspace.yaml; grep -Fq "brace-expansion: 5.0.9" lighthouse-worker/pnpm-workspace.yaml'
+	$(DEV_RUN) sh -ec 'wait_for_log() { attempts=1; while ! test -s "$$1" && [ "$$attempts" -le "$(TOOLING_LOG_FLUSH_ATTEMPTS)" ]; do sleep "$(TOOLING_LOG_FLUSH_DELAY_SECONDS)"; attempts=$$((attempts + 1)); done; test -s "$$1"; }; scratch=$$(mktemp -d); mkdir -p "$$scratch/lighthouse-worker"; cp scripts/bump_lighthouse_minimum_release_age.sh "$$scratch"; cp lighthouse-worker/pnpm-workspace.yaml "$$scratch/lighthouse-worker"; cd "$$scratch"; LOG_FILE="$$scratch/bump-lighthouse.log" bash bump_lighthouse_minimum_release_age.sh; wait_for_log "$$scratch/bump-lighthouse.log" || { echo "Lighthouse dependency age-gate log was not created" >&2; exit 1; }; test "$$(grep -c "^minimumReleaseAge: 10080$$" lighthouse-worker/pnpm-workspace.yaml)" -eq 1 || { echo "Lighthouse dependency age gate is not exact" >&2; exit 1; }; grep -Fq -- "- brace-expansion@5.0.9" lighthouse-worker/pnpm-workspace.yaml; grep -Fq "brace-expansion: 5.0.9" lighthouse-worker/pnpm-workspace.yaml; grep -Fq -- "- nanoid@3.3.18" lighthouse-worker/pnpm-workspace.yaml; grep -Fq "nanoid: 3.3.18" lighthouse-worker/pnpm-workspace.yaml'
 
 test-live: dev-image ## Run every configured provider and shipped transport check
 	@$(MAKE) --no-print-directory test-live-google-search-console RANKRAT_DEV_IMAGE_SOURCE=local
@@ -402,11 +400,7 @@ test-lighthouse-image: build ## Run real Lighthouse audits through production RE
 test-coverage: lighthouse-test dev-image ## Run every test with Python coverage reporting
 	$(DEV_RUN) uv run --frozen --no-sync pytest -p no:cacheprovider --cov=rankrat --cov-report=term tests
 
-# create-badges.yml is a dumb reader: it renders whatever number is in
-# coverage-percent.txt and fails when the file is absent, so producing that
-# number is this Makefile's job. The report goes to a log instead of a pipe
-# because the default Make shell is /bin/sh, which has no pipefail -- a pipe
-# would swallow a failing test run and publish a badge for a red build.
+# Avoid publishing coverage after a failed test run.
 coverage-percent: ## Write the total coverage percentage to coverage-percent.txt for the badges job
 	@$(MAKE) --no-print-directory test-coverage > $(COVERAGE_LOG) 2>&1 \
 		|| { cat $(COVERAGE_LOG); rm -f $(COVERAGE_LOG); exit 1; }

@@ -5,6 +5,7 @@
   "description": "OpenClaw static MCP definition and Docker stdio launcher for Rankrat SEO audits, monitoring, Google Tag Manager, Microsoft Clarity, managed edge redirects, safe Bing content submission, internal links, CrUX, ownership, analytics, Bing backlink intelligence, Cloudflare performance, remediation, PageSpeed, and optional Lighthouse tools.",
   "type": "module",
   "openclaw": {
+    "extensions": ["./bin/cli.js"],
     "compat": {
       "pluginApi": ">=2026.3.24-beta.2"
     },

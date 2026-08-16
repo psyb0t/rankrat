@@ -314,7 +314,6 @@ def _write_atomically(path: Path, contents: str, mode: int) -> None:
     except OSError as error:
         raise IndexNowInitializationError("could not write local IndexNow setup") from error
     finally:
-        # Coverage cannot record the exception-exit arc here; the mkstemp failure test exercises it.
         if temporary_path is not None:  # pragma: no branch
             with contextlib.suppress(OSError):
                 temporary_path.unlink(missing_ok=True)

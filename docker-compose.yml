@@ -40,9 +40,7 @@ services:
     ports:
       - "127.0.0.1:${RANKRAT_HTTP_PORT:-8080}:8080"
     volumes:
-      # One profile shared with rankrat and every MCP client. Mount the
-      # directory, not only boundaries.json, so writable discovery/onboarding
-      # can atomically update inventory without depending on image ownership.
+      # Mount the directory for atomic onboarding updates.
       - type: bind
         source: ${RANKRAT_DATA_DIR:-.}/config
         target: /run/config
@@ -78,9 +76,7 @@ services:
     depends_on:
       lighthouse:
         condition: service_healthy
-    # Some Docker hosts block analyticsadmin.googleapis.com from user-defined
-    # bridges. The default bridge preserves the same container network namespace
-    # and outbound provider access without exposing an additional service port.
+    # Required for Analytics Admin API access on affected Docker hosts.
     network_mode: bridge
 
   lighthouse:

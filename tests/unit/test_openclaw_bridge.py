@@ -59,7 +59,7 @@ def test_openclaw_manifest_declares_a_static_stdio_server() -> None:
             "args": ["./bin/cli.js"],
         }
     }
-    assert "extensions" not in manifest
+    assert manifest["extensions"] == ["./bin/cli.js"]
     assert "Lighthouse" in manifest["description"]
 
 
@@ -111,12 +111,13 @@ process.exitCode = status;
     assert "RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3" in arguments
 
 
-def test_bridge_package_declares_clawhub_compatibility_without_runtime_dependencies() -> None:
+def test_bridge_package_declares_clawhub_extension_without_runtime_dependencies() -> None:
     package = json.loads((_PLUGIN_ROOT / "package.json").read_text(encoding="utf-8"))
     source = _BRIDGE.read_text(encoding="utf-8")
 
     assert _BRIDGE.stat().st_mode & 0o111 == 0o111
     assert package["openclaw"] == {
+        "extensions": ["./bin/cli.js"],
         "compat": {"pluginApi": _OPENCLAW_PLUGIN_API_COMPATIBILITY},
         "build": {"openclawVersion": _OPENCLAW_BUILD_VERSION},
     }

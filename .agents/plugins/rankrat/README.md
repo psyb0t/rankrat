@@ -13,9 +13,9 @@ covers credentials, boundaries, all three transports, feature workflows,
 security, and troubleshooting. This README covers only OpenClaw-specific
 behavior.
 
-rankrat speaks MCP itself, over both stdio and Streamable HTTP. This plugin has
-no OpenClaw runtime extension; its static MCP definition executes the bundled
-stdio launcher, which starts the published Rankrat image. Local
+rankrat speaks MCP itself, over both stdio and Streamable HTTP. The package
+declares its bundled stdio launcher as the OpenClaw extension, and the static
+MCP definition starts the published Rankrat image. Local
 Lighthouse audits use an optional second image and therefore require the shared
 Streamable HTTP deployment described below.
 

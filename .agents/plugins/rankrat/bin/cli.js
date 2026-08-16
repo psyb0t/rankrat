@@ -1,7 +1,5 @@
 #!/usr/bin/env node
-// This is an MCP stdio launcher, not an OpenClaw extension. Its stdout belongs
-// exclusively to the Rankrat container's MCP protocol; launcher failures use
-// stderr so they cannot corrupt the protocol stream.
+// MCP stdio owns stdout; launcher errors must use stderr.
 import { spawnSync } from "node:child_process";
 import { lstatSync, realpathSync } from "node:fs";
 import { isAbsolute, resolve } from "node:path";
@@ -157,7 +155,6 @@ function currentUserArgument() {
   return ["--user", `${process.getuid()}:${process.getgid()}`];
 }
 
-/** Build the direct, hardened Docker invocation for Rankrat's stdio transport. */
 export function buildDockerArgs(environment, commandArgs = []) {
   const dataDirectory = requiredDataDirectory(environment);
   const configDir = resolve(dataDirectory, STANDARD_CONFIG_DIR_NAME);
@@ -232,7 +229,6 @@ export function buildDockerArgs(environment, commandArgs = []) {
   return args;
 }
 
-/** Start Rankrat and return its exit status without handling an MCP message. */
 export function runStdio(
   environment = process.env,
   commandArgs = process.argv.slice(2),

@@ -92,9 +92,6 @@ async def test_read_only_runtime_refuses_a_rename_call_not_just_its_discovery(
         ):
             result = await client.call_tool(name, arguments)
             payload = json.loads(result.content[0].text)  # type: ignore[union-attr]
-            # The dispatch guard makes the branch fall through to the unknown-tool
-            # path, so a read-only server answers as though the tool does not exist
-            # -- and `must_not_run` proves the client was never reached.
             assert payload["code"] == "TOOL_NOT_FOUND", name
 
 

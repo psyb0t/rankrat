@@ -6,8 +6,7 @@ on:
 
 jobs:
   call-collaborators-only-workflow:
-    # reusable-github-workflows master reviewed 2026-08-05
-    uses: psyb0t/reusable-github-workflows/.github/workflows/collaborators-only-workflow.yml@9b67e6f6f0d5efd3c7061fbdb1c3e0cda003097e
+    uses: psyb0t/reusable-github-workflows/.github/workflows/collaborators-only-workflow.yml@master
     with:
       close_message: "No PRs. Best security policy ever. Open an issue and I'll fix it myself."
       lock: true

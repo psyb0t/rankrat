@@ -1,30 +1,6 @@
 #!/bin/bash
-# rankrat -- host wrapper around the published Rankrat images.
-#
-# Stdio and operator commands use hardened `docker run` invocations. HTTP uses a
-# persistent Docker Compose project rooted in one profile directory so Rankrat and its
-# Lighthouse companion share one restart policy and one operator-owned profile.
-#
-# The first non-option argument is the image's own mode -- stdio (default),
-# http, setup, auth-google, revoke-google, onboard-site. Non-HTTP arguments
-# are forwarded to the image untouched. This script owns host-side mounts,
-# profile bootstrap, ports, and hardening.
-#
-# Host-side settings, read here and never forwarded into the container:
-#
-#   RANKRAT_IMAGE                 image reference          psyb0t/rankrat:latest
-#   RANKRAT_LIGHTHOUSE_IMAGE      companion image          psyb0t/rankrat-lighthouse:latest
-#   RANKRAT_DATA_DIR              optional profile override $HOME/.config/rankrat
-#   RANKRAT_HTTP_PORT             published loopback port  8080
-#   RANKRAT_OAUTH_CALLBACK_PORT   published OAuth port     49152
-#
-# RANKRAT_READ_ONLY is the server's own setting, read here as well because it
-# decides which tools are visible and how the account file has to be mounted.
-#
-# Unlike the scripts under scripts/ this one does not tee to a log file. In stdio
-# mode the container's stdout is the MCP channel and this process's stdout is
-# that pipe; a tee would sit in the middle of the protocol stream. Diagnostics go
-# to stderr only.
+# Host wrapper for published Rankrat images.
+# HTTP uses Compose; stdio and operator commands use docker run.
 set -euo pipefail
 trap 'log ERROR "command failed exit=$?"' ERR
 
@@ -176,9 +152,7 @@ require_boolean() {
 	esac
 }
 
-# The checks the server depends on before it writes discovered inventory back.
-# A writable mount anyone else can reach would let a third party replace the
-# configured provider accounts between runs.
+# Writable boundaries must remain operator-owned.
 require_writable_boundary_is_safe() {
 	local boundary_file="$1" boundary_directory="$2" host_user_id
 	host_user_id="$(id -u)"
@@ -346,9 +320,7 @@ services:
     ports:
       - "127.0.0.1:${RANKRAT_HTTP_PORT:-8080}:8080"
     volumes:
-      # One profile shared with rankrat and every MCP client. Mount the
-      # directory, not only boundaries.json, so writable discovery/onboarding
-      # can atomically update inventory without depending on image ownership.
+      # Mount the directory for atomic onboarding updates.
       - type: bind
         source: ${RANKRAT_DATA_DIR:-.}/config
         target: /run/config
@@ -384,9 +356,7 @@ services:
     depends_on:
       lighthouse:
         condition: service_healthy
-    # Some Docker hosts block analyticsadmin.googleapis.com from user-defined
-    # bridges. The default bridge preserves the same container network namespace
-    # and outbound provider access without exposing an additional service port.
+    # Required for Analytics Admin API access on affected Docker hosts.
     network_mode: bridge
 
   lighthouse:
@@ -611,13 +581,7 @@ if [[ "$mode" == "setup" ]]; then
 	secret_mount="type=bind,src=$secrets_directory,dst=$CONTAINER_SECRET_ROOT"
 fi
 
-# The boundary file's DIRECTORY is what gets mounted, never the file on its own.
-# The image bakes /run/config as mode 750 owned by its own `rankrat` user, and a
-# single-file bind mount leaves that directory in place -- so a container running
-# as the host user cannot traverse into it, and one running as `rankrat` cannot
-# read an owner-only host file. Mounting the directory replaces both, and it is
-# also what writable onboarding needs, since onboarding replaces the file by
-# rename after creating provider resources.
+# Mount the config directory: onboarding atomically replaces the boundary file.
 runtime_boundary_file="$CONTAINER_CONFIG_DIRECTORY/$(basename "$boundary_file")"
 readonly_boundary_mount="type=bind,src=$boundary_directory,dst=$CONTAINER_CONFIG_DIRECTORY,readonly"
 writable_boundary_mount="type=bind,src=$boundary_directory,dst=$CONTAINER_CONFIG_DIRECTORY"
@@ -700,8 +664,6 @@ auth-google)
 		-e "RANKRAT_BOUNDARY_FILE=$runtime_boundary_file"
 		-e "RANKRAT_SECRET_ROOT=$CONTAINER_SECRET_ROOT"
 	)
-	# Both flags describe the port publishing above, so they belong here
-	# rather than at every call site.
 	set -- "$@" --callback-port "$oauth_callback_port" --docker-loopback-proxy
 	;;
 revoke-google)

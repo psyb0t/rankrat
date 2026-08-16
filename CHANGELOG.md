@@ -2,6 +2,19 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.14.2 — 2026-08-16
+
+Completes the repaired release path without changing Rankrat's REST, MCP, or
+provider contracts.
+
+- Declares the bundled OpenClaw stdio launcher as the package extension that
+  ClawHub requires, in both the package metadata and plugin manifest.
+- Moves the Lighthouse worker to patched Chrome for Testing `152.0.7977.42`.
+- Pins the Lighthouse worker's transitive `nanoid` dependency to `3.3.18`, the
+  advisory-fixed release.
+- Lets CI consume the current shared release workflows, including the corrected
+  ClawHub handling for deterministic package metadata errors.
+
 ## v0.14.1 — 2026-08-15
 
 Repairs release publication validation without changing Rankrat's HTTP, MCP, or

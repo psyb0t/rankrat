@@ -265,13 +265,8 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
     apply_openapi_operation_ids(api_router.routes)
     app.include_router(api_router)
     if settings.enable_openapi:
-        # The YAML source document -- not FastAPI's route introspection -- owns the
-        # published contract, so the generator has to be replaced outright. This is
-        # FastAPI's own documented override point (see its extending-openapi guide).
-        # Writing app.openapi_schema instead would not hold: FastAPI regenerates the
-        # schema whenever its private _openapi_routes_version stops matching the
-        # router, so pinning the document that way means depending on a private
-        # attribute that can change between releases.
+        # The YAML document is the published contract. Use FastAPI's documented
+        # override: its cached schema is regenerated after route changes.
         app.openapi = lambda: load_openapi_document_for_routes(app.routes)  # type: ignore[method-assign]
 
     @app.exception_handler(RequestValidationError)
@@ -351,9 +346,7 @@ async def _run_monitor_scheduler(
                 extra={"error_type": type(error).__name__},
             )
             await asyncio.sleep(interval_seconds)
-        # The scheduler is a long-lived supervisor boundary. An unexpected bug
-        # is logged and delayed here so one malformed state row cannot silently
-        # disable every future monitor run.
+        # Keep the supervisor alive after malformed state or unexpected errors.
         except Exception as error:
             logger.error(
                 "scheduled monitor run failed unexpectedly",

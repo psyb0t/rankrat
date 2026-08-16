@@ -44,8 +44,7 @@ _BEARER_PREFIX = "Bearer "
 _HTTP_POST = "POST"
 _HTTP_GET = "GET"
 _HTTP_PATCH = "PATCH"
-# The Admin API ignores any field absent from updateMask, and the mask is in
-# snake case while the body is camel case.
+# GA4 requires snake_case update masks for camelCase body fields.
 _GA4_DISPLAY_NAME_UPDATE_MASK = "display_name"
 _GA4_DATA_STREAM_PAGE_SIZE = 200
 _GA4_MAX_DATA_STREAM_PAGES = 10
@@ -181,9 +180,7 @@ class GoogleAnalyticsAdminClient:
     ) -> Ga4SiteProperty:
         """Create one GA4 property and its web stream at documented fixed endpoints."""
 
-        # The parent GA4 account comes from the caller, not the boundary file. The
-        # credential account is still pinned; which of that identity's own GA4
-        # accounts the new property lands under is the caller's choice.
+        # The authenticated Google identity is fixed; callers choose one of its GA4 accounts.
         account = self._boundary_policy.require_google_onboarding_account(
             str(request.account_id),
         )
@@ -263,8 +260,7 @@ class GoogleAnalyticsAdminClient:
     ) -> Ga4RenamedResource:
         """Rename one GA4 account the configured credential can administer."""
 
-        # Renaming reaches an account-wide resource rather than a listed one, so
-        # it rides the same explicit switch that permits account discovery.
+        # Account-wide renames require the same permission as account discovery.
         account = self._boundary_policy.require_google_account(str(request.account_id))
         _require_ga4_resource_id(analytics_account_id, "account")
         token = await self._token_for_account(account.credential)
@@ -399,8 +395,7 @@ class GoogleAnalyticsAdminClient:
             stream_id = response.name.removeprefix(expected_prefix)
             if _GA4_RESOURCE_ID_PATTERN.fullmatch(stream_id) is None:
                 raise ValueError("Google Analytics stream ID is invalid")
-            # webStreamData is optional on the shared model because app streams
-            # have none; a create response for a web stream must still carry it.
+            # App streams omit webStreamData; a created web stream must include it.
             web_data = response.webStreamData
             if web_data is None:
                 raise ValueError("Google Analytics web stream response has no web stream data")
@@ -428,8 +423,7 @@ class GoogleAnalyticsAdminClient:
             expected_prefix = f"{_GA4_PROPERTY_RESOURCE_PREFIX}{property_id}/dataStreams/"
             streams: list[Ga4DataStream] = []
             for stream in page.dataStreams:
-                # A stream naming another property would mean the response does
-                # not belong to the resource that was authorized.
+                # Reject streams returned for a different authorized property.
                 if not stream.name.startswith(expected_prefix):
                     raise ValueError("Google Analytics stream belongs to another property")
                 stream_id = stream.name.removeprefix(expected_prefix)

@@ -178,8 +178,6 @@ from rankrat.transports.seo_mcp import (
 from rankrat.transports.tool_contracts import ToolAnnotations, tool_catalog
 
 _OBJECT_SCHEMA = "object"
-# GA4 account, property and stream IDs are all bare numerics. The same literal is
-# still inlined on the older report arguments below; new arguments use the name.
 _GA4_RESOURCE_ID_PATTERN = r"^[0-9]+$"
 _GA4_DISPLAY_NAME_MAX_CHARS = 255
 _JSON_MIME_TYPE = "application/json"

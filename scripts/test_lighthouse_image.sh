@@ -192,15 +192,13 @@ cleanup() {
 		return
 	fi
 	if [[ "$rankrat_started" == true ]]; then
-		# This exact name is assigned only after this script starts Rankrat.
+		# Remove only resources this script created.
 		docker rm -f "$rankrat_container_name" >/dev/null 2>&1 || :
 	fi
 	if [[ "$worker_started" == true ]]; then
-		# This exact name is assigned only after this script starts the worker.
 		docker rm -f "$worker_container_name" >/dev/null 2>&1 || :
 	fi
 	if [[ "$runtime_volume_created" == true ]]; then
-		# This exact randomized volume is created only by this script.
 		docker volume rm "$runtime_volume_name" >/dev/null 2>&1 || :
 	fi
 	if [[ -n "$temporary_directory" ]]; then
