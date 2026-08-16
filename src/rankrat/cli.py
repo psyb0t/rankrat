@@ -97,7 +97,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--docker-loopback-proxy", action="store_true")
     parser.add_argument("--print-authorization-url", action="store_true")
     parser.add_argument("--interactive-setup", action="store_true")
-    parser.add_argument("--setup-google-oauth-client-file", type=Path)
     parser.add_argument("--google-account-id")
     parser.add_argument("--bing-account-id")
     parser.add_argument("--site-url")
@@ -286,7 +285,6 @@ def _run_setup_operator(arguments: argparse.Namespace, settings: Settings) -> in
             settings.boundary_file,
             settings.secret_root,
             settings.oauth_token_root,
-            google_oauth_client_file=arguments.setup_google_oauth_client_file,
         )
     policy = BoundaryPolicy.from_file(
         settings.boundary_file,

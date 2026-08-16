@@ -84,21 +84,6 @@ def test_parser_supports_local_site_onboarding_without_a_transport_surface() -> 
     assert arguments.site_url == "https://example.com/"
 
 
-def test_parser_supports_the_wrapper_mounted_google_oauth_client_file() -> None:
-    arguments = cli._parser().parse_args(
-        [
-            "setup",
-            "--interactive-setup",
-            "--setup-google-oauth-client-file",
-            "/run/google-oauth-client-import.json",
-        ]
-    )
-
-    assert arguments.mode == "setup"
-    assert arguments.interactive_setup is True
-    assert arguments.setup_google_oauth_client_file == Path("/run/google-oauth-client-import.json")
-
-
 def test_site_onboarding_requires_explicit_write_enablement(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

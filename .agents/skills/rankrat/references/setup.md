@@ -136,14 +136,15 @@ exception: they are absent unless writable mode enables them.
 - **Google Search Console / Google Analytics 4 / Google Tag Manager / Google
   Indexing** — create a Google project and Desktop OAuth client JSON using the
   exact [Google OAuth guide](https://github.com/psyb0t/rankrat/blob/main/docs/providers.md#google-oauth).
-  Start the wrapper with the downloaded host file:
+  Run setup and paste the client JSON's single line at the hidden prompt:
 
   ```sh
-  rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
+  rankrat setup
   ```
 
-  The CLI imports that file into `RANKRAT_SECRET_ROOT`, runs one authorization
-  flow, and stores the resulting token under `RANKRAT_OAUTH_TOKEN_ROOT`. It
+  The CLI validates the pasted JSON, writes it into `RANKRAT_SECRET_ROOT`, runs
+  one authorization flow, and stores the resulting token under
+  `RANKRAT_OAUTH_TOKEN_ROOT`. It
   requests Search Console management, Google Indexing, GA4 read/edit, and Tag
   Manager container edit, delete, version-edit, and publish scopes; provider-side
   ownership still controls what the account can do.

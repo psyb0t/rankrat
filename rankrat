@@ -20,7 +20,6 @@ readonly CONTAINER_OAUTH_TOKEN_ROOT="/run/oauth"
 readonly CONTAINER_STATE_DIRECTORY="/run/state"
 readonly CONTAINER_STATE_DATABASE="/run/state/rankrat.sqlite3"
 readonly CONTAINER_SECRET_ROOT="/run/secrets"
-readonly CONTAINER_GOOGLE_OAUTH_CLIENT_IMPORT="/run/google-oauth-client-import.json"
 readonly HOST_HTTP_BEARER_SECRET_RELATIVE_PATH="rankrat/http-bearer-token"
 readonly LOOPBACK_HOST="127.0.0.1"
 readonly MEMORY_LIMIT="512m"
@@ -54,8 +53,7 @@ modes:
   stdio           MCP over stdio (default)
   http [-d]       REST + Streamable HTTP MCP through Docker Compose
                   -d or --detach runs the restartable stack in the background
-  setup [--google-oauth-client-file FILE]
-                  guided credential setup, Google OAuth, and live checks
+  setup           guided credential setup, Google OAuth, and live checks
   auth-google     authorize the Google OAuth scopes
   revoke-google   revoke one Google OAuth account
   onboard-site    create and record resources for one new site
@@ -63,14 +61,9 @@ modes:
 options:
   --data-dir DIRECTORY  persistent Rankrat profile (defaults to ~/.config/rankrat)
 
-setup option:
-  --google-oauth-client-file FILE
-                  absolute path to the downloaded Google Desktop OAuth JSON
-
 host settings (environment):
   RANKRAT_IMAGE RANKRAT_LIGHTHOUSE_IMAGE RANKRAT_HTTP_PORT
   RANKRAT_OAUTH_CALLBACK_PORT RANKRAT_READ_ONLY
-  RANKRAT_GOOGLE_OAUTH_CLIENT_FILE (setup only; absolute host file path)
 
 `rankrat setup` creates a new profile safely before prompting for credentials.
 Use --data-dir only to keep a separate profile for another account or workspace.
@@ -515,34 +508,8 @@ if [[ "$mode" == "http" ]]; then
 	esac
 fi
 
-google_oauth_client_file="${RANKRAT_GOOGLE_OAUTH_CLIENT_FILE:-}"
 if [[ "$mode" == "setup" ]]; then
-	case "$#" in
-	0) ;;
-	2)
-		[[ "$1" == "--google-oauth-client-file" ]] ||
-			fail "setup accepts only --google-oauth-client-file FILE"
-		[[ -z "$google_oauth_client_file" ]] ||
-			fail "set the Google OAuth client file through either the option or environment, not both"
-		google_oauth_client_file="$2"
-		shift 2
-		;;
-	1)
-		case "$1" in
-		--google-oauth-client-file) fail "--google-oauth-client-file requires an absolute file path" ;;
-		--google-oauth-client-file=*)
-			[[ -z "$google_oauth_client_file" ]] ||
-				fail "set the Google OAuth client file through either the option or environment, not both"
-			google_oauth_client_file="${1#--google-oauth-client-file=}"
-			[[ -n "$google_oauth_client_file" ]] ||
-				fail "--google-oauth-client-file requires an absolute file path"
-			shift
-			;;
-		*) fail "setup accepts only --google-oauth-client-file FILE" ;;
-		esac
-		;;
-	*) fail "setup accepts only --google-oauth-client-file FILE" ;;
-	esac
+	[[ "$#" -eq 0 ]] || fail "setup accepts no additional arguments"
 fi
 
 image="${RANKRAT_IMAGE:-$DEFAULT_IMAGE}"
@@ -550,11 +517,6 @@ lighthouse_image="${RANKRAT_LIGHTHOUSE_IMAGE:-$DEFAULT_LIGHTHOUSE_IMAGE}"
 profile_directory="$(data_directory)"
 if [[ "$mode" == "setup" ]]; then
 	bootstrap_profile "$profile_directory"
-	if [[ -n "$google_oauth_client_file" ]]; then
-		[[ "$google_oauth_client_file" == /* ]] ||
-			fail "--google-oauth-client-file must be an absolute file path"
-		require_safe_mount_source_file "$google_oauth_client_file" "Google OAuth client file"
-	fi
 fi
 boundary_file="$profile_directory/$BOUNDARY_FILE_RELATIVE_PATH"
 secrets_directory="$profile_directory/$SECRETS_DIRECTORY_RELATIVE_PATH"
@@ -643,12 +605,6 @@ setup)
 		-e "RANKRAT_BOUNDARY_FILE=$runtime_boundary_file"
 		-e "RANKRAT_SECRET_ROOT=$CONTAINER_SECRET_ROOT"
 	)
-	if [[ -n "$google_oauth_client_file" ]]; then
-		mode_arguments+=(
-			--mount "type=bind,src=$google_oauth_client_file,dst=$CONTAINER_GOOGLE_OAUTH_CLIENT_IMPORT,readonly"
-		)
-		set -- "$@" --setup-google-oauth-client-file "$CONTAINER_GOOGLE_OAUTH_CLIENT_IMPORT"
-	fi
 	set -- "$@" --interactive-setup --callback-port "$oauth_callback_port" \
 		--docker-loopback-proxy --print-authorization-url
 	;;

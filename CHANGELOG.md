@@ -2,6 +2,22 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.16.0 — 2026-08-16
+
+Removes the `--google-oauth-client-file` setup flag. Google's Desktop OAuth
+client JSON is now pasted at the same hidden prompt as every other credential —
+one setup path for all providers, nothing to bind-mount.
+
+- `rankrat setup` no longer takes `--google-oauth-client-file`, and the wrapper
+  no longer reads `RANKRAT_GOOGLE_OAUTH_CLIENT_FILE` or bind-mounts a host file
+  into the setup container. Paste the client JSON's single line when setup asks;
+  it is validated before storage, so a bad paste is caught rather than saved.
+- Migration: drop the flag and the env var from any setup scripts. Open the
+  downloaded `client_secret_*.json` and paste its one line at the prompt — the
+  Desktop-app JSON Google hands you is already single-line, so paste it as-is.
+- No change to Rankrat's REST, MCP, provider contracts, or the OAuth flow
+  itself; only how the client JSON reaches setup.
+
 ## v0.15.0 — 2026-08-16
 
 Adds a one-command installer for the `rankrat` wrapper without changing

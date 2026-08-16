@@ -92,12 +92,8 @@ hides every value you paste. No copying token permissions out of a README:
 rankrat setup
 ```
 
-Configuring Google? Paste the one-line Desktop OAuth JSON when it asks, or hand
-it the downloaded file up front so you don't have to:
-
-```sh
-rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
-```
+Configuring Google? Paste the one-line Desktop OAuth client JSON at the hidden
+prompt when setup asks — same as every other credential.
 
 Setup validates account access — it does not submit URLs or create properties.
 Your profile lives in `~/.config/rankrat`; override it per launch with
@@ -120,9 +116,10 @@ Compose, attached).
 Over HTTP, MCP lives at `http://127.0.0.1:8080/mcp` and REST under `/v1/`; stdio
 needs no port and no bearer. HTTP treats your data directory as its Compose
 project — it drops a `docker-compose.yml` in there if one's missing and never
-touches yours if it isn't. Under the hood that's two long-lived services plus a
-one-shot volume init. The wrapper, plain `docker run`, raw Compose, HTTP auth,
-and client wiring all live in [Transports and deployment](docs/transports.md).
+touches yours if it isn't. Under the hood that's two
+long-lived services plus one one-shot volume initializer. The wrapper, plain
+`docker run`, raw Compose, HTTP auth, and client wiring all live in
+[Transports and deployment](docs/transports.md).
 
 Browser audits run in a separate `psyb0t/rankrat-lighthouse` image over a Unix
 socket, and it never sees a single provider credential. See [Lighthouse](docs/lighthouse.md).

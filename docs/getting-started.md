@@ -92,15 +92,10 @@ feature Rankrat ships; the feature mapping is in
 Now run setup:
 
 ```sh
-rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
+rankrat setup
 ```
 
-Drop `--google-oauth-client-file` when you're not configuring Google. From a
-checkout, pass the same host path through the environment:
-
-```sh
-RANKRAT_GOOGLE_OAUTH_CLIENT_FILE="$HOME/Downloads/client_secret_...json" make setup
-```
+From a source checkout it's `make setup`.
 
 Setup builds `$HOME/.config/rankrat` owner-only — a minimal valid boundary file,
 the HTTP bearer, and the credential/OAuth/state directories — before it asks you
@@ -114,9 +109,9 @@ rankrat --data-dir /absolute/path/to/rankrat-profile setup
 It creates missing paths without overwriting, rejects symlinks, normalizes
 sensitive permissions, then walks each provider you selected: prints the console
 URL and the account-wide permissions it needs, takes the credential through a
-hidden prompt, and writes it at mode `0600`. For Google it imports the Desktop
-OAuth client JSON you handed the wrapper — don't paste the multi-line contents —
-then runs one full-scope OAuth flow and saves the refresh record.
+hidden prompt, and writes it at mode `0600`. For Google you paste the Desktop
+OAuth client JSON at that prompt — it's a single line, paste it as-is — and
+setup then runs one full-scope OAuth flow and saves the refresh record.
 
 Rerun it as often as you like. A selected provider is added or refreshed in
 place; the ones you skip stay untouched, discovered inventory included. If the

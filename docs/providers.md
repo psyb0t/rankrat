@@ -87,23 +87,17 @@ and Tag Manager container the rat manages.
    **Create client**, choose **Desktop app**, name it `rankrat`, click
    **Create**, then **Download JSON** and keep the file. Not a Web client, not a
    service account — Desktop app.
-7. Hand setup the downloaded JSON's host path, then choose `google` when it asks
-   for providers:
+7. Run setup, choose `google` when it asks for providers, then open the
+   downloaded JSON and paste its single line at the hidden prompt:
 
    ```sh
-   rankrat setup --google-oauth-client-file "/absolute/path/to/client_secret_...json"
+   rankrat setup
    ```
 
-   From a checkout, same one-command flow:
-
-   ```sh
-   RANKRAT_GOOGLE_OAUTH_CLIENT_FILE="$HOME/Downloads/client_secret_...json" make setup
-   ```
-
-   Rankrat reads that host file through a temporary read-only mount, validates
-   it, and copies it into its owner-only secret directory. Don't move it by hand
-   and don't paste multi-line JSON into the terminal. Setup opens the one
-   browser consent flow itself.
+   From a checkout it's `make setup`. Rankrat validates the pasted client JSON
+   and copies it into its owner-only secret directory. The Desktop-app JSON
+   Google hands you is already one line — paste it as-is, don't reformat it.
+   Setup opens the one browser consent flow itself.
 
 The supported Google identity is the user who completes this consent flow. There
 is no service-account path — don't build one.
