@@ -2,6 +2,26 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.15.0 — 2026-08-16
+
+Adds a one-command installer for the `rankrat` wrapper without changing
+Rankrat's REST, MCP, or provider contracts.
+
+- Ships `install.sh`, which places the `rankrat` wrapper on your PATH — per-user
+  (no root) at `~/.local/bin/rankrat`, or system-wide (with sudo) at
+  `/usr/local/bin/rankrat`. The mode auto-detects from the invoking user, with
+  `--user` / `--system` to force it and `--uninstall` to remove the command; a
+  per-user install that finds `~/.local/bin` off PATH prints the exact bash/zsh
+  line to add it. The installer verifies the downloaded wrapper before placing
+  it and warns when Docker is missing.
+- A system-wide install shares only the command: Rankrat data stays in each
+  user's owner-only `~/.config/rankrat` profile (override per launch with
+  `rankrat --data-dir` or `RANKRAT_DATA_DIR`), which the wrapper refuses to
+  share — so the security model is unchanged.
+- Documents the installer as the primary "Install the wrapper" path in
+  [Getting started](docs/getting-started.md), keeping the manual
+  download-and-move method as a fallback.
+
 ## v0.14.2 — 2026-08-16
 
 Completes the repaired release path without changing Rankrat's REST, MCP, or

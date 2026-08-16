@@ -24,18 +24,37 @@ security scanners run in pinned containers.
 
 ## Install the wrapper
 
-Rankrat ships as `psyb0t/rankrat`. The wrapper is readable convenience around
-the supported `docker run` contract.
+Rankrat ships as `psyb0t/rankrat`. The `rankrat` wrapper is readable convenience
+around the supported `docker run` contract. Download the installer, read it, then
+run it — per-user (no root) or system-wide:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh -o rankrat-install.sh
+less rankrat-install.sh
+bash rankrat-install.sh                # per-user   -> ~/.local/bin/rankrat
+sudo bash rankrat-install.sh --system  # system-wide -> /usr/local/bin/rankrat
+```
+
+The mode auto-detects from who runs it; force it with `--user` / `--system`, and
+remove the command later with `--uninstall`. A per-user install that finds
+`~/.local/bin` off your PATH prints the exact bash/zsh line to add it.
+
+Prefer to place the wrapper by hand? Download it, read it, and move it yourself:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/rankrat -o rankrat
 less rankrat
 chmod +x rankrat
-sudo mv rankrat /usr/local/bin/rankrat
+mv rankrat ~/.local/bin/rankrat         # or: sudo mv rankrat /usr/local/bin/rankrat
 rankrat --help
 ```
 
-Without access to `/usr/local/bin`, keep it locally and use `./rankrat`.
+Without access to either bin directory, keep it in the checkout and use `./rankrat`.
+
+Either way, rankrat keeps its data in an owner-only profile at `~/.config/rankrat`
+(override per launch with `rankrat --data-dir DIR` or `RANKRAT_DATA_DIR`). A
+system-wide install shares only the command — every user still runs `rankrat
+setup` into their own private profile, which the wrapper refuses to share.
 
 ## Run guided setup
 
