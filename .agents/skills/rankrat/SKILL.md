@@ -115,7 +115,7 @@ the bearer token if anything else can reach it.
 Both MCP transports run from the published image. Read tools have a stable
 discovery surface even when their provider is not configured; ask
 `provider_readiness` before interpreting an empty or unavailable result. Only
-write-tool discovery changes only with `RANKRAT_READ_ONLY`.
+write-tool discovery changes, and only with `RANKRAT_READ_ONLY`.
 
 The public `rankrat` launcher keeps stdio as a hardened direct `docker run`
 child and uses Docker Compose for HTTP so Rankrat and Lighthouse share one

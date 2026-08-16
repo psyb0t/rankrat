@@ -191,8 +191,18 @@ APIs over HTTPS and are not sent anywhere else.
 ## Running it
 
 An agent runs the published image directly. A human creates the profile,
-credentials, and Google authorization with `rankrat setup` beforehand. The
-single public launcher is named `rankrat`; it is not duplicated into agent
+credentials, and Google authorization with `rankrat setup` beforehand — after
+installing the launcher. Download the installer, read it, then run it, per-user
+(no root) or system-wide:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh -o rankrat-install.sh
+less rankrat-install.sh
+bash rankrat-install.sh                # per-user   -> ~/.local/bin/rankrat
+sudo bash rankrat-install.sh --system  # system-wide -> /usr/local/bin/rankrat
+```
+
+The single public launcher is named `rankrat`; it is not duplicated into agent
 skills, so the shipped code cannot drift from what operators install:
 
 ```bash
