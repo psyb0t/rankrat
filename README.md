@@ -108,10 +108,22 @@ step is `make setup`.
 ```sh
 rankrat            # MCP over stdio (default)
 rankrat http -d    # REST + Streamable-HTTP MCP + Lighthouse, detached with restarts
+rankrat upgrade    # re-pin to the latest release, pull it, drop the previous image
 ```
 
 From a source checkout: `make run` (stdio) and `make run-http` (HTTP over
 Compose, attached).
+
+`rankrat setup` pins both `psyb0t/rankrat` and `psyb0t/rankrat-lighthouse` to the
+latest release tag — recorded, along with the HTTP port and read-only flag, in a
+`.env` at your profile root — rather than tracking the moving `:latest`. `rankrat
+upgrade` re-pins the images to the newest release, pulls both, restarts a running
+HTTP stack (reusing the recorded port and read-only flag), and removes the
+superseded images; it leaves the port and read-only lines untouched. Pass
+`--rolling` (or set `RANKRAT_ROLLING=1`) to use the moving `:latest` images for a
+single run without touching the recorded pin. `RANKRAT_IMAGE`,
+`RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, and `RANKRAT_READ_ONLY` still
+override the recorded values per run.
 
 Over HTTP, MCP lives at `http://127.0.0.1:8080/mcp` and REST under `/v1/`; stdio
 needs no port and no bearer. HTTP treats your data directory as its Compose

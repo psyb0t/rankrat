@@ -6,6 +6,12 @@ trap 'log ERROR "command failed exit=$?"' ERR
 
 readonly DEFAULT_IMAGE="psyb0t/rankrat:latest"
 readonly DEFAULT_LIGHTHOUSE_IMAGE="psyb0t/rankrat-lighthouse:latest"
+readonly IMAGE_REPO="psyb0t/rankrat"
+readonly LIGHTHOUSE_IMAGE_REPO="psyb0t/rankrat-lighthouse"
+readonly ROLLING_IMAGE="psyb0t/rankrat:latest"
+readonly ROLLING_LIGHTHOUSE_IMAGE="psyb0t/rankrat-lighthouse:latest"
+readonly GITHUB_API_LATEST="https://api.github.com/repos/psyb0t/rankrat/releases/latest"
+readonly ENV_FILE_RELATIVE_PATH=".env"
 readonly DEFAULT_HTTP_PORT=8080
 readonly DEFAULT_OAUTH_CALLBACK_PORT=49152
 readonly DEFAULT_DATA_DIRECTORY_SUFFIX=".config/rankrat"
@@ -57,15 +63,18 @@ modes:
   auth-google     authorize the Google OAuth scopes
   revoke-google   revoke one Google OAuth account
   onboard-site    create and record resources for one new site
+  upgrade         re-pin to the latest release, pull it, and drop the previous image
 
 options:
   --data-dir DIRECTORY  persistent Rankrat profile (defaults to ~/.config/rankrat)
+  --rolling             use the moving :latest images for this run without changing the pin
 
 host settings (environment):
   RANKRAT_IMAGE RANKRAT_LIGHTHOUSE_IMAGE RANKRAT_HTTP_PORT
-  RANKRAT_OAUTH_CALLBACK_PORT RANKRAT_READ_ONLY
+  RANKRAT_OAUTH_CALLBACK_PORT RANKRAT_READ_ONLY RANKRAT_ROLLING
 
-`rankrat setup` creates a new profile safely before prompting for credentials.
+`rankrat setup` creates a new profile safely before prompting for credentials and
+pins both images to the latest release; `rankrat upgrade` re-pins them later.
 Use --data-dir only to keep a separate profile for another account or workspace.
 The README documents direct stdio Docker and Compose HTTP invocations.
 EOF
@@ -458,7 +467,225 @@ run_http_compose() {
 	exec docker "${compose_arguments[@]}"
 }
 
+resolve_latest_tag() {
+	local tag
+	tag="$(curl -fsSL "$GITHUB_API_LATEST" |
+		sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
+	[[ -n "$tag" ]] || fail "could not resolve the latest Rankrat release tag"
+	printf '%s\n' "$tag"
+}
+
+# env_file_value reads one KEY=VALUE line out of the owner-only profile .env.
+# The file is never sourced; each value is extracted with sed to avoid shell
+# injection on a hardened tool.
+env_file_value() {
+	local env_file="$1" key="$2"
+	[[ -e "$env_file" || -L "$env_file" ]] || return 0
+	require_real_file "$env_file" "Rankrat profile .env file"
+	sed -n "s/^${key}=//p" "$env_file" | head -n1
+}
+
+# write_default_env writes nothing; it exists so create_owner_only_file_if_missing
+# can create an empty owner-only .env before env_set_value edits individual keys.
+write_default_env() {
+	:
+}
+
+# env_set_value rewrites a single KEY=VALUE line in the owner-only profile .env,
+# appending it when absent and leaving every other line untouched. It mirrors
+# pr0xteus's env_set so an upgrade re-pins the images without disturbing the
+# recorded HTTP port or read-only flag.
+env_set_value() {
+	local env_file="$1" key="$2" value="$3"
+	create_owner_only_file_if_missing "$env_file" "Rankrat profile .env file" write_default_env
+	if grep -q "^${key}=" "$env_file"; then
+		sed -i "s|^${key}=.*|${key}=${value}|" "$env_file"
+	else
+		printf '%s\n' "${key}=${value}" >>"$env_file"
+	fi
+	chmod 600 -- "$env_file" || fail "could not restrict Rankrat profile .env file permissions"
+}
+
+# write_env_file atomically writes the whole owner-only profile .env for the
+# first setup. It replaces any existing file, so it uses an atomic rename rather
+# than the create-only hardlink used for one-shot profile files.
+write_env_file() {
+	local env_file="$1" image="$2" lighthouse_image="$3" http_port="$4" read_only="$5"
+	local parent temporary_file
+	parent="$(dirname -- "$env_file")"
+	require_real_directory "$parent" "Rankrat profile directory"
+	umask 077
+	temporary_file="$(mktemp "$parent/.rankrat-env.XXXXXX")"
+	if ! printf '%s\n' \
+		"RANKRAT_IMAGE=$image" \
+		"RANKRAT_LIGHTHOUSE_IMAGE=$lighthouse_image" \
+		"RANKRAT_HTTP_PORT=$http_port" \
+		"RANKRAT_READ_ONLY=$read_only" \
+		>"$temporary_file"; then
+		rm -f -- "$temporary_file"
+		fail "could not write Rankrat profile .env file"
+	fi
+	chmod 600 -- "$temporary_file"
+	if ! mv -f -- "$temporary_file" "$env_file"; then
+		rm -f -- "$temporary_file"
+		fail "could not install Rankrat profile .env file"
+	fi
+	require_real_file "$env_file" "Rankrat profile .env file"
+}
+
+# resolve_image picks the image for one repository in precedence order:
+# explicit environment override, then the rolling :latest tag, then the recorded
+# pin, then the :latest default for a profile that was never pinned.
+resolve_image() {
+	local env_file="$1" key="$2" env_override="$3" rolling="$4"
+	local rolling_image="$5" default_image="$6" pinned
+	if [[ -n "$env_override" ]]; then
+		printf '%s\n' "$env_override"
+		return
+	fi
+	if [[ "$rolling" == "true" ]]; then
+		printf '%s\n' "$rolling_image"
+		return
+	fi
+	pinned="$(env_file_value "$env_file" "$key")"
+	if [[ -n "$pinned" ]]; then
+		printf '%s\n' "$pinned"
+		return
+	fi
+	printf '%s\n' "$default_image"
+}
+
+# resolve_setting picks a plain .env setting in precedence order: explicit
+# environment override, then the value recorded in the profile .env, then the
+# built-in default. Rolling does not affect these settings.
+resolve_setting() {
+	local env_override="$1" env_file="$2" key="$3" default_value="$4" recorded
+	if [[ -n "$env_override" ]]; then
+		printf '%s\n' "$env_override"
+		return
+	fi
+	recorded="$(env_file_value "$env_file" "$key")"
+	if [[ -n "$recorded" ]]; then
+		printf '%s\n' "$recorded"
+		return
+	fi
+	printf '%s\n' "$default_value"
+}
+
+# pin_on_setup records the latest release plus the resolved HTTP port and
+# read-only flag on first setup. It never moves an existing pin, defers to an
+# explicit image override, and stays out of the way when rolling is requested.
+pin_on_setup() {
+	local env_file="$1" rolling="$2" http_port="$3" read_only="$4"
+	local tag new_image new_lighthouse
+	[[ "$rolling" != "true" ]] || return 0
+	[[ -z "${RANKRAT_IMAGE:-}" && -z "${RANKRAT_LIGHTHOUSE_IMAGE:-}" ]] || return 0
+	[[ -z "$(env_file_value "$env_file" RANKRAT_IMAGE)" ]] || return 0
+	tag="$(resolve_latest_tag)"
+	new_image="$IMAGE_REPO:$tag"
+	new_lighthouse="$LIGHTHOUSE_IMAGE_REPO:$tag"
+	log INFO "pinning Rankrat to release $tag"
+	docker pull "$new_image"
+	docker pull "$new_lighthouse"
+	write_env_file "$env_file" "$new_image" "$new_lighthouse" "$http_port" "$read_only"
+	log INFO "pinned images image=$new_image lighthouse=$new_lighthouse http_port=$http_port read_only=$read_only"
+}
+
+# restart_running_http_stack recreates the HTTP Compose stack with new images,
+# but only when it is already running. A profile that only ran stdio has no
+# Compose file, and a stopped stack is left stopped. It reuses the HTTP port and
+# read-only flag recorded in the profile .env so an upgrade restart keeps them.
+restart_running_http_stack() {
+	local profile_directory="$1" compose_file="$2" image="$3" lighthouse_image="$4" env_file="$5"
+	local host_user_id host_group_id running http_port read_only
+	local -a base_arguments
+	[[ -f "$compose_file" && ! -L "$compose_file" ]] || return 0
+	require_real_file "$compose_file" "Rankrat Docker Compose file"
+	require_compose_file_is_safe "$compose_file"
+	http_port="$(resolve_setting "${RANKRAT_HTTP_PORT:-}" "$env_file" RANKRAT_HTTP_PORT "$DEFAULT_HTTP_PORT")"
+	read_only="$(resolve_setting "${RANKRAT_READ_ONLY:-}" "$env_file" RANKRAT_READ_ONLY "false")"
+	host_user_id="$(id -u)"
+	host_group_id="$(id -g)"
+	export RANKRAT_DATA_DIR="$profile_directory"
+	export RANKRAT_IMAGE="$image"
+	export RANKRAT_LIGHTHOUSE_IMAGE="$lighthouse_image"
+	export RANKRAT_HTTP_PORT="$http_port"
+	export RANKRAT_READ_ONLY="$read_only"
+	export RANKRAT_UID="$host_user_id"
+	export RANKRAT_GID="$host_group_id"
+	base_arguments=(
+		compose
+		--project-directory "$profile_directory"
+		--file "$compose_file"
+	)
+	running="$(docker "${base_arguments[@]}" ps --quiet 2>/dev/null || true)"
+	if [[ -z "$running" ]]; then
+		log INFO "Rankrat HTTP stack is not running; leaving it stopped"
+		return 0
+	fi
+	log INFO "restarting the running Rankrat HTTP stack for the new images"
+	docker "${base_arguments[@]}" up --detach --remove-orphans
+}
+
+# remove_old_image reclaims disk after an upgrade. A still-in-use image is a
+# warning, never a failure.
+remove_old_image() {
+	local old_image="$1" new_image="$2"
+	[[ -n "$old_image" && "$old_image" != "$new_image" ]] || return 0
+	if docker image rm "$old_image" >/dev/null 2>&1; then
+		log INFO "removed the previous image $old_image"
+	else
+		log WARN "kept $old_image (still in use); prune it later"
+	fi
+}
+
+# run_upgrade re-pins both images to the latest release, pulls them, restarts a
+# running HTTP stack, and drops the superseded images. With rolling requested it
+# only pulls the moving :latest images and leaves the recorded pin alone.
+run_upgrade() {
+	local profile_directory="$1" env_file="$2" rolling="$3"
+	local compose_file="$profile_directory/$COMPOSE_FILE_RELATIVE_PATH"
+	local old_image old_lighthouse new_tag new_image new_lighthouse
+
+	[[ -d "$profile_directory/config" ]] ||
+		fail "no Rankrat profile at $profile_directory; run 'rankrat setup' first"
+	require_real_directory "$profile_directory/config" "Rankrat config directory"
+
+	if [[ "$rolling" == "true" ]]; then
+		log INFO "pulling rolling images; recorded pin unchanged"
+		docker pull "$ROLLING_IMAGE"
+		docker pull "$ROLLING_LIGHTHOUSE_IMAGE"
+		return 0
+	fi
+
+	old_image="$(env_file_value "$env_file" RANKRAT_IMAGE)"
+	old_lighthouse="$(env_file_value "$env_file" RANKRAT_LIGHTHOUSE_IMAGE)"
+	new_tag="$(resolve_latest_tag)"
+	new_image="$IMAGE_REPO:$new_tag"
+	new_lighthouse="$LIGHTHOUSE_IMAGE_REPO:$new_tag"
+
+	if [[ "$old_image" == "$new_image" && "$old_lighthouse" == "$new_lighthouse" ]]; then
+		log INFO "already on the latest release $new_tag; re-pulling"
+	fi
+
+	log INFO "pinning Rankrat to release $new_tag"
+	docker pull "$new_image"
+	docker pull "$new_lighthouse"
+	env_set_value "$env_file" RANKRAT_IMAGE "$new_image"
+	env_set_value "$env_file" RANKRAT_LIGHTHOUSE_IMAGE "$new_lighthouse"
+	log INFO "pinned images image=$new_image lighthouse=$new_lighthouse"
+
+	restart_running_http_stack "$profile_directory" "$compose_file" "$new_image" "$new_lighthouse" "$env_file"
+
+	remove_old_image "$old_image" "$new_image"
+	remove_old_image "$old_lighthouse" "$new_lighthouse"
+}
+
 profile_directory_override=""
+rolling="false"
+if [[ "${RANKRAT_ROLLING:-}" == "1" ]]; then
+	rolling="true"
+fi
 while [[ "$#" -gt 0 ]]; do
 	case "$1" in
 	--data-dir)
@@ -469,6 +696,10 @@ while [[ "$#" -gt 0 ]]; do
 	--data-dir=*)
 		profile_directory_override="${1#--data-dir=}"
 		[[ -n "$profile_directory_override" ]] || fail "--data-dir requires an absolute directory"
+		shift
+		;;
+	--rolling)
+		rolling="true"
 		shift
 		;;
 	*) break ;;
@@ -486,7 +717,7 @@ case "$mode" in
 	usage
 	exit 0
 	;;
-stdio | http | setup | auth-google | revoke-google | onboard-site) ;;
+stdio | http | setup | auth-google | revoke-google | onboard-site | upgrade) ;;
 *)
 	usage
 	fail "unknown mode '$mode'"
@@ -512,22 +743,40 @@ if [[ "$mode" == "setup" ]]; then
 	[[ "$#" -eq 0 ]] || fail "setup accepts no additional arguments"
 fi
 
-image="${RANKRAT_IMAGE:-$DEFAULT_IMAGE}"
-lighthouse_image="${RANKRAT_LIGHTHOUSE_IMAGE:-$DEFAULT_LIGHTHOUSE_IMAGE}"
+if [[ "$mode" == "upgrade" ]]; then
+	[[ "$#" -eq 0 ]] || fail "upgrade accepts no additional arguments"
+fi
+
 profile_directory="$(data_directory)"
+env_file="$profile_directory/$ENV_FILE_RELATIVE_PATH"
+
+# Resolve the HTTP port and read-only flag up front so setup can persist them
+# and an upgrade restart can reuse them: explicit environment override, then the
+# value recorded in the profile .env, then the built-in default.
+http_port="$(resolve_setting "${RANKRAT_HTTP_PORT:-}" "$env_file" RANKRAT_HTTP_PORT "$DEFAULT_HTTP_PORT")"
+read_only="$(resolve_setting "${RANKRAT_READ_ONLY:-}" "$env_file" RANKRAT_READ_ONLY "false")"
+require_boolean RANKRAT_READ_ONLY "$read_only"
+
 if [[ "$mode" == "setup" ]]; then
 	bootstrap_profile "$profile_directory"
+	pin_on_setup "$env_file" "$rolling" "$http_port" "$read_only"
 fi
+
+if [[ "$mode" == "upgrade" ]]; then
+	run_upgrade "$profile_directory" "$env_file" "$rolling"
+	exit 0
+fi
+
+image="$(resolve_image "$env_file" RANKRAT_IMAGE \
+	"${RANKRAT_IMAGE:-}" "$rolling" "$ROLLING_IMAGE" "$DEFAULT_IMAGE")"
+lighthouse_image="$(resolve_image "$env_file" RANKRAT_LIGHTHOUSE_IMAGE \
+	"${RANKRAT_LIGHTHOUSE_IMAGE:-}" "$rolling" "$ROLLING_LIGHTHOUSE_IMAGE" "$DEFAULT_LIGHTHOUSE_IMAGE")"
 boundary_file="$profile_directory/$BOUNDARY_FILE_RELATIVE_PATH"
 secrets_directory="$profile_directory/$SECRETS_DIRECTORY_RELATIVE_PATH"
 oauth_directory="$profile_directory/$OAUTH_DIRECTORY_RELATIVE_PATH"
 state_directory="$profile_directory/$STATE_DIRECTORY_RELATIVE_PATH"
 compose_file="$profile_directory/$COMPOSE_FILE_RELATIVE_PATH"
-http_port="${RANKRAT_HTTP_PORT:-$DEFAULT_HTTP_PORT}"
 oauth_callback_port="${RANKRAT_OAUTH_CALLBACK_PORT:-$DEFAULT_OAUTH_CALLBACK_PORT}"
-read_only="${RANKRAT_READ_ONLY:-false}"
-
-require_boolean RANKRAT_READ_ONLY "$read_only"
 
 require_real_directory "$profile_directory/config" "Rankrat config directory"
 require_real_directory "$secrets_directory" "Rankrat secrets directory"

@@ -2,6 +2,24 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.17.0 — 2026-08-17
+
+Adds release-version pinning and an `upgrade` command to the host wrapper.
+`rankrat setup` now pins both images to the latest release instead of tracking
+the moving `:latest`, and records the pin — along with the HTTP port and
+read-only flag — in a `.env` at the profile root.
+
+- `rankrat upgrade` re-pins both `psyb0t/rankrat` and `psyb0t/rankrat-lighthouse`
+  to the newest release, pulls them, restarts a running HTTP stack (reusing the
+  recorded port and read-only flag), and drops the superseded images.
+- `--rolling` (or `RANKRAT_ROLLING=1`) runs the moving `:latest` images for a
+  single invocation without changing the recorded pin.
+- `RANKRAT_IMAGE`, `RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, and
+  `RANKRAT_READ_ONLY` still override the recorded values per run.
+- No change to Rankrat's REST, MCP, provider contracts, or the container images
+  themselves — this is host-wrapper behavior. Existing profiles keep working and
+  fall back to `:latest` until the next `setup` or `upgrade`.
+
 ## v0.16.0 — 2026-08-16
 
 Removes the `--google-oauth-client-file` setup flag. Google's Desktop OAuth
