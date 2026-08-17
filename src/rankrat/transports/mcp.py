@@ -71,6 +71,7 @@ from rankrat.errors import RankratError
 from rankrat.models.boundaries import ACCOUNT_ID_PATTERN, Provider
 from rankrat.models.common import JsonValue, to_json_value
 from rankrat.providers.base import ProviderOperationError
+from rankrat.providers.connectivity import provider_error_detail
 from rankrat.services.bing import (
     BingBacklinkIntelligenceRequest,
     BingBrandAnalysisRequest,
@@ -1115,8 +1116,11 @@ def _tool_input_schema(name: str) -> dict[str, object]:
 def _tool_error(
     code: str,
     message: str = "MCP tool input was rejected",
+    detail: str | None = None,
 ) -> types.CallToolResult:
-    payload: JsonValue = {"code": code, "message": message}
+    payload: dict[str, JsonValue] = {"code": code, "message": message}
+    if detail is not None:
+        payload["detail"] = detail
     return types.CallToolResult(
         content=[
             types.TextContent(
@@ -2231,6 +2235,7 @@ def build_mcp_server(services: ApplicationServices) -> Server[object, object]:
             return _tool_error(
                 error.code.value,
                 PROVIDER_OPERATION_FAILED_MESSAGE,
+                provider_error_detail(error),
             )
         except RankratError:
             return _tool_error(

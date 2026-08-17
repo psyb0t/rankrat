@@ -38,6 +38,7 @@ from rankrat.errors import (
 from rankrat.logging import reset_log_scope, with_log_scope
 from rankrat.models.common import to_json_value
 from rankrat.providers.base import ProviderFailureCode, ProviderOperationError
+from rankrat.providers.connectivity import provider_error_detail
 from rankrat.services.diagnostics import DiagnosticsRequest
 from rankrat.transports.auth import bearer_is_valid, load_bearer_secret
 from rankrat.transports.mcp import build_mcp_server
@@ -287,13 +288,14 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
     @app.exception_handler(ProviderOperationError)
     async def provider_error(_: Request, error: ProviderOperationError) -> JSONResponse:
         status_code = 429 if error.code is ProviderFailureCode.RATE_LIMITED else 502
-        return JSONResponse(
-            status_code=status_code,
-            content={
-                "code": error.code.value,
-                "message": PROVIDER_OPERATION_FAILED_MESSAGE,
-            },
-        )
+        content: dict[str, object] = {
+            "code": error.code.value,
+            "message": PROVIDER_OPERATION_FAILED_MESSAGE,
+        }
+        detail = provider_error_detail(error)
+        if detail is not None:
+            content["detail"] = detail
+        return JSONResponse(status_code=status_code, content=content)
 
     @app.get(HEALTH_PATH)
     def health() -> dict[str, object]:

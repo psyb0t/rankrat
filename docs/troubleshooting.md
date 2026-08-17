@@ -25,6 +25,7 @@ each configured provider account — no separate live-test selector file needed.
 - [Google says a sitemap could not be read](#google-says-a-sitemap-could-not-be-read)
 - [Bing returns no data or cannot access a site](#bing-returns-no-data-or-cannot-access-a-site)
 - [Ownership verify reports a record it just created as not propagated](#ownership-verify-reports-a-record-it-just-created-as-not-propagated)
+- [A provider tool is UNAVAILABLE with a DNS-sinkhole detail](#a-provider-tool-is-unavailable-with-a-dns-sinkhole-detail)
 - [Cloudflare readiness or writes fail](#cloudflare-readiness-or-writes-fail)
 - [IndexNow verification fails](#indexnow-verification-fails)
 - [HTTP returns 401](#http-returns-401)
@@ -220,6 +221,27 @@ Once it resolves on public resolvers and the negative cache has expired, a
 repeated `site_ownership_verify` sees it propagated and redeems the proof. Poll
 `site_ownership_check` until `complete` is true, and leave the record in place —
 providers recheck it.
+
+## A provider tool is UNAVAILABLE with a DNS-sinkhole detail
+
+When a provider tool returns `UNAVAILABLE` and the error carries a `detail` that
+names a host resolving to `0.0.0.0` or `127.0.0.1`, a DNS-level content blocker
+on the host or its network — AdGuard, Pi-hole, or similar — is filtering that
+provider's domain, so the connection is refused before it leaves the machine.
+This is common for the analytics domains (`analyticsadmin.googleapis.com`,
+`analyticsdata.googleapis.com`) that such blocklists classify as tracking, which
+takes out the GA4 admin and reporting tools while Search Console keeps working.
+
+Allowlist the named host in the blocker, or disable the blocker, then retry.
+Confirm from the same host:
+
+```sh
+dig +short analyticsadmin.googleapis.com
+```
+
+A `0.0.0.0` answer (or no answer) is the block; a routable address is not. This
+is a network condition, not a credential or scope problem — the OAuth grant and
+API enablement are unaffected.
 
 ## Cloudflare readiness or writes fail
 

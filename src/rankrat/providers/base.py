@@ -37,9 +37,15 @@ class ProviderFailureCode(StrEnum):
 class ProviderOperationError(Exception):
     """A typed, redaction-safe provider error without an upstream payload."""
 
-    def __init__(self, code: ProviderFailureCode, message: str) -> None:
+    def __init__(
+        self,
+        code: ProviderFailureCode,
+        message: str,
+        detail: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.detail = detail
 
 
 async def read_limited_response(

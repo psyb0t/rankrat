@@ -23,6 +23,7 @@ from rankrat.providers.bing import BingWebmasterClient
 from rankrat.providers.clarity import ClarityClient
 from rankrat.providers.cloudflare import CloudflareDnsClient
 from rankrat.providers.cloudflare_performance import CloudflarePerformanceClient
+from rankrat.providers.connectivity import create_diagnostic_transport
 from rankrat.providers.crux import CruxHistoryClient
 from rankrat.providers.dns import PublicDnsClient
 from rankrat.providers.google_analytics import (
@@ -124,25 +125,31 @@ def build_services(settings: Settings) -> ApplicationServices:
     google_client = GoogleSearchConsoleClient(
         policy,
         GoogleConfiguredTokenProvider(policy),
+        transport_factory=create_diagnostic_transport,
     )
     google_analytics_client = GoogleAnalyticsDataClient(
         policy,
         GoogleConfiguredTokenProvider(policy, (GOOGLE_ANALYTICS_READ_SCOPE,)),
+        transport_factory=create_diagnostic_transport,
     )
     google_indexing_read_client = GoogleSearchConsoleClient(
         policy,
         GoogleConfiguredTokenProvider(policy, (GOOGLE_INDEXING_SCOPE,)),
+        transport_factory=create_diagnostic_transport,
     )
     google_indexing_metadata = GoogleIndexingMetadataService(
         policy,
         GoogleIndexingClient(google_indexing_read_client),
     )
-    bing_client = BingWebmasterClient(policy)
-    cloudflare_client = CloudflareDnsClient(policy)
-    clarity_client = ClarityClient(policy)
-    pagespeed_client = PageSpeedClient(policy)
-    crux_client = CruxHistoryClient(policy)
-    cloudflare_performance_client = CloudflarePerformanceClient(policy)
+    bing_client = BingWebmasterClient(policy, transport_factory=create_diagnostic_transport)
+    cloudflare_client = CloudflareDnsClient(policy, transport_factory=create_diagnostic_transport)
+    clarity_client = ClarityClient(policy, transport_factory=create_diagnostic_transport)
+    pagespeed_client = PageSpeedClient(policy, transport_factory=create_diagnostic_transport)
+    crux_client = CruxHistoryClient(policy, transport_factory=create_diagnostic_transport)
+    cloudflare_performance_client = CloudflarePerformanceClient(
+        policy,
+        transport_factory=create_diagnostic_transport,
+    )
     google_tag_manager = GoogleTagManagerService(
         GoogleTagManagerClient(
             policy,
@@ -155,6 +162,7 @@ def build_services(settings: Settings) -> ApplicationServices:
                     GOOGLE_TAG_MANAGER_PUBLISH_SCOPE,
                 ),
             ),
+            transport_factory=create_diagnostic_transport,
         )
     )
     indexnow = None
@@ -173,6 +181,7 @@ def build_services(settings: Settings) -> ApplicationServices:
             GoogleSiteVerificationClient(
                 policy,
                 GoogleConfiguredTokenProvider(policy, (GOOGLE_SITE_VERIFICATION_SCOPE,)),
+                transport_factory=create_diagnostic_transport,
             ),
             bing_client,
             {cloudflare_client.provider: cloudflare_client},
@@ -190,6 +199,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         indexing_client = GoogleSearchConsoleClient(
             policy,
             GoogleConfiguredTokenProvider(policy, (GOOGLE_INDEXING_SCOPE,)),
+            transport_factory=create_diagnostic_transport,
         )
         google_indexing = GoogleIndexingService(
             policy,
@@ -199,6 +209,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         site_client = GoogleSearchConsoleClient(
             policy,
             GoogleConfiguredTokenProvider(policy, (SEARCH_CONSOLE_WRITE_SCOPE,)),
+            transport_factory=create_diagnostic_transport,
         )
         google_sites = GoogleSiteService(
             policy,
@@ -207,6 +218,7 @@ def build_services(settings: Settings) -> ApplicationServices:
         sitemap_client = GoogleSearchConsoleClient(
             policy,
             GoogleConfiguredTokenProvider(policy, (SEARCH_CONSOLE_WRITE_SCOPE,)),
+            transport_factory=create_diagnostic_transport,
         )
         google_sitemaps = GoogleSitemapService(
             policy,
@@ -230,11 +242,13 @@ def build_services(settings: Settings) -> ApplicationServices:
                 GoogleAnalyticsAdminClient(
                     policy,
                     GoogleConfiguredTokenProvider(policy, (GOOGLE_ANALYTICS_EDIT_SCOPE,)),
+                    transport_factory=create_diagnostic_transport,
                 ),
                 google_analytics_client,
                 GoogleSearchConsoleClient(
                     policy,
                     GoogleConfiguredTokenProvider(policy, (SEARCH_CONSOLE_WRITE_SCOPE,)),
+                    transport_factory=create_diagnostic_transport,
                 ),
                 bing_client,
             ),
