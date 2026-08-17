@@ -2,7 +2,7 @@
 
 Notable changes to Rankrat, newest first.
 
-## v0.17.0 — 2026-08-17
+## v0.17.1 — 2026-08-17
 
 Adds release-version pinning and an `upgrade` command to the host wrapper.
 `rankrat setup` now pins both images to the latest release instead of tracking

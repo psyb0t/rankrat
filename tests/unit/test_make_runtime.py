@@ -76,7 +76,10 @@ def test_version_target_treats_the_release_version_as_data() -> None:
 def test_wrapper_mounts_config_writable_exactly_when_writes_are_enabled() -> None:
     source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
 
-    assert 'read_only="${RANKRAT_READ_ONLY:-false}"' in source
+    assert (
+        'read_only="$(resolve_setting "${RANKRAT_READ_ONLY:-}" '
+        '"$env_file" RANKRAT_READ_ONLY "false")"'
+    ) in source
     assert _READ_ONLY_MOUNT_ASSIGNMENT in source
     assert _WRITABLE_MOUNT_ASSIGNMENT in source
     assert 'serve_boundary_mount="$readonly_boundary_mount"' in source
@@ -692,6 +695,18 @@ fi
     path.chmod(0o700)
 
 
+def _create_fake_curl(path: Path) -> None:
+    # The wrapper curls the GitHub latest-release API in resolve_latest_tag
+    # (setup pins to it). Stub it with a canned tag_name so setup runs offline.
+    path.write_text(
+        """#!/bin/sh
+printf '%s\\n' '{"tag_name": "v1.2.3"}'
+""",
+        encoding="utf-8",
+    )
+    path.chmod(0o700)
+
+
 @contextmanager
 def _fake_bin_directory() -> Iterator[Path]:
     scratch_root = Path(".testing/runtime-fixtures").resolve()
@@ -699,6 +714,7 @@ def _fake_bin_directory() -> Iterator[Path]:
     directory = Path(tempfile.mkdtemp(prefix="rankrat-wrapper-", dir=scratch_root))
     try:
         _create_fake_docker(directory / "docker")
+        _create_fake_curl(directory / "curl")
         yield directory
     finally:
         shutil.rmtree(directory)

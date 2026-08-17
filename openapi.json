@@ -5389,7 +5389,7 @@
   "info": {
     "description": "Boundary-limited SEO operations over REST and MCP. The source document lists the full writable contract; a read-only runtime removes write routes from its served OpenAPI document.",
     "title": "rankrat",
-    "version": "0.17.0"
+    "version": "0.17.1"
   },
   "openapi": "3.1.0",
   "paths": {
