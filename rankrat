@@ -87,6 +87,12 @@ host settings (environment):
   RANKRAT_IMAGE RANKRAT_LIGHTHOUSE_IMAGE RANKRAT_HTTP_PORT
   RANKRAT_OAUTH_CALLBACK_PORT RANKRAT_READ_ONLY RANKRAT_ROLLING
 
+host env file (permanent):
+  ~/.config/rankrat/.env (override the path with RANKRAT_ENV_FILE) permanently
+  sets RANKRAT_DATA_DIR and the host settings above; a flag or a real env var
+  still wins. Read before a profile is selected; for the default profile it is
+  that profile's own .env.
+
 `rankrat setup` creates a new profile safely before prompting for credentials and
 pins both images to the latest release; `rankrat upgrade` re-pins them later.
 Use --data-dir only to keep a separate profile for another account or workspace.
@@ -499,6 +505,40 @@ env_file_value() {
 	sed -n "s/^${key}=//p" "$env_file" | head -n1
 }
 
+# load_host_env_file fills the host settings from a permanent host env file read
+# before any profile is selected, so it can even choose the profile via
+# RANKRAT_DATA_DIR. For the default profile it is that profile's own .env; a
+# profile reached via RANKRAT_DATA_DIR keeps its own .env too. Every RANKRAT_*
+# KEY=VALUE line is parsed (never sourced, so a hostile or corrupt file cannot
+# execute code); only vars that are unset or empty are filled, so a real env var
+# or a --data-dir flag always wins. A symlinked file is rejected; a missing file
+# is a no-op.
+load_host_env_file() {
+	local env_file key value line
+	if [[ -n "${RANKRAT_ENV_FILE:-}" ]]; then
+		env_file="$RANKRAT_ENV_FILE"
+	elif [[ -n "${XDG_CONFIG_HOME:-}" ]]; then
+		env_file="$XDG_CONFIG_HOME/rankrat/.env"
+	elif [[ -n "${HOME:-}" ]]; then
+		env_file="$HOME/.config/rankrat/.env"
+	else
+		return 0
+	fi
+	[[ -e "$env_file" || -L "$env_file" ]] || return 0
+	require_real_file "$env_file" "Rankrat host env file"
+
+	# Parse every RANKRAT_* KEY=VALUE line (rankrat's own unquoted .env format);
+	# never source, so a hostile or corrupt file cannot execute code. Only fill
+	# a key that is currently unset, so a real env var or a flag always wins.
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		[[ "$line" =~ ^(RANKRAT_[A-Z0-9_]+)=(.*)$ ]] || continue
+		key="${BASH_REMATCH[1]}"
+		value="${BASH_REMATCH[2]}"
+		[[ -z "${!key:-}" ]] || continue
+		export "$key=$value"
+	done <"$env_file"
+}
+
 # write_default_env writes nothing; it exists so create_owner_only_file_if_missing
 # can create an empty owner-only .env before env_set_value edits individual keys.
 write_default_env() {
@@ -736,6 +776,8 @@ start_stdio_lighthouse_sidecar() {
 		-e "LIGHTHOUSE_RUNNER_TIMEOUT_MS=$LIGHTHOUSE_RUNNER_TIMEOUT_MS" \
 		"$lighthouse_image" >/dev/null
 }
+
+load_host_env_file
 
 profile_directory_override=""
 rolling="false"

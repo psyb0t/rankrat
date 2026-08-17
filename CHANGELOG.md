@@ -2,6 +2,20 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.19.0 — 2026-08-17
+
+Adds a permanent host env file so the wrapper's host settings can be set once
+instead of per run — most useful for MCP launchers that run `rankrat` with a
+minimal environment that never carries your shell exports.
+
+- `~/.config/rankrat/.env` (override the path with `RANKRAT_ENV_FILE`) is read
+  before a profile is selected, so it can set `RANKRAT_DATA_DIR` (which profile
+  to use) along with `RANKRAT_READ_ONLY`, the image pins, ports, and rolling.
+  For the default profile it is that profile's own `.env`.
+- Every `RANKRAT_*` line is parsed and never sourced; a `--data-dir` flag or a
+  real environment variable still overrides it. No change to the container
+  images or provider contracts.
+
 ## v0.18.0 — 2026-08-17
 
 Lighthouse audits now work over stdio. `rankrat` stdio brings up an ephemeral

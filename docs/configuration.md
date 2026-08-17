@@ -50,6 +50,27 @@ existing regular file, and requires both the directory and the file to be owned
 by the current UID and not group/world writable. The Python process ignores the
 data-directory and image selectors entirely — those are the wrapper's business.
 
+### Permanent host env file
+
+To set these once instead of per run, put them in a host env file at
+`~/.config/rankrat/.env` (override the path with `RANKRAT_ENV_FILE`). The launcher
+reads it before it selects a profile, so it can set `RANKRAT_DATA_DIR` — which
+profile to use — along with `RANKRAT_READ_ONLY`, `RANKRAT_IMAGE`,
+`RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, `RANKRAT_OAUTH_CALLBACK_PORT`,
+and `RANKRAT_ROLLING`. Each variable is filled only when it is unset or empty, so
+a `--data-dir` flag or a real environment variable still wins. Every `RANKRAT_*`
+line is parsed and never sourced; a symlinked file is rejected and a missing file
+is a no-op. This is the layer MCP launchers need, since they run `rankrat` with a
+minimal environment that never carries your shell exports.
+
+The host env file is read before any profile is selected: for the default
+profile it is that profile's own `.env`, and a profile reached via
+`RANKRAT_DATA_DIR` keeps its own `.env` (written by `setup`/`upgrade`, which pins
+that profile's images, HTTP port, and read-only flag). Precedence for a host
+setting is:
+`--data-dir` flag, then a real environment variable, then the host env file, then
+the profile `.env`, then the built-in default.
+
 ## Process settings
 
 Read by the Python process:

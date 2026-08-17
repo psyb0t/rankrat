@@ -747,6 +747,127 @@ def test_coverage_target_also_runs_the_lighthouse_worker_suite() -> None:
     assert "test-coverage: lighthouse-test dev-image ##" in makefile
 
 
+def test_host_env_file_selects_the_profile_without_a_flag_or_env_var(
+    tmp_path: Path,
+) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    host_env_file = tmp_path / "rankrat.env"
+    host_env_file.write_text(f"RANKRAT_DATA_DIR={data_directory}\n", encoding="utf-8")
+    docker_all_arguments = tmp_path / "docker-all-arguments"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_ENV_FILE": str(host_env_file),
+            "RANKRAT_READ_ONLY": "true",
+            "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-arguments"),
+            "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_arguments),
+        }
+        environment.pop("RANKRAT_DATA_DIR", None)
+        result = _run_wrapper(environment, tmp_path, mode="stdio")
+
+    assert result.returncode == 0, result.stderr
+    main_run = _stdio_main_run(docker_all_arguments)
+    expected_mounts = {
+        f"type=bind,src={data_directory}/config,dst=/run/config,readonly",
+        f"type=bind,src={data_directory}/secrets,dst=/run/secrets,readonly",
+        f"type=bind,src={data_directory}/oauth,dst=/run/oauth",
+        f"type=bind,src={data_directory}/state,dst=/run/state",
+    }
+    assert expected_mounts.issubset(set(main_run))
+
+
+def test_host_env_file_enables_read_only_mode(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    host_env_file = tmp_path / "rankrat.env"
+    host_env_file.write_text(
+        f"RANKRAT_DATA_DIR={data_directory}\nRANKRAT_READ_ONLY=true\n",
+        encoding="utf-8",
+    )
+    docker_all_arguments = tmp_path / "docker-all-arguments"
+
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **os.environ,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_ENV_FILE": str(host_env_file),
+            "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-arguments"),
+            "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_arguments),
+        }
+        environment.pop("RANKRAT_DATA_DIR", None)
+        environment.pop("RANKRAT_READ_ONLY", None)
+        result = _run_wrapper(environment, tmp_path, mode="stdio")
+
+    assert result.returncode == 0, result.stderr
+    main_run = _stdio_main_run(docker_all_arguments)
+    assert "RANKRAT_READ_ONLY=true" in main_run
+    assert f"type=bind,src={data_directory}/config,dst=/run/config,readonly" in main_run
+
+
+def test_host_env_file_yields_to_a_real_env_var_and_the_flag(tmp_path: Path) -> None:
+    file_profile = _create_data_directory(tmp_path / "file-profile")
+    env_profile = _create_data_directory(tmp_path / "env-profile")
+    flag_profile = _create_data_directory(tmp_path / "flag-profile")
+    host_env_file = tmp_path / "rankrat.env"
+    host_env_file.write_text(f"RANKRAT_DATA_DIR={file_profile}\n", encoding="utf-8")
+
+    base_environment = {
+        **os.environ,
+        "RANKRAT_ENV_FILE": str(host_env_file),
+        "RANKRAT_READ_ONLY": "true",
+        "RANKRAT_DATA_DIR": str(env_profile),
+    }
+
+    # A real RANKRAT_DATA_DIR env var wins over the host env file.
+    docker_all_env = tmp_path / "docker-all-env"
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **base_environment,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-args-env"),
+            "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_env),
+        }
+        result = _run_wrapper(environment, tmp_path, mode="stdio")
+
+    assert result.returncode == 0, result.stderr
+    env_main_run = _stdio_main_run(docker_all_env)
+    assert f"type=bind,src={env_profile}/config,dst=/run/config,readonly" in env_main_run
+    assert not any(str(file_profile) in argument for argument in env_main_run)
+
+    # The --data-dir flag is parsed before the mode, so it must sit ahead of it.
+    # _run_wrapper always places the mode first, so invoke bash directly here to
+    # reproduce a real `rankrat --data-dir DIR stdio` launch.
+    docker_all_flag = tmp_path / "docker-all-flag"
+    with _fake_bin_directory() as fake_bin:
+        environment = {
+            **base_environment,
+            "PATH": f"{fake_bin}:{os.environ['PATH']}",
+            "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-args-flag"),
+            "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_flag),
+        }
+        result = subprocess.run(  # noqa: S603
+            [
+                _BASH_EXECUTABLE,
+                str(_SOURCE_WRAPPER.resolve()),
+                "--data-dir",
+                str(flag_profile),
+                "stdio",
+            ],
+            capture_output=True,
+            check=False,
+            cwd=tmp_path,
+            encoding="utf-8",
+            env=environment,
+        )
+
+    assert result.returncode == 0, result.stderr
+    flag_main_run = _stdio_main_run(docker_all_flag)
+    assert f"type=bind,src={flag_profile}/config,dst=/run/config,readonly" in flag_main_run
+    assert not any(str(file_profile) in argument for argument in flag_main_run)
+    assert not any(str(env_profile) in argument for argument in flag_main_run)
+
+
 def _target(source: str, name: str) -> str:
     return source.split(f"\n{name}:", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
 

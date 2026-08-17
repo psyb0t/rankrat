@@ -125,6 +125,18 @@ single run without touching the recorded pin. `RANKRAT_IMAGE`,
 `RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, and `RANKRAT_READ_ONLY` still
 override the recorded values per run.
 
+To set the host settings once instead of per run, put them in a permanent host
+env file at `~/.config/rankrat/.env` (override the path with `RANKRAT_ENV_FILE`).
+The wrapper reads it before selecting a profile, so it can set `RANKRAT_DATA_DIR`
+(which profile to use) along with `RANKRAT_READ_ONLY`, `RANKRAT_IMAGE`,
+`RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, `RANKRAT_OAUTH_CALLBACK_PORT`,
+and `RANKRAT_ROLLING`. It only fills a variable that is unset or empty, so a
+`--data-dir` flag or a real env var still overrides it. This is especially handy
+for MCP launchers that run `rankrat` with a minimal environment and never see
+your shell exports. It is separate from the per-profile `.env`: the host file
+selects the profile and the host defaults, while a profile's `.env` pins that
+profile's images, port, and read-only flag.
+
 Over HTTP, MCP lives at `http://127.0.0.1:8080/mcp` and REST under `/v1/`; stdio
 needs no port and no bearer. HTTP treats your data directory as its Compose
 project — it drops a `docker-compose.yml` in there if one's missing and never
