@@ -24,6 +24,7 @@ each configured provider account — no separate live-test selector file needed.
 - [PageSpeed fails while other Google tools work](#pagespeed-fails-while-other-google-tools-work)
 - [Google says a sitemap could not be read](#google-says-a-sitemap-could-not-be-read)
 - [Bing returns no data or cannot access a site](#bing-returns-no-data-or-cannot-access-a-site)
+- [Ownership verify reports a record it just created as not propagated](#ownership-verify-reports-a-record-it-just-created-as-not-propagated)
 - [Cloudflare readiness or writes fail](#cloudflare-readiness-or-writes-fail)
 - [IndexNow verification fails](#indexnow-verification-fails)
 - [HTTP returns 401](#http-returns-401)
@@ -200,6 +201,25 @@ list.
 ```sh
 make test-live-bing
 ```
+
+## Ownership verify reports a record it just created as not propagated
+
+`site_ownership_verify` creates the proof record, then checks public DNS for it
+in the same call. A resolver asked for that exact name a moment earlier can hold
+a cached negative answer from before the record existed, so the first call often
+returns `propagated: false` and stops before it can redeem the proof. That is
+ordinary DNS negative caching, not a failure — the record was still created.
+
+Confirm the record is actually public, then call again:
+
+```sh
+dig +short CNAME <token>.example.com @1.1.1.1
+```
+
+Once it resolves on public resolvers and the negative cache has expired, a
+repeated `site_ownership_verify` sees it propagated and redeems the proof. Poll
+`site_ownership_check` until `complete` is true, and leave the record in place —
+providers recheck it.
 
 ## Cloudflare readiness or writes fail
 

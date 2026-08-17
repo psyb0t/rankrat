@@ -12,10 +12,12 @@ a GA4 tag — that's your move, later.
 ## Contents
 
 - [Read the runtime guide first](#read-the-runtime-guide-first)
+- [Check what already exists first](#check-what-already-exists-first)
 - [What onboarding creates](#what-onboarding-creates)
 - [The GA4 account prerequisite](#the-ga4-account-prerequisite)
 - [Operator-driven onboarding](#operator-driven-onboarding)
 - [Agent-driven onboarding](#agent-driven-onboarding)
+- [Registering an already-verified site without onboarding](#registering-an-already-verified-site-without-onboarding)
 - [Ownership status](#ownership-status)
 - [Automated DNS verification](#automated-dns-verification)
 - [Manual verification alternatives](#manual-verification-alternatives)
@@ -35,6 +37,25 @@ It tells you the live write/onboarding posture, the configured sites, the
 verification methods each specific property form accepts, the manual steps, and
 who performs each action. Read it instead of assuming every Search Console
 property takes the same proof — Domain and URL-prefix don't.
+
+## Check what already exists first
+
+Onboarding creates provider resources. Before running it, find out whether they
+already exist — re-running the full flow on a site that is already set up is
+rarely what you want, and it always resolves or creates a GA4 property.
+
+- `accounts_list` reports how many Search Console, PageSpeed, GA4, and Bing
+  resources each configured account already carries.
+- `google_sites_list` lists the Search Console properties the Google credential
+  can see upstream, which is broader than the cached boundary inventory. A site
+  present here but absent from the boundary is already a permissioned or verified
+  Search Console property — it needs registering, not creating.
+- `site_ownership_check`, with the Google and/or Bing account selected, reports
+  whether each provider already treats the exact site as verified.
+
+A site that is already a verified Search Console and Bing property does not need
+onboarding at all — see
+[Registering an already-verified site](#registering-an-already-verified-site-without-onboarding).
 
 ## What onboarding creates
 
@@ -96,6 +117,37 @@ RANKRAT_READ_ONLY=false
 
 HTTP still wants its bearer. `RANKRAT_READ_ONLY=true` drops this operation from
 REST and MCP discovery — that's the only switch.
+
+## Registering an already-verified site without onboarding
+
+`site_onboarding_submit` and `rankrat onboard-site` always resolve or create a
+GA4 property for the site. When the Search Console and Bing properties already
+exist and you do not want Rankrat attaching or creating a GA4 property, do not
+onboard — add the existing resources to the account inventory in
+`boundaries.json` directly:
+
+1. Append the verified Search Console property to the Google account's
+   `search_console_sites` — an HTTPS URL-prefix like `https://example.com/`, or
+   an `sc-domain:example.com` Domain property. Copy the exact form
+   `google_sites_list` returns.
+2. Append the HTTPS root to `pagespeed_sites` for PageSpeed, CrUX, and
+   child-URL containment on that site.
+3. Append the HTTPS root to the Bing account's `sites`.
+4. If you will verify Bing by automated DNS, add the site's zone to the
+   Cloudflare account's `dns_zones` (`name` plus the 32-character
+   `provider_zone_id`). [Automated DNS verification](#automated-dns-verification)
+   writes the proof only into a configured zone.
+
+These arrays are discovered and cached inventory, not a second permission layer,
+so registering a property you already control changes nothing about the
+credential's authority. Rankrat reads `boundaries.json` once at startup: restart
+the process, or start a fresh stdio session, before the new entries are visible
+to `sites_list` and the provider tools.
+
+Registering a Bing site this way — or through `bing_site_submit` — leaves it
+unverified, and Bing rejects sitemap writes until it is verified. Run
+[automated DNS verification](#automated-dns-verification) or a
+[manual method](#bing) next.
 
 ## Ownership status
 

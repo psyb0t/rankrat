@@ -2,6 +2,23 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.19.1 — 2026-08-17
+
+Documents how to bring an already-verified site under Rankrat's boundary without
+onboarding, so operating on a site that already has its Search Console and Bing
+properties does not create an unwanted GA4 property.
+
+- New ownership-guide sections: check what already exists (`accounts_list`,
+  `google_sites_list`, `site_ownership_check`) before onboarding, and register an
+  already-verified site by adding its properties to `search_console_sites`,
+  `pagespeed_sites`, and Bing `sites` — plus its zone to `dns_zones` for Bing DNS
+  verification — then restarting so the boundary reloads.
+- New troubleshooting entry: `site_ownership_verify` returning `propagated: false`
+  immediately after it creates the record is DNS negative caching, not a failure;
+  re-run once the record resolves publicly, then poll `site_ownership_check`.
+- Documentation and the agent skill only; no change to code, container images, or
+  provider contracts.
+
 ## v0.19.0 — 2026-08-17
 
 Adds a permanent host env file so the wrapper's host settings can be set once

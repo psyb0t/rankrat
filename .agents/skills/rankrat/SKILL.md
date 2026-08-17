@@ -237,6 +237,19 @@ pass `site_url` to get the methods that site's property form actually accepts.
 Both are read-only and present on every server, including read-only ones, and
 `POST /v1/onboarding-guides` serves the same document over REST.
 
+Check what already exists before creating anything. `accounts_list` shows how
+many resources each account carries; `google_sites_list` lists the Search Console
+properties the credential sees upstream, broader than the cached boundary; and
+`site_ownership_check` reports whether Google and Bing already treat the site as
+verified. A site that is already a verified Search Console and Bing property does
+not need onboarding — onboarding always resolves or creates a GA4 property. When
+you only need Rankrat to operate on existing properties, register them in the
+account's `search_console_sites`, `pagespeed_sites`, and Bing `sites` inventory
+in `boundaries.json`, plus the site's zone in the Cloudflare `dns_zones` if you
+will DNS-verify Bing, then restart so the boundary reloads. A Bing site stays
+unverified until `site_ownership_verify` or a manual method redeems its proof,
+and Bing rejects sitemap writes until then.
+
 If the user has no GA4 account yet, do not attempt to create one and do not
 guess the steps. No tool can create a GA4 account — the Admin API has no
 `accounts.create`, and the flow ends at a Terms of Service page. The guide's
