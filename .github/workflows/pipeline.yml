@@ -1,6 +1,6 @@
 name: pipeline
 
-on: [push]
+on: [push, workflow_dispatch]
 
 jobs:
   # Rankrat publishes images, not a Python package.
