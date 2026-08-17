@@ -26,12 +26,26 @@ readonly CONTAINER_OAUTH_TOKEN_ROOT="/run/oauth"
 readonly CONTAINER_STATE_DIRECTORY="/run/state"
 readonly CONTAINER_STATE_DATABASE="/run/state/rankrat.sqlite3"
 readonly CONTAINER_SECRET_ROOT="/run/secrets"
+readonly CONTAINER_LIGHTHOUSE_DIRECTORY="/run/lighthouse"
+readonly CONTAINER_LIGHTHOUSE_SOCKET="/run/lighthouse/lighthouse.sock"
 readonly HOST_HTTP_BEARER_SECRET_RELATIVE_PATH="rankrat/http-bearer-token"
 readonly LOOPBACK_HOST="127.0.0.1"
 readonly MEMORY_LIMIT="512m"
 readonly CPU_LIMIT="1"
 readonly PIDS_LIMIT=128
 readonly TMPFS_SIZE="32m"
+
+# Ephemeral stdio Lighthouse sidecar limits, mirroring the Compose lighthouse
+# service and its networkless one-shot volume initializer.
+readonly LIGHTHOUSE_MEMORY_LIMIT="2g"
+readonly LIGHTHOUSE_CPU_LIMIT="2.0"
+readonly LIGHTHOUSE_PIDS_LIMIT=256
+readonly LIGHTHOUSE_SHM_SIZE="1g"
+readonly LIGHTHOUSE_TMPFS_SIZE="1g"
+readonly LIGHTHOUSE_RUNNER_TIMEOUT_MS=120000
+readonly LIGHTHOUSE_INIT_MEMORY_LIMIT="64m"
+readonly LIGHTHOUSE_INIT_CPU_LIMIT="0.25"
+readonly LIGHTHOUSE_INIT_PIDS_LIMIT=16
 
 readonly GROUP_AND_OTHER_WRITE_BITS=022
 readonly GROUP_AND_OTHER_ANY_BITS=077
@@ -681,6 +695,48 @@ run_upgrade() {
 	remove_old_image "$old_lighthouse" "$new_lighthouse"
 }
 
+# lighthouse_stdio_cleanup force-removes the ephemeral stdio Lighthouse sidecar
+# and its per-session socket volume. It is wired to EXIT/INT/TERM only in stdio
+# mode and swallows every byte so teardown never lands on the MCP stdout stream.
+lighthouse_stdio_cleanup() {
+	docker rm -f "$lighthouse_stdio_container" >/dev/null 2>&1 || true
+	docker volume rm "$lighthouse_stdio_volume" >/dev/null 2>&1 || true
+}
+
+# start_stdio_lighthouse_sidecar brings up a per-session Lighthouse worker for a
+# single stdio launch: it creates the shared socket volume, runs the networkless
+# one-shot initializer that chowns the volume to the host UID/GID the stdio app
+# runs as, then starts the hardened worker in the background. Every docker stdout
+# goes to /dev/null or stderr because stdio's real stdout is raw MCP protocol.
+start_stdio_lighthouse_sidecar() {
+	local lighthouse_image="$1" host_user_id="$2" host_group_id="$3"
+
+	docker volume create "$lighthouse_stdio_volume" >/dev/null
+
+	log INFO "initializing the stdio Lighthouse socket volume uid=$host_user_id"
+	docker run --rm --network none --user 0:0 --read-only \
+		--cap-drop=ALL --cap-add=CHOWN --cap-add=FOWNER \
+		--security-opt no-new-privileges:true \
+		--pids-limit "$LIGHTHOUSE_INIT_PIDS_LIMIT" \
+		--memory "$LIGHTHOUSE_INIT_MEMORY_LIMIT" --cpus "$LIGHTHOUSE_INIT_CPU_LIMIT" \
+		--mount "type=volume,src=$lighthouse_stdio_volume,dst=$CONTAINER_LIGHTHOUSE_DIRECTORY" \
+		--entrypoint /bin/sh "$lighthouse_image" \
+		-c 'chmod 1777 /run/lighthouse && touch /run/lighthouse/.initialized && chown -R "$1:$2" /run/lighthouse && chmod 0750 /run/lighthouse' \
+		_ "$host_user_id" "$host_group_id" >&2
+
+	log INFO "starting the ephemeral stdio Lighthouse sidecar container=$lighthouse_stdio_container"
+	docker run -d --init --name "$lighthouse_stdio_container" --network bridge \
+		--user "$host_user_id:$host_group_id" \
+		--read-only --cap-drop=ALL --security-opt no-new-privileges:true \
+		--pids-limit "$LIGHTHOUSE_PIDS_LIMIT" --memory "$LIGHTHOUSE_MEMORY_LIMIT" \
+		--cpus "$LIGHTHOUSE_CPU_LIMIT" --shm-size "$LIGHTHOUSE_SHM_SIZE" \
+		--tmpfs "/tmp:rw,noexec,nosuid,size=$LIGHTHOUSE_TMPFS_SIZE,mode=1777" \
+		--mount "type=volume,src=$lighthouse_stdio_volume,dst=$CONTAINER_LIGHTHOUSE_DIRECTORY" \
+		-e "LIGHTHOUSE_SOCKET_PATH=$CONTAINER_LIGHTHOUSE_SOCKET" \
+		-e "LIGHTHOUSE_RUNNER_TIMEOUT_MS=$LIGHTHOUSE_RUNNER_TIMEOUT_MS" \
+		"$lighthouse_image" >/dev/null
+}
+
 profile_directory_override=""
 rolling="false"
 if [[ "${RANKRAT_ROLLING:-}" == "1" ]]; then
@@ -892,5 +948,27 @@ onboard-site)
 esac
 
 log INFO "starting rankrat mode=$mode image=$image read_only=$read_only"
+
+# stdio always launches an ephemeral Lighthouse sidecar so a stdio session has
+# the same browser-audit capability the HTTP Compose stack does. The wrapper runs
+# the sidecar host-side; the app never touches the docker socket and only reaches
+# Lighthouse over the shared Unix socket volume, mounted read-only. The main
+# container runs in the foreground (not exec) so the cleanup trap fires on exit.
+if [[ "$mode" == "stdio" ]]; then
+	host_user_id="$(id -u)"
+	host_group_id="$(id -g)"
+	lighthouse_stdio_volume="rankrat-lighthouse-stdio-$$"
+	lighthouse_stdio_container="rankrat-lighthouse-stdio-$$"
+
+	trap lighthouse_stdio_cleanup EXIT INT TERM
+	start_stdio_lighthouse_sidecar "$lighthouse_image" "$host_user_id" "$host_group_id"
+
+	stdio_exit_status=0
+	docker run "${common_arguments[@]}" "${mode_arguments[@]}" \
+		--mount "type=volume,src=$lighthouse_stdio_volume,dst=$CONTAINER_LIGHTHOUSE_DIRECTORY,readonly" \
+		-e "RANKRAT_LIGHTHOUSE_WORKER_SOCKET=$CONTAINER_LIGHTHOUSE_SOCKET" \
+		"$image" stdio "$@" || stdio_exit_status=$?
+	exit "$stdio_exit_status"
+fi
 
 exec docker run "${common_arguments[@]}" "${mode_arguments[@]}" "$image" "$mode" "$@"

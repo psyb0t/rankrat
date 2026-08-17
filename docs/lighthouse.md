@@ -73,6 +73,11 @@ The wrapper writes the reviewed Compose deployment into the profile when it's
 missing and leaves an existing operator file alone. Drop `-d` to attach to both
 services' logs.
 
+`rankrat stdio` gets the same capability without Compose: the wrapper starts a
+per-session ephemeral worker over a private socket volume and removes it on exit.
+The app never touches the Docker socket — the wrapper runs the sidecar host-side
+and the app reaches it only over the shared Unix socket, mounted read-only.
+
 The committed Compose deployment:
 
 - binds Rankrat HTTP to host loopback;

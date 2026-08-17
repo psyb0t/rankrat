@@ -146,37 +146,128 @@ def test_wrapper_never_bind_mounts_the_boundary_file_on_its_own() -> None:
 
 def test_wrapper_uses_one_shared_profile_independently_of_cwd(tmp_path: Path) -> None:
     data_directory = _create_data_directory(tmp_path / "shared profile")
-    docker_arguments = tmp_path / "docker-arguments"
+    stable_invocations: list[list[str]] = []
+
+    for site_name in ("site-a", "site-b"):
+        docker_all_arguments = tmp_path / f"docker-all-{site_name}"
+        with _fake_bin_directory() as fake_bin:
+            environment = {
+                **os.environ,
+                "PATH": f"{fake_bin}:{os.environ['PATH']}",
+                "RANKRAT_DATA_DIR": str(data_directory),
+                "RANKRAT_READ_ONLY": "true",
+                "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / f"docker-args-{site_name}"),
+                "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_arguments),
+                "RANKRAT_BOUNDARIES": "/ignored/old/boundaries.json",
+                "RANKRAT_SECRETS": "/ignored/old/secrets",
+            }
+            site_directory = tmp_path / site_name
+            site_directory.mkdir()
+            result = _run_wrapper(environment, site_directory)
+            assert result.returncode == 0, result.stderr
+
+        arguments = _stdio_main_run(docker_all_arguments)
+        expected_mounts = {
+            f"type=bind,src={data_directory}/config,dst=/run/config,readonly",
+            f"type=bind,src={data_directory}/secrets,dst=/run/secrets,readonly",
+            f"type=bind,src={data_directory}/oauth,dst=/run/oauth",
+            f"type=bind,src={data_directory}/state,dst=/run/state",
+        }
+        assert expected_mounts.issubset(set(arguments))
+        assert not any(str(data_directory) == argument for argument in arguments)
+        assert not any("/ignored/old/" in argument for argument in arguments)
+        # Drop the per-session Lighthouse volume name so the profile-derived
+        # invocation can be compared across working directories.
+        stable_invocations.append(
+            [argument for argument in arguments if "rankrat-lighthouse-stdio-" not in argument]
+        )
+
+    assert stable_invocations[0] == stable_invocations[1]
+
+
+def test_stdio_launches_ephemeral_lighthouse_sidecar(tmp_path: Path) -> None:
+    data_directory = _create_data_directory(tmp_path / "profile")
+    docker_all_arguments = tmp_path / "docker-all-arguments"
     with _fake_bin_directory() as fake_bin:
         environment = {
             **os.environ,
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "RANKRAT_DATA_DIR": str(data_directory),
+            "RANKRAT_IMAGE": "example/rankrat:test",
+            "RANKRAT_LIGHTHOUSE_IMAGE": "example/lighthouse:test",
             "RANKRAT_READ_ONLY": "true",
-            "RANKRAT_TEST_DOCKER_ARGS": str(docker_arguments),
-            "RANKRAT_BOUNDARIES": "/ignored/old/boundaries.json",
-            "RANKRAT_SECRETS": "/ignored/old/secrets",
+            "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-arguments"),
+            "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_arguments),
         }
-        invocations: list[list[str]] = []
+        result = _run_wrapper(environment, tmp_path, mode="stdio")
 
-        for site_name in ("site-a", "site-b"):
-            site_directory = tmp_path / site_name
-            site_directory.mkdir()
-            result = _run_wrapper(environment, site_directory)
-            assert result.returncode == 0, result.stderr
-            invocations.append(docker_arguments.read_text(encoding="utf-8").splitlines())
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == ""
+    invocations = _docker_invocations(docker_all_arguments)
 
-    assert invocations[0] == invocations[1]
-    arguments = invocations[0]
-    expected_mounts = {
-        f"type=bind,src={data_directory}/config,dst=/run/config,readonly",
-        f"type=bind,src={data_directory}/secrets,dst=/run/secrets,readonly",
-        f"type=bind,src={data_directory}/oauth,dst=/run/oauth",
-        f"type=bind,src={data_directory}/state,dst=/run/state",
+    def volume_source(invocation: list[str]) -> str | None:
+        for argument in invocation:
+            if argument.startswith("type=volume,src=rankrat-lighthouse-stdio-"):
+                return argument.split("src=", 1)[1].split(",", 1)[0]
+        return None
+
+    # (a) The worker runs the resolved Lighthouse image, hardened and networked.
+    worker_runs = [
+        invocation
+        for invocation in invocations
+        if invocation[:2] == ["run", "-d"] and invocation[-1] == "example/lighthouse:test"
+    ]
+    assert len(worker_runs) == 1, invocations
+    worker_run = worker_runs[0]
+    assert "bridge" in worker_run
+    assert "LIGHTHOUSE_SOCKET_PATH=/run/lighthouse/lighthouse.sock" in worker_run
+    assert "LIGHTHOUSE_RUNNER_TIMEOUT_MS=120000" in worker_run
+
+    # The networkless one-shot initializer chowns the volume to the host UID/GID.
+    init_runs = [
+        invocation
+        for invocation in invocations
+        if invocation[:2] == ["run", "--rm"] and "--cap-add=CHOWN" in invocation
+    ]
+    assert len(init_runs) == 1, invocations
+    init_run = init_runs[0]
+    assert "none" in init_run
+    assert "0:0" in init_run
+    assert init_run[-2:] == [str(os.getuid()), str(os.getgid())]
+
+    # (b) The main container gets the worker socket env and the read-only volume.
+    main_run = _stdio_main_run(docker_all_arguments)
+    assert "RANKRAT_LIGHTHOUSE_WORKER_SOCKET=/run/lighthouse/lighthouse.sock" in main_run
+    assert any(
+        argument.startswith("type=volume,src=rankrat-lighthouse-stdio-")
+        and argument.endswith(",dst=/run/lighthouse,readonly")
+        for argument in main_run
+    )
+    assert main_run[-2:] == ["example/rankrat:test", "stdio"]
+
+    # All three containers share one per-session socket volume.
+    volume_names = {
+        volume_source(init_run),
+        volume_source(worker_run),
+        volume_source(main_run),
     }
-    assert expected_mounts.issubset(set(arguments))
-    assert not any(str(data_directory) == argument for argument in arguments)
-    assert not any("/ignored/old/" in argument for argument in arguments)
+    assert len(volume_names) == 1 and None not in volume_names
+
+    # (c) A cleanup trap removes the container and the volume on exit.
+    assert any(
+        invocation[:2] == ["rm", "-f"] and invocation[-1].startswith("rankrat-lighthouse-stdio-")
+        for invocation in invocations
+    )
+    assert any(
+        invocation[:2] == ["volume", "rm"]
+        and invocation[-1].startswith("rankrat-lighthouse-stdio-")
+        for invocation in invocations
+    )
+
+    source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
+    assert "trap lighthouse_stdio_cleanup EXIT INT TERM" in source
+    assert 'docker rm -f "$lighthouse_stdio_container" >/dev/null 2>&1 || true' in source
+    assert 'docker volume rm "$lighthouse_stdio_volume" >/dev/null 2>&1 || true' in source
 
 
 def test_wrapper_rejects_unsafe_data_directories_before_docker(tmp_path: Path) -> None:
@@ -660,6 +751,22 @@ def _target(source: str, name: str) -> str:
     return source.split(f"\n{name}:", maxsplit=1)[1].split("\n\n", maxsplit=1)[0]
 
 
+def _docker_invocations(all_args_file: Path) -> list[list[str]]:
+    records = all_args_file.read_text(encoding="utf-8").split("\0")
+    return [record.splitlines() for record in records if record.strip()]
+
+
+def _stdio_main_run(all_args_file: Path) -> list[str]:
+    invocations = _docker_invocations(all_args_file)
+    main_runs = [
+        invocation
+        for invocation in invocations
+        if invocation[:1] == ["run"] and invocation[-1:] == ["stdio"]
+    ]
+    assert len(main_runs) == 1, invocations
+    return main_runs[0]
+
+
 def _create_data_directory(path: Path) -> Path:
     path.mkdir(mode=0o700)
     config = path / "config"
@@ -678,9 +785,16 @@ def _create_data_directory(path: Path) -> Path:
 
 
 def _create_fake_docker(path: Path) -> None:
+    # RANKRAT_TEST_DOCKER_ARGS keeps the last invocation (overwritten each call);
+    # RANKRAT_TEST_DOCKER_ALL_ARGS, when set, records every invocation as a
+    # NUL-terminated record so the multi-call stdio Lighthouse flow (volume
+    # create, init, worker, main run, cleanup) can be inspected call by call.
     path.write_text(
         """#!/bin/sh
 printf '%s\\n' "$@" > "$RANKRAT_TEST_DOCKER_ARGS"
+if [ -n "${RANKRAT_TEST_DOCKER_ALL_ARGS:-}" ]; then
+    { printf '%s\\n' "$@"; printf '\\0'; } >> "$RANKRAT_TEST_DOCKER_ALL_ARGS"
+fi
 if [ -n "${RANKRAT_TEST_DOCKER_ENV:-}" ]; then
     printf '%s\\n' \\
         "$RANKRAT_DATA_DIR" \\

@@ -64,8 +64,10 @@ overwrites one you already have.
 
 ## Plain Docker: stdio MCP
 
-Don't want the wrapper? Run the image yourself. This is what `rankrat stdio`
-expands to:
+Don't want the wrapper? Run the image yourself. This is the app container
+`rankrat stdio` runs — but the wrapper also starts an ephemeral Lighthouse
+sidecar for the session (see [Lighthouse deployment](#lighthouse-deployment)) and
+mounts its socket read-only, which this bare command omits:
 
 ```sh
 export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
@@ -204,8 +206,11 @@ networkless, holds only `CHOWN`/`FOWNER`, preps one private volume, and exits.
 
 One-container Rankrat runs fine without the browser worker — the five Lighthouse
 tools just return a finite `UNAVAILABLE` instead of silently degrading to
-PageSpeed. For the two-image topology and the browser threat model, read
-[Lighthouse](lighthouse.md).
+PageSpeed. The `rankrat` wrapper wires the worker in for both transports: HTTP
+through Compose, and stdio through a per-session ephemeral sidecar the wrapper
+starts host-side and tears down on exit. The bare `docker run` above has no
+worker unless you add one. For the two-image topology and the browser threat
+model, read [Lighthouse](lighthouse.md).
 
 ## Agent integrations
 

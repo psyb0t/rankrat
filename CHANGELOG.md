@@ -2,6 +2,19 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.18.0 — 2026-08-17
+
+Lighthouse audits now work over stdio. `rankrat` stdio brings up an ephemeral
+Lighthouse sidecar for the session — the same browser-audit capability the HTTP
+Compose stack has — and tears it down on exit.
+
+- The wrapper launches the sidecar host-side over a per-session private socket
+  volume, so the main app never touches the Docker socket and reaches Lighthouse
+  only over the shared Unix socket, mounted read-only. The sidecar mirrors the
+  Compose worker's hardening: dropped capabilities, read-only root, and a
+  networkless one-shot volume initializer.
+- No change to the REST/HTTP path, provider contracts, or the container images.
+
 ## v0.17.1 — 2026-08-17
 
 Adds release-version pinning and an `upgrade` command to the host wrapper.

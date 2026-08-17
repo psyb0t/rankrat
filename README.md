@@ -134,7 +134,10 @@ long-lived services plus one one-shot volume initializer. The wrapper, plain
 [Transports and deployment](docs/transports.md).
 
 Browser audits run in a separate `psyb0t/rankrat-lighthouse` image over a Unix
-socket, and it never sees a single provider credential. See [Lighthouse](docs/lighthouse.md).
+socket, and it never sees a single provider credential. `rankrat` stdio brings up
+an ephemeral Lighthouse sidecar for the session — same capability as HTTP — and
+tears it down on exit; the wrapper launches it host-side, so the app stays off the
+Docker socket and reaches Lighthouse only over the socket. See [Lighthouse](docs/lighthouse.md).
 
 ## Safety model
 
