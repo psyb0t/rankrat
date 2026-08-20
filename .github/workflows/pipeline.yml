@@ -7,8 +7,9 @@ jobs:
   checks:
     permissions:
       contents: read
-    uses: psyb0t/reusable-github-workflows/.github/workflows/make-checks.yml@master
+    uses: psyb0t/reusable-github-workflows/.github/workflows/code-workflow.yml@master
     with:
+      lint_command: "make lint"
       test_command: "make coverage-percent"
       coverage_file: coverage-percent.txt
 
