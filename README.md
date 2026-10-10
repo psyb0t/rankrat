@@ -191,7 +191,7 @@ Claude Code and Codex manifests, or OpenClaw integration under [`.agents`](.agen
 ## Agent integrations
 
 The [Rankrat skill](.agents/skills/rankrat) works in agents that read
-`.agents/skills/`. The integrations below cover both MCP stdio and a shared
+`.agents/skills/` (such as [peen](https://github.com/psyb0t/peen)). The integrations below cover both MCP stdio and a shared
 Streamable HTTP server.
 
 ### Claude Code

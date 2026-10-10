@@ -2,6 +2,10 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.20.1, 2026-10-10
+
+Documentation only. The README's agent integrations section names [peen](https://github.com/psyb0t/peen) as an example of an agent that reads `.agents/skills/`.
+
 ## v0.20.0 — 2026-08-17
 
 Connection-level provider failures now explain themselves. When a fixed-origin
