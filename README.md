@@ -7,6 +7,7 @@
 [![version](https://raw.githubusercontent.com/psyb0t/rankrat/badges/version.svg)](https://github.com/psyb0t/rankrat/releases)
 [![license](https://raw.githubusercontent.com/psyb0t/rankrat/badges/license.svg)](LICENSE)
 [![Docker Pulls](https://img.shields.io/docker/pulls/psyb0t/rankrat?style=flat-square)](https://hub.docker.com/r/psyb0t/rankrat)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/psyb0t/rankrat)
 
 Every SEO signal lives in its own walled garden with its own dashboard, its own
 API, and its own bullshit auth dance: Search Console over here, GA4 over there,
