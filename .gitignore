@@ -69,3 +69,6 @@ pyrightconfig.json
 .telemetry/
 
 git-update.sh
+
+# Review receipt for the local release script.
+git-update.sh.debot
