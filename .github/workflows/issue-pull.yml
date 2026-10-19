@@ -2,7 +2,7 @@ name: issue-pull
 
 on:
   schedule:
-    - cron: "33 */6 * * *"
+    - cron: "41 3,9,15,21 * * *"
   workflow_dispatch:
 
 jobs:
