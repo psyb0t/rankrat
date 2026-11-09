@@ -1,7 +1,7 @@
 ---
 title: "Security"
 description: "Rankrat's trust model: what provider credentials can reach, read-only mode, HTTP exposure, container hardening, SSRF limits, and secret handling."
-nav_order: 11
+nav_order: 12
 ---
 
 # Security

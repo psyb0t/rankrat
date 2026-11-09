@@ -1,6 +1,6 @@
 ---
 title: "Transports and deployment"
-description: "Run Rankrat's HTTP server with the wrapper, Compose, or plain Docker; bearer auth, REST and OpenAPI, and MCP client setup for agents."
+description: "Run Rankrat's HTTP server with the wrapper, Compose, or plain Docker, with bearer auth, REST and OpenAPI, and the move off stdio."
 nav_order: 5
 ---
 
@@ -212,90 +212,9 @@ and the browser threat model, read [Lighthouse](lighthouse.md).
 
 ## Agent integrations
 
-Installing an integration adds instructions or an MCP client definition. It
-does not create a boundary, provider credentials, OAuth authorization, or state
-paths; those are still yours to set up. Every client below talks to a running
-`rankrat http` server.
-
-Load the bearer once per shell from its owner-readable file, so it never hits
-shell history:
-
-```sh
-export RANKRAT_TOKEN="$(<"$HOME/.config/rankrat/secrets/rankrat/http-bearer-token")"
-```
-
-### Claude Code
-
-```sh
-claude plugin marketplace add psyb0t/agents
-claude plugin install rankrat@psyb0t
-```
-
-The plugin asks for the server URL and the bearer, stored as a sensitive value.
-Register the MCP server itself once at user scope so every project shares one
-Rankrat:
-
-```sh
-claude mcp add --transport http --scope user rankrat \
-  http://127.0.0.1:8080/mcp \
-  --header "Authorization: Bearer $RANKRAT_TOKEN"
-```
-
-### Codex
-
-```sh
-codex plugin marketplace add psyb0t/agents
-codex plugin add rankrat@psyb0t
-```
-
-Register the same server in Codex; it reads the bearer from the environment
-variable you name:
-
-```sh
-codex mcp add rankrat \
-  --url http://127.0.0.1:8080/mcp \
-  --bearer-token-env-var RANKRAT_TOKEN
-```
-
-The installed skill invokes as `$rankrat:rankrat`; a checkout containing
-`.agents/skills/rankrat` also exposes it as `$rankrat`.
-
-### OpenClaw bridge plugin
-
-```sh
-openclaw skills install @psyb0t/rankrat
-openclaw plugins install clawhub:@psyb0t/rankrat
-```
-
-The plugin is a stdio-to-HTTP bridge built on `mcp-remote`. Set `RANKRAT_URL`
-(for example `http://127.0.0.1:8080`; the bridge appends `/mcp`) and
-`RANKRAT_TOKEN` in the plugin environment. The bridge passes the header as the
-literal `${RANKRAT_TOKEN}` placeholder, which `mcp-remote` fills from its own
-environment, so the token never lands in a process argument list.
-
-### OpenClaw native Streamable HTTP
-
-```sh
-export RANKRAT_AUTH_TOKEN="$(<secrets/rankrat/http-bearer-token)"
-openclaw mcp set rankrat '{
-  "url": "http://127.0.0.1:8080/mcp",
-  "transport": "streamable-http",
-  "headers": {
-    "Authorization": "Bearer ${RANKRAT_AUTH_TOKEN}"
-  }
-}'
-openclaw mcp doctor rankrat --probe
-```
-
-Single quotes keep `${RANKRAT_AUTH_TOKEN}` intact for OpenClaw to expand.
-`openclaw mcp unset rankrat` drops the override and returns to the bridge
-plugin.
-
-See the repository
-[agent setup reference](https://github.com/psyb0t/rankrat/blob/main/.agents/skills/rankrat/references/setup.md)
-and
-[OpenClaw plugin README](https://github.com/psyb0t/rankrat/blob/main/.agents/plugins/rankrat/README.md)
-for the distribution-specific details.
+The Rankrat skill and plugins for Claude Code, Codex, and OpenClaw install from
+the `psyb0t/agents` marketplace and ClawHub. Commands and direct MCP
+registration for each client are on [Agent integrations](integrations.md).
 
 ## Moving off stdio
 
@@ -305,7 +224,8 @@ working in 0.21.0. To move over:
 1. Start the server once: `rankrat http -d`. It restarts with Docker.
 2. Remove the old registration, for example `claude mcp remove rankrat` or
    `codex mcp remove rankrat`.
-3. Register `http://127.0.0.1:8080/mcp` with the bearer as shown above.
+3. Register `http://127.0.0.1:8080/mcp` with the bearer as shown in
+   [Agent integrations](integrations.md).
 4. For OpenClaw, update the plugin and set `RANKRAT_URL` and `RANKRAT_TOKEN`.
 
 Lighthouse sidecars named `rankrat-lighthouse-stdio-*` left behind by earlier

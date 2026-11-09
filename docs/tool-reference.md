@@ -1,7 +1,7 @@
 ---
 title: "MCP tool reference"
 description: "Every MCP tool Rankrat can expose, grouped by provider and area, with the read-only and writable sets and their REST counterparts."
-nav_order: 7
+nav_order: 8
 ---
 
 # MCP tool reference

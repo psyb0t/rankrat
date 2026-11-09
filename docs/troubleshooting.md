@@ -1,7 +1,7 @@
 ---
 title: "Troubleshooting"
 description: "Fixes for Rankrat startup, profile, OAuth, provider, sitemap, monitor, and Lighthouse failures, with the error categories each one reports."
-nav_order: 12
+nav_order: 13
 ---
 
 # Troubleshooting

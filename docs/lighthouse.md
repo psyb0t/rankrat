@@ -1,7 +1,7 @@
 ---
 title: "Lighthouse"
 description: "Local Lighthouse audits in the isolated psyb0t/rankrat-lighthouse worker: deployment, the five tools, limits, and the browser threat model."
-nav_order: 8
+nav_order: 9
 ---
 
 # Local Lighthouse audits

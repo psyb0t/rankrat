@@ -1,7 +1,7 @@
 ---
 title: "Ownership and onboarding"
 description: "Check Google and Bing site ownership, verify through Cloudflare DNS, and onboard a new site across GA4, Search Console, and Bing in one call."
-nav_order: 9
+nav_order: 10
 ---
 
 # Ownership and onboarding

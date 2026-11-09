@@ -78,7 +78,8 @@ claude mcp add --transport http --scope user rankrat \
   --header "Authorization: Bearer $RANKRAT_TOKEN"
 ```
 
-Other clients, plain Docker and Compose are in
+Codex, OpenClaw and the marketplace plugins are in
+[Agent integrations](integrations.md); plain Docker and Compose are in
 [Transports and deployment](transports.md). The full walkthrough with checks
 is [Getting started](getting-started.md).
 
@@ -89,7 +90,8 @@ is [Getting started](getting-started.md).
 | [Getting started](getting-started.md) | Install, file locations, verifying setup |
 | [Configuration](configuration.md) | Every boundary field and runtime switch |
 | [Providers and credentials](providers.md) | Getting each credential and its permissions |
-| [Transports and deployment](transports.md) | Streamable HTTP MCP, REST, Compose, agent integrations, moving off stdio |
+| [Transports and deployment](transports.md) | Streamable HTTP MCP, REST, Compose, moving off stdio |
+| [Agent integrations](integrations.md) | Claude Code, Codex, and OpenClaw installs and MCP registration |
 | [Feature workflows](features.md) | Which tools answer common SEO, analytics, backlink, and indexing questions |
 | [MCP tool reference](tool-reference.md) | Every discoverable MCP tool |
 | [Lighthouse](lighthouse.md) | The browser worker and its security limits |

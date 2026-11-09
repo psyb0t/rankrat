@@ -177,7 +177,8 @@ The full manual lives at **[psyb0t.github.io/rankrat](https://psyb0t.github.io/r
 | [Getting started](https://psyb0t.github.io/rankrat/getting-started/) | Install, file locations, verifying setup |
 | [Configuration](https://psyb0t.github.io/rankrat/configuration/) | Every boundary field and runtime switch |
 | [Providers and credentials](https://psyb0t.github.io/rankrat/providers/) | Getting each credential and its permissions |
-| [Transports and deployment](https://psyb0t.github.io/rankrat/transports/) | Streamable HTTP MCP, REST, Compose, agent integrations |
+| [Transports and deployment](https://psyb0t.github.io/rankrat/transports/) | Streamable HTTP MCP, REST, Compose, moving off stdio |
+| [Agent integrations](https://psyb0t.github.io/rankrat/integrations/) | Claude Code, Codex, and OpenClaw installs and MCP registration |
 | [Feature workflows](https://psyb0t.github.io/rankrat/features/) | Operations for common SEO, analytics, backlink, and indexing questions |
 | [Lighthouse](https://psyb0t.github.io/rankrat/lighthouse/) | The browser worker and its security limits |
 | [Ownership and onboarding](https://psyb0t.github.io/rankrat/ownership-and-onboarding/) | Google/Bing property creation and DNS verification |
@@ -230,7 +231,7 @@ The plugin is a stdio-to-HTTP bridge built on `mcp-remote`. Set `RANKRAT_URL`
 (for example `http://127.0.0.1:8080`) and `RANKRAT_TOKEN` (the profile's bearer)
 in its environment. Registering the server URL directly in Claude Code, Codex,
 or OpenClaw is covered in
-[Transports and deployment](https://psyb0t.github.io/rankrat/transports/#agent-integrations).
+[Agent integrations](https://psyb0t.github.io/rankrat/integrations/).
 
 ## Development
 

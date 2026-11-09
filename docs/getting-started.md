@@ -204,6 +204,7 @@ full writable contract; the runtime document drops whatever routes you disabled.
 
 - [Configuration and boundaries](configuration.md)
 - [Transports and deployment](transports.md)
+- [Agent integrations](integrations.md)
 - [Feature workflows](features.md)
 - [Security](security.md)
 - [Troubleshooting](troubleshooting.md)
