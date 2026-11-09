@@ -1,4 +1,4 @@
-# rankrat — setup reference
+# rankrat: setup reference
 
 Everything the [skill](../SKILL.md) needs but does not need loaded up front:
 configuration, credentials, and how to run it.
@@ -6,9 +6,9 @@ configuration, credentials, and how to run it.
 This file is the self-contained agent reference shipped with the skill. Human
 operators can use the topic-based
 [public manual](https://github.com/psyb0t/rankrat/tree/main/docs), especially
-[Getting started](https://github.com/psyb0t/rankrat/blob/main/docs/getting-started.md),
-[Providers and credentials](https://github.com/psyb0t/rankrat/blob/main/docs/providers.md),
-and [Troubleshooting](https://github.com/psyb0t/rankrat/blob/main/docs/troubleshooting.md).
+[Getting started](https://psyb0t.github.io/rankrat/getting-started/),
+[Providers and credentials](https://psyb0t.github.io/rankrat/providers/),
+and [Troubleshooting](https://psyb0t.github.io/rankrat/troubleshooting/).
 
 ## Contents
 
@@ -30,7 +30,7 @@ the ones in the settings model, not example values.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `RANKRAT_HTTP_HOST` | `127.0.0.1` | Listen address in `http` mode. Loopback by default — bind wider only deliberately. |
+| `RANKRAT_HTTP_HOST` | `127.0.0.1` | Listen address in `http` mode. Loopback by default. Bind wider only deliberately. |
 | `RANKRAT_HTTP_PORT` | `8080` | Listen port in `http` mode. |
 | `RANKRAT_BOUNDARY_FILE` | `/run/config/boundaries.json` | Provider accounts plus discovered resource inventory and URL-containment roots. |
 | `RANKRAT_SECRET_ROOT` | `/run/secrets` | Directory holding provider credentials. |
@@ -39,8 +39,8 @@ the ones in the settings model, not example values.
 | `RANKRAT_LOG_LEVEL` | `INFO` | Standard Python log levels. |
 | `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` | `/run/lighthouse/lighthouse.sock` | Optional Unix socket for the isolated local Lighthouse worker. Empty disables it. |
 | `RANKRAT_STATE_DATABASE` | unset | Absolute SQLite path for monitors, snapshots, and issue events. Empty/unset disables persistence. The wrapper sets `/run/state/rankrat.sqlite3`. |
-| `RANKRAT_SCHEDULER_INTERVAL_SECONDS` | `60` | How often the HTTP process claims due monitors; accepted range 10–3600 seconds. |
-| `RANKRAT_STATE_RETENTION_DAYS` | `180` | Snapshot/event retention after a monitor run; accepted range 1–3650 days. |
+| `RANKRAT_SCHEDULER_INTERVAL_SECONDS` | `60` | How often the HTTP process claims due monitors; accepted range 10 to 3600 seconds. |
+| `RANKRAT_STATE_RETENTION_DAYS` | `180` | Snapshot/event retention after a monitor run; accepted range 1 to 3650 days. |
 | `RANKRAT_ENABLE_OPENAPI` | `false` | Serve the OpenAPI document. |
 | `RANKRAT_READ_ONLY` | `false` | See "Write access" below. |
 | `RANKRAT_HTTP_BEARER_SECRET_FILE` | unset | File holding the bearer token required on HTTP requests. Unset means no auth, so only do that on loopback. |
@@ -74,8 +74,7 @@ passes ownership and mode checks.
 `RANKRAT_READ_ONLY` defaults to `false`. The trusted caller gets direct access
 to every supported operation permitted by each configured provider account.
 This is the only capability switch. HTTP uses its normal bearer for transport
-authentication; stdio access is controlled by who can start the process and
-read its mounts.
+authentication.
 
 Set it to `true` and the effect is stronger than a refusal at call time: write
 tools are absent from `tools/list` and REST write routes are not mounted. An
@@ -134,8 +133,8 @@ than inferring it from discovery or an empty result. Write tools are the
 exception: they are absent unless writable mode enables them.
 
 - **Google Search Console / Google Analytics 4 / Google Tag Manager / Google
-  Indexing** — create a Google project and Desktop OAuth client JSON using the
-  exact [Google OAuth guide](https://github.com/psyb0t/rankrat/blob/main/docs/providers.md#google-oauth).
+  Indexing**: create a Google project and Desktop OAuth client JSON using the
+  exact [Google OAuth guide](https://psyb0t.github.io/rankrat/providers/#google-oauth).
   Run setup and paste the client JSON's single line at the hidden prompt:
 
   ```sh
@@ -148,12 +147,12 @@ exception: they are absent unless writable mode enables them.
   requests Search Console management, Google Indexing, GA4 read/edit, and Tag
   Manager container edit, delete, version-edit, and publish scopes; provider-side
   ownership still controls what the account can do.
-- **Bing Webmaster Tools** — open
+- **Bing Webmaster Tools**: open
   [Bing Webmaster Tools](https://www.bing.com/webmasters/home), add and verify
   one site, then **Settings → API Access → API Key → Generate API Key**. The
   resulting key is account-wide, not site-specific; setup stores it under
   `RANKRAT_SECRET_ROOT`.
-- **Cloudflare** — create one dedicated **User API Token**, not an Account API
+- **Cloudflare**: create one dedicated **User API Token**, not an Account API
   Token: [open User API Tokens](https://dash.cloudflare.com/profile/api-tokens)
   → **Create Token → Create Custom Token** → name it `rankrat`. Add **Zone →
   Zone → Read**, **Zone → DNS → Edit**, **Zone → Analytics → Read**, **Zone →
@@ -168,18 +167,18 @@ exception: they are absent unless writable mode enables them.
   DNS-only and untagged, so no Cloudflare DNS-tag quota is needed. Readiness
   confirms account reachability but deliberately does not create a throwaway
   record to test DNS write access.
-- **Microsoft Clarity** — open [Microsoft Clarity](https://clarity.microsoft.com/),
+- **Microsoft Clarity**: open [Microsoft Clarity](https://clarity.microsoft.com/),
   choose a project, then **Settings → Data Export → Generate new API token**.
   The token belongs to that project; setup stores it at the configured account
   credential path. One Clarity account represents one project and is read-only
   in Rankrat. The upstream API allows at most ten requests per project/day; see
   [Microsoft's documentation](https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api).
-- **PageSpeed Insights and CrUX** — setup separately asks for one optional API
+- **PageSpeed Insights and CrUX**: setup separately asks for one optional API
   key. Create it through [Google API Credentials](https://console.cloud.google.com/apis/credentials)
   and restrict it to **PageSpeed Insights API** and **Chrome UX Report API**.
   OAuth does not grant it. Without the key, PageSpeed runs under a tighter
   anonymous quota and `crux_history` is unavailable.
-- **Local Lighthouse** — no credential. The optional companion image receives
+- **Local Lighthouse**: no credential. The optional companion image receives
   only a shared Unix socket and outbound browser network access. Rankrat accepts
   only requested URLs beneath the account's `pagespeed_sites` and rejects a
   report whose final URL escapes that boundary. A public cross-origin redirect
@@ -192,12 +191,13 @@ APIs over HTTPS and are not sent anywhere else.
 ## Running it
 
 An agent runs the published image directly. A human creates the profile,
-credentials, and Google authorization with `rankrat setup` beforehand — after
+credentials, and Google authorization with `rankrat setup` beforehand, after
 installing the launcher. Download the installer, read it, then run it, per-user
 (no root) or system-wide:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh -o rankrat-install.sh
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh \
+  -o rankrat-install.sh
 less rankrat-install.sh
 bash rankrat-install.sh                # per-user   -> ~/.local/bin/rankrat
 sudo bash rankrat-install.sh --system  # system-wide -> /usr/local/bin/rankrat
@@ -207,9 +207,10 @@ The single public launcher is named `rankrat`; it is not duplicated into agent
 skills, so the shipped code cannot drift from what operators install:
 
 ```bash
-rankrat --data-dir /absolute/path/to/rankrat-profile stdio
-rankrat --data-dir /absolute/path/to/rankrat-profile http       # attached Rankrat + Lighthouse
-rankrat --data-dir /absolute/path/to/rankrat-profile http -d    # detached, restart unless stopped
+# Attached Rankrat + Lighthouse:
+rankrat --data-dir /absolute/path/to/rankrat-profile http
+# Detached, restarts unless stopped:
+rankrat --data-dir /absolute/path/to/rankrat-profile http -d
 ```
 
 HTTP treats the profile as its Compose project directory. It atomically creates
@@ -219,7 +220,7 @@ image, port, UID/GID, and read-only values from its environment. The project
 directory and Compose file must be owned by the current UID and not group/world
 writable. Only the four fixed children below are mounted into containers.
 
-Both transports take the same four mounts. Container-side paths are the
+The server takes four mounts. Container-side paths are the
 server's defaults, so only the host side changes:
 
 | Host | Container | Access | Holds |
@@ -229,23 +230,7 @@ server's defaults, so only the host side changes:
 | `$RANKRAT_DATA_DIR/oauth` | `/run/oauth` | writable | stored Google OAuth token; refresh may rotate it |
 | `$RANKRAT_DATA_DIR/state` | `/run/state` | writable, owner-only | SQLite monitor definitions, snapshots, issues, and events |
 
-**stdio** — the default mode, for a client that owns the process:
-
-```bash
-docker run -i --rm --init --read-only \
-  --user "$(id -u):$(id -g)" \
-  --cap-drop=ALL --security-opt no-new-privileges:true \
-  --pids-limit 128 --memory 512m --cpus 1 \
-  --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/config",dst=/run/config \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/oauth",dst=/run/oauth \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/state",dst=/run/state \
-  -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
-  psyb0t/rankrat stdio
-```
-
-**Manual single-container Streamable HTTP** — for a shared server that does not
+**Manual single-container Streamable HTTP**: for a shared server that does not
 need local Lighthouse. MCP lands at `/mcp` and the REST API shares the port:
 
 ```bash
@@ -272,8 +257,7 @@ loopback. MCP is then at `http://127.0.0.1:8080/mcp`; send
 The commands above use the writable default. Before mounting config writable,
 verify that the resolved directory is owner-only, `boundaries.json` is not a
 symlink, both are owned by the current UID, and the file is not group- or
-world-writable. The public `rankrat` launcher performs those checks. The OpenClaw
-launcher additionally rejects symlinked path components. For a read-only
+world-writable. The public `rankrat` launcher performs those checks. For a read-only
 caller, set `RANKRAT_READ_ONLY=true` and make only `/run/config` read-only.
 Never make the provider-secret mount writable during normal service operation.
 
@@ -288,7 +272,10 @@ docker run --rm --network none --user 0:0 --read-only \
   --pids-limit 16 --memory 64m --cpus 0.25 \
   --mount type=volume,src=rankrat-lighthouse-runtime,dst=/run/lighthouse \
   --entrypoint /bin/sh psyb0t/rankrat-lighthouse \
-  -c 'chmod 1777 /run/lighthouse && touch /run/lighthouse/.initialized && chown -R 10001:10001 /run/lighthouse && chmod 0750 /run/lighthouse'
+  -c 'chmod 1777 /run/lighthouse \
+    && touch /run/lighthouse/.initialized \
+    && chown -R 10001:10001 /run/lighthouse \
+    && chmod 0750 /run/lighthouse'
 docker run --rm -d --name rankrat-lighthouse-worker --init --read-only \
   --user 10001:10001 --cap-drop=ALL --security-opt no-new-privileges:true \
   --pids-limit 256 --memory 2g --cpus 2 --shm-size 1g \
@@ -305,15 +292,14 @@ user is overridden. The provided Compose file applies `RANKRAT_UID` and
 `RANKRAT_GID` consistently to both long-lived services after running this
 hardened initializer.
 
-Add this read-only volume mount to either published Rankrat invocation above:
+Add this read-only volume mount to the published Rankrat invocation above:
 
 ```bash
 --mount type=volume,src=rankrat-lighthouse-runtime,dst=/run/lighthouse,readonly
 ```
 
-The normal `psyb0t/rankrat stdio` command then exposes the five Lighthouse tools
-over stdio. The normal `psyb0t/rankrat http` command exposes the same tools over
-Streamable HTTP at `/mcp` and REST under `/v1/lighthouse/`. Leave
+The normal `psyb0t/rankrat http` command then exposes the five Lighthouse tools
+over Streamable HTTP at `/mcp` and REST under `/v1/lighthouse/`. Leave
 `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` empty to disable the worker explicitly. Stop
 and remove only the worker and volume you created when they are no longer
 needed.
@@ -335,7 +321,7 @@ outer sandbox such as gVisor or Kata Containers before auditing hostile content.
 
 Every operation accepts the same strict body: `account_id`, a configured
 `site_url`, a child `page_url`, and optional `timeout_seconds` in the inclusive
-5–300 second range. The aggregate audit returns all four category scores and
+5 to 300 second range. The aggregate audit returns all four category scores and
 failed findings; the other four operations return only that category's failed
 findings.
 
@@ -364,7 +350,7 @@ Without a supported adapter, a `sc-domain:` property accepts only DNS TXT,
 while a `https://` URL-prefix property also accepts the GA4 tag, an HTML file,
 or a meta tag.
 
-The SEO expansion has the same names over stdio and Streamable HTTP MCP:
+The SEO expansion has these MCP tool names and REST routes:
 
 | MCP tool | REST route |
 |---|---|
@@ -481,11 +467,11 @@ These appear only when `RANKRAT_READ_ONLY=false`:
 
 ## Checking it works
 
-- `server_info` — the server is up and which mode it is in.
-- `provider_readiness` — which providers are actually configured.
-- `accounts_list` / `sites_list` — the boundary as the server sees it.
-- `diagnostics` — deeper detail when one of the above is not what you expected.
-- `monitors_list` and `monitor_issues_list` — whether scheduled audit history
+- `server_info`: the server is up and which mode it is in.
+- `provider_readiness`: which providers are actually configured.
+- `accounts_list` / `sites_list`: the boundary as the server sees it.
+- `diagnostics`: deeper detail when one of the above is not what you expected.
+- `monitors_list` and `monitor_issues_list`: whether scheduled audit history
   is accumulating and which lifecycle issues remain open.
 
 If a provider-specific tool returns nothing, check `provider_readiness` before

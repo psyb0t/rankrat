@@ -1,8 +1,14 @@
+---
+title: "Getting started"
+description: "Install the rankrat launcher, create a profile with guided setup, start the HTTP stack, and verify every configured provider works."
+nav_order: 2
+---
+
 # Getting started
 
 Fresh machine to a running, verified Rankrat deployment.
 
-Guided setup validates provider access and nothing else — it does not create
+Guided setup validates provider access and nothing else. It does not create
 site properties or submit URLs. Those are your agent's job, once setup succeeds.
 
 ## Contents
@@ -20,19 +26,20 @@ site properties or submit URLs. Those are your agent's job, once setup succeeds.
 - a POSIX shell;
 - `curl`, `openssl`, and the usual core utilities.
 
-That is the whole list for the wrapper path — Python, Node, uv, pnpm, and the
+That is the whole list for the wrapper path. Python, Node, uv, pnpm, and the
 security scanners all run in pinned containers, so you never install them.
 Working from a source checkout instead adds Git and GNU Make.
 
 ## Install the wrapper
 
 Rankrat is the `psyb0t/rankrat` image. The `rankrat` wrapper is a readable
-script over the supported `docker run` contract — nothing in it you can't audit
-first. Download the installer, read it, then run it — per-user (no root) or
+script over the supported `docker run` contract, nothing in it you can't audit
+first. Download the installer, read it, then run it, per-user (no root) or
 system-wide:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh -o rankrat-install.sh
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh \
+  -o rankrat-install.sh
 less rankrat-install.sh
 bash rankrat-install.sh                # per-user   -> ~/.local/bin/rankrat
 sudo bash rankrat-install.sh --system  # system-wide -> /usr/local/bin/rankrat
@@ -57,12 +64,12 @@ No write access to either bin directory? Keep it in the checkout and run
 
 Either way, the profile lives owner-only at `~/.config/rankrat` (override per
 launch with `rankrat --data-dir DIR` or `RANKRAT_DATA_DIR`). A system-wide
-install shares the command and nothing else — every user still runs `rankrat
+install shares the command and nothing else. Every user still runs `rankrat
 setup` into their own private profile, and the wrapper refuses to share one.
 
 ## Run guided setup
 
-Create the credentials first. Skip any provider you don't use — setup only asks
+Create the credentials first. Skip any provider you don't use. Setup only asks
 about the ones you pick.
 
 - **Google:** start at <https://console.cloud.google.com/projectcreate> and
@@ -97,8 +104,8 @@ rankrat setup
 
 From a source checkout it's `make setup`.
 
-Setup builds `$HOME/.config/rankrat` owner-only — a minimal valid boundary file,
-the HTTP bearer, and the credential/OAuth/state directories — before it asks you
+Setup builds `$HOME/.config/rankrat` owner-only (a minimal valid boundary file,
+the HTTP bearer, and the credential/OAuth/state directories) before it asks you
 for anything. Want a separate account or a throwaway test profile? Point it
 somewhere else:
 
@@ -110,7 +117,7 @@ It creates missing paths without overwriting, rejects symlinks, normalizes
 sensitive permissions, then walks each provider you selected: prints the console
 URL and the account-wide permissions it needs, takes the credential through a
 hidden prompt, and writes it at mode `0600`. For Google you paste the Desktop
-OAuth client JSON at that prompt — it's a single line, paste it as-is — and
+OAuth client JSON at that prompt (it's a single line, paste it as-is), and
 setup then runs one full-scope OAuth flow and saves the refresh record.
 
 Rerun it as often as you like. A selected provider is added or refreshed in
@@ -121,7 +128,7 @@ before reading the secret so you can name the intended account in
 
 Once credentials exist, setup runs provider readiness. It does not create site
 properties, submit URLs or sitemaps, fire IndexNow, or spin up a throwaway DNS
-record just to prove a Cloudflare token — which is exactly why the explicit
+record just to prove a Cloudflare token, which is exactly why the explicit
 Cloudflare permissions above are required even though readiness can list zones.
 
 No checkout? The wrapper gives you the same guided setup plus an explicit Google
@@ -129,7 +136,8 @@ reauthorization command:
 
 ```sh
 rankrat --data-dir /absolute/path/to/rankrat-profile setup
-rankrat --data-dir /absolute/path/to/rankrat-profile auth-google --print-authorization-url
+rankrat --data-dir /absolute/path/to/rankrat-profile \
+  auth-google --print-authorization-url
 ```
 
 Provider-side steps and permissions live in
@@ -138,7 +146,6 @@ Provider-side steps and permissions live in
 ## Start Rankrat
 
 ```sh
-rankrat           # stdio MCP using ~/.config/rankrat
 rankrat http      # attached REST + Streamable HTTP MCP + Lighthouse
 rankrat http -d   # detached stack with automatic restarts
 ```
@@ -147,8 +154,8 @@ HTTP uses the selected profile as its Compose project directory. If there's no
 `docker-compose.yml` there, the wrapper drops in its reviewed default
 atomically; if a safe regular file is already there, it leaves yours alone and
 uses it. The profile root and that Compose file must be owned by the current UID
-and not group- or world-writable. The profile root itself never gets mounted —
-only `config`, `secrets`, `oauth`, and `state` do.
+and not group- or world-writable. The profile root itself never gets mounted.
+Only `config`, `secrets`, `oauth`, and `state` do.
 
 From a checkout, build both local images and attach to the same deployment:
 
@@ -156,7 +163,7 @@ From a checkout, build both local images and attach to the same deployment:
 make run-http
 ```
 
-Raw `docker compose up` still works through the committed file — export the
+Raw `docker compose up` still works through the committed file. Export the
 absolute `RANKRAT_DATA_DIR` and numeric `RANKRAT_UID`/`RANKRAT_GID` in that
 shell first; the wrapper derives them for you.
 
@@ -179,10 +186,10 @@ Stdio uses no bearer and no port.
 
 Four calls that touch nothing you'd regret:
 
-1. `server_info` — process policy and capability metadata.
-2. `accounts_list` and `sites_list` — configured, non-secret scope.
-3. `diagnostics` — local checks, no provider calls.
-4. `provider_readiness` — live access for one account.
+1. `server_info`: process policy and capability metadata.
+2. `accounts_list` and `sites_list`: configured, non-secret scope.
+3. `diagnostics`: local checks, no provider calls.
+4. `provider_readiness`: live access for one account.
 
 Want the REST contract at runtime? Turn it on:
 
@@ -190,7 +197,7 @@ Want the REST contract at runtime? Turn it on:
 RANKRAT_ENABLE_OPENAPI=true
 ```
 
-Then read `/openapi.json`. The committed [`openapi.json`](../openapi.json) is the
+Then read `/openapi.json`. The committed [`openapi.json`](https://github.com/psyb0t/rankrat/blob/main/openapi.json) is the
 full writable contract; the runtime document drops whatever routes you disabled.
 
 ## Next steps

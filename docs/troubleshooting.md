@@ -1,3 +1,9 @@
+---
+title: "Troubleshooting"
+description: "Fixes for Rankrat startup, profile, OAuth, provider, sitemap, monitor, and Lighthouse failures, with the error categories each one reports."
+nav_order: 12
+---
+
 # Troubleshooting
 
 Start at the smallest layer that can fail and work up: local paths → boundary
@@ -9,7 +15,7 @@ rankrat setup
 ```
 
 From a checkout, `make setup` runs the same guided profile setup. It validates
-each configured provider account — no separate live-test selector file needed.
+each configured provider account. No separate live-test selector file needed.
 
 ## Contents
 
@@ -34,6 +40,7 @@ each configured provider account — no separate live-test selector file needed.
 - [Lighthouse returns unavailable](#lighthouse-returns-unavailable)
 - [Docker build fails with registry 401](#docker-build-fails-with-registry-401)
 - [Provider readiness passes but a report fails](#provider-readiness-passes-but-a-report-fails)
+- [Error codes](#error-codes)
 - [Collect useful diagnostics safely](#collect-useful-diagnostics-safely)
 
 ## Startup says configuration is invalid
@@ -48,17 +55,17 @@ Check, in order:
 - account/target/resource IDs are unique;
 - public roots are HTTPS with no query, fragment, credentials, or nonstandard
   port;
-- every `RANKRAT_*` name matches `.env.example` — an unknown or misspelled
-  environment variable is silently ignored, not honored;
+- every `RANKRAT_*` name matches `.env.example` (an unknown or misspelled
+  environment variable is silently ignored, not honored);
 - `RANKRAT_READ_ONLY` is exactly `true` or `false`.
 
-Use [`boundaries.json.example`](../config/boundaries.json.example) and
+Use [`boundaries.json.example`](https://github.com/psyb0t/rankrat/blob/main/config/boundaries.json.example) and
 [Configuration](configuration.md) as the field reference.
 
 ## A required config, secret, OAuth, or state path is missing
 
 The wrapper needs a boundary file plus real `secrets/`, `oauth/`, and `state/`
-directories under one profile. Don't hand-build or hand-repair that tree — run
+directories under one profile. Don't hand-build or hand-repair that tree. Run
 `rankrat setup`, or `rankrat --data-dir /absolute/profile setup` for a separate
 profile. Setup creates only the missing owner-only paths and never overwrites an
 existing secret or boundary document.
@@ -69,12 +76,12 @@ owned by the current user and owner-only.
 
 ## Boundary file permission denied inside Docker
 
-Mount `config/` at `/run/config` — the directory, not the file. A single-file
+Mount `config/` at `/run/config` (the directory, not the file). A single-file
 bind leaves the image's baked `/run/config` ownership in place, and the host UID
 may not be able to traverse it.
 
 Use the published wrapper or the plain command in
-[Transports and deployment](transports.md#plain-docker-stdio-mcp).
+[Transports and deployment](transports.md#plain-docker).
 
 ## Google says the app is unverified or testing
 
@@ -86,7 +93,7 @@ until the app's publishing status changes.
 ## Google authorization callback was not accepted
 
 Keep the authorization command alive until the browser redirects to the exact
-loopback callback — kill it early and the handshake never completes. Confirm:
+loopback callback. Kill it early and the handshake never completes. Confirm:
 
 - the OAuth client type is Desktop app;
 - the printed URL is from the current command, not a stale attempt;
@@ -96,7 +103,7 @@ loopback callback — kill it early and the handshake never completes. Confirm:
 - the user approved instead of canceling.
 
 Authorization failures write a bounded `google-auth.log` under OAuth storage.
-Treat it as sensitive local diagnostic state — do not publish it. It records the
+Treat it as sensitive local diagnostic state. Do not publish it. It records the
 failing stage and a finite failure category without dragging OAuth tokens or raw
 upstream responses into normal service logs. A rejected callback also carries a
 fixed `reason` such as `callback_state_rejected`; it never contains the callback
@@ -118,7 +125,7 @@ bar, and click **Enable**. A button labelled **Manage** means it's already on.
 - Tag Manager tools fail: enable
   [Google Tag Manager API](https://console.cloud.google.com/apis/library/tagmanager.googleapis.com).
 
-Enabling an API isn't instant — wait a few minutes, then rerun the failing live
+Enabling an API isn't instant. Wait a few minutes, then rerun the failing live
 check. Re-authorize only after enabling a newly required OAuth scope. Last,
 confirm the signed-in user can actually see the exact Search Console/GA4
 resources.
@@ -152,7 +159,7 @@ it does not conjure access to an account the user can't manage.
 
 ## GA4 account/property cannot be found
 
-Call `google_analytics_account_inventory` — the property may live under an
+Call `google_analytics_account_inventory`. The property may live under an
 Analytics account you didn't expect. Call `google_analytics_data_streams` and
 compare its `G-` ID against the site tag; a correctly installed tag can be
 feeding a different property.
@@ -163,7 +170,7 @@ its numeric account ID for onboarding.
 
 ## PageSpeed fails while other Google tools work
 
-PageSpeed doesn't use OAuth — that's the catch. Configure a PageSpeed Insights
+PageSpeed doesn't use OAuth. That's the catch. Configure a PageSpeed Insights
 API key or live with tighter anonymous quota. CrUX History requires the key.
 Confirm the target is inside `pagespeed_sites` and the key is restricted to the
 enabled PageSpeed API.
@@ -174,7 +181,7 @@ make test-live-pagespeed
 
 ## Google says a sitemap could not be read
 
-A successful submission means the API accepted the sitemap URL — not that Google
+A successful submission means the API accepted the sitemap URL, not that Google
 fetched it. Check the exact public sitemap with a normal unauthenticated client:
 
 - direct HTTPS returns `200`;
@@ -193,7 +200,7 @@ polling; it can't make Google fetch on command.
 
 Verify the site in Bing Webmaster Tools and regenerate/check the account API
 key. Call `site_ownership_check` with the selected `bing_account_id` to confirm
-the exact site is verified — a site can be visible to the account yet unverified,
+the exact site is verified. A site can be visible to the account yet unverified,
 and Bing will reject sitemap writes on it. Then use `bing_feeds`,
 `bing_url_information`, and `bing_crawl_issues` to tell sitemap, URL, and crawl
 state apart. The `sites` array is persisted inventory, not a second permission
@@ -209,7 +216,7 @@ make test-live-bing
 in the same call. A resolver asked for that exact name a moment earlier can hold
 a cached negative answer from before the record existed, so the first call often
 returns `propagated: false` and stops before it can redeem the proof. That is
-ordinary DNS negative caching, not a failure — the record was still created.
+ordinary DNS negative caching, not a failure. The record was still created.
 
 Confirm the record is actually public, then call again:
 
@@ -219,14 +226,14 @@ dig +short CNAME <token>.example.com @1.1.1.1
 
 Once it resolves on public resolvers and the negative cache has expired, a
 repeated `site_ownership_verify` sees it propagated and redeems the proof. Poll
-`site_ownership_check` until `complete` is true, and leave the record in place —
-providers recheck it.
+`site_ownership_check` until `complete` is true, and leave the record in place.
+Providers recheck it.
 
 ## A provider tool is UNAVAILABLE with a DNS-sinkhole detail
 
 When a provider tool returns `UNAVAILABLE` and the error carries a `detail` that
 names a host resolving to `0.0.0.0` or `127.0.0.1`, a DNS-level content blocker
-on the host or its network — AdGuard, Pi-hole, or similar — is filtering that
+on the host or its network (AdGuard, Pi-hole, or similar) is filtering that
 provider's domain, so the connection is refused before it leaves the machine.
 This is common for the analytics domains (`analyticsadmin.googleapis.com`,
 `analyticsdata.googleapis.com`) that such blocklists classify as tracking, which
@@ -240,7 +247,7 @@ dig +short analyticsadmin.googleapis.com
 ```
 
 A `0.0.0.0` answer (or no answer) is the block; a routable address is not. This
-is a network condition, not a credential or scope problem — the OAuth grant and
+is a network condition, not a credential or scope problem. The OAuth grant and
 API enablement are unaffected.
 
 ## Cloudflare readiness or writes fail
@@ -250,13 +257,13 @@ Confirm:
 - the token has Zone Read across the intended account zones;
 - the selected zone's 32-character `provider_zone_id` in the boundary matches a
   zone that token can actually read;
-- the feature permission exists — DNS Edit, Analytics Read, Cache Purge, or
+- the feature permission exists: DNS Edit, Analytics Read, Cache Purge, or
   Cache Rules Edit, as appropriate;
 - the account ID in the request selects the intended Cloudflare credential.
 
 Rankrat refuses arbitrary records, whole-zone purge, unknown templates, and
 ambiguous duplicate managed-rule markers even when Cloudflare itself would allow
-them. That's deliberate — don't file it as a bug.
+them. That's deliberate. Don't file it as a bug.
 
 ```sh
 make test-live-cloudflare
@@ -269,7 +276,7 @@ Confirm the configured `key_location`:
 - uses direct HTTPS on the configured host;
 - returns `200` with no redirect;
 - contains exactly the key, with no HTML or newline transformation;
-- is public — no authentication or challenge;
+- is public: no authentication or challenge;
 - matches the local key file the target selects.
 
 ```sh
@@ -291,14 +298,14 @@ Stdio never uses the bearer. `/healthz` stays public for liveness probes;
 
 ## REST write route or MCP write tool is missing
 
-Expected in read-only mode — nothing's broken. Restart with
+Expected in read-only mode. Nothing's broken. Restart with
 `RANKRAT_READ_ONLY=false`. Runtime `/openapi.json` and MCP `tools/list` reflect
 whichever you chose.
 
 ## Runtime OpenAPI is missing
 
 Set `RANKRAT_ENABLE_OPENAPI=true` before starting HTTP. The committed
-[`openapi.json`](../openapi.json) is available without enabling runtime docs at
+[`openapi.json`](https://github.com/psyb0t/rankrat/blob/main/openapi.json) is available without enabling runtime docs at
 all.
 
 ## Lighthouse returns unavailable
@@ -320,14 +327,14 @@ A stale cached Docker Hub login can make anonymous public base-image pulls fail
 with `401 Unauthorized`. Inspect your local Docker credential setup, log in with
 a valid account or remove just the stale registry credential, then retry. Do not
 weaken digest pinning or repoint Dockerfiles at random mirrors as a first
-move — that trades a login glitch for a supply-chain hole.
+move. That trades a login glitch for a supply-chain hole.
 
 Rankrat already resolves selected bases/tools through reviewed public mirrors; a
 credential error can still hit an image whose registry is Docker Hub.
 
 ## Provider readiness passes but a report fails
 
-Readiness proves one minimal account call — not every resource, date range,
+Readiness proves one minimal account call, not every resource, date range,
 quota, or product feature. Run the provider-specific live target against the same
 profile, then inspect:
 
@@ -338,6 +345,43 @@ profile, then inspect:
 - the requested feature is enabled for that provider account;
 - the provider even has data for that interval.
 
+## Error codes
+
+Failures come back as a small JSON object with a finite `code`, a fixed
+`message`, and sometimes a curated `detail`. Raw provider bodies and upstream
+URLs never leak through.
+
+A provider failure over REST:
+
+```json
+{
+  "code": "RATE_LIMITED",
+  "message": "provider operation failed",
+  "detail": "…"
+}
+```
+
+Over MCP the same object is the text of a tool result with `isError: true`.
+
+| `code` | Where | Means |
+| --- | --- | --- |
+| `AUTHENTICATION` | REST 502, MCP | The provider rejected the credential. Re-run `rankrat setup` or `rankrat auth-google` |
+| `FORBIDDEN` | REST 502, MCP | The credential works but can't touch that resource |
+| `RATE_LIMITED` | REST 429, MCP | Provider quota or rate limit hit. Wait and retry |
+| `TIMEOUT` | REST 502, MCP | The provider didn't answer in time |
+| `UNAVAILABLE` | REST 502, MCP | The provider, or an optional component such as the Lighthouse worker, can't be reached |
+| `INVALID_RESPONSE` | REST 502, MCP | The provider answered with something Rankrat refuses to trust |
+| `VALIDATION_FAILED` | REST 422 | The request body or parameters failed schema validation |
+| `REQUEST_REJECTED` | REST 400, 404, 409, 429 or 503 | Rankrat refused the request: a boundary or policy rule (400), a missing monitor or issue (404), a state conflict (409), the IndexNow rate limit (429), or monitor state unavailable (503) |
+| `TOOL_INPUT_INVALID` | MCP | Tool arguments failed schema validation |
+| `TOOL_REQUEST_REJECTED` | MCP | Rankrat refused the call, same causes as `REQUEST_REJECTED` |
+| `TOOL_NOT_FOUND` | MCP | Unknown tool name, or a write tool on a read-only server |
+| `RESOURCE_NOT_FOUND` | MCP `resources/read` | Prefix of the JSON-RPC error message for an unknown resource URI |
+
+Every HTTP response carries an `X-Request-ID` header, echoing a valid one you
+sent or a fresh UUID, and the same ID lands in the server log. Quote it when you
+report a problem.
+
 ## Collect useful diagnostics safely
 
 Record:
@@ -346,8 +390,8 @@ Record:
 - tool/operation name;
 - the finite error category;
 - account/resource IDs that are safe to disclose;
-- whether stdio, HTTP MCP, or REST was used;
-- relevant configuration field names — never secret values;
+- whether HTTP MCP or REST was used;
+- relevant configuration field names (never secret values);
 - whether `diagnostics`, `provider_readiness`, or a mocked test reproduces it.
 
 Never paste bearer tokens, OAuth records, provider keys, downloaded OAuth client

@@ -1,8 +1,14 @@
+---
+title: "Lighthouse"
+description: "Local Lighthouse audits in the isolated psyb0t/rankrat-lighthouse worker: deployment, the five tools, limits, and the browser threat model."
+nav_order: 8
+---
+
 # Local Lighthouse audits
 
 Run Chromium on your own box and get Lighthouse scores back without shipping the
 page off to PageSpeed Insights. Browser execution is optional and lives entirely
-in the separate `psyb0t/rankrat-lighthouse` image — it never touches the main
+in the separate `psyb0t/rankrat-lighthouse` image. It never touches the main
 Rankrat process.
 
 ## Contents
@@ -32,7 +38,7 @@ Five tools, five REST routes:
 Every call takes `account_id`, a known `site_url`, a child `page_url`, and an
 optional timeout between 5 and 300 seconds. The account's `pagespeed_sites`
 inventory is what defines the site roots for both PageSpeed and Lighthouse
-child-URL containment — turning on the browser creates no second credential
+child-URL containment. Turning on the browser creates no second credential
 scope. Same accounts, same boundaries.
 
 ## Architecture
@@ -46,14 +52,14 @@ Rankrat image -- /run/lighthouse/lighthouse.sock --> Lighthouse image
   boundary checks                                 no provider credentials
 ```
 
-The worker exposes no TCP listener — Rankrat reaches it over a shared Unix socket
+The worker exposes no TCP listener. Rankrat reaches it over a shared Unix socket
 and nothing else. It gets zero Google, Bing, Cloudflare, IndexNow, OAuth, or
 Rankrat HTTP bearer mounts. If a rendered page pops the Chromium process, there
 are no credentials sitting there to steal.
 
 Requests and reports are schema-validated on both sides. Rankrat checks the
 requested page before dispatch, and checks Lighthouse's actual final document URL
-before it hands you a result — a mid-flight redirect off your site gets caught.
+before it hands you a result. A mid-flight redirect off your site gets caught.
 
 ## Run the two-image stack
 
@@ -73,11 +79,6 @@ The wrapper writes the reviewed Compose deployment into the profile when it's
 missing and leaves an existing operator file alone. Drop `-d` to attach to both
 services' logs.
 
-`rankrat stdio` gets the same capability without Compose: the wrapper starts a
-per-session ephemeral worker over a private socket volume and removes it on exit.
-The app never touches the Docker socket — the wrapper runs the sidecar host-side
-and the app reaches it only over the shared Unix socket, mounted read-only.
-
 The committed Compose deployment:
 
 - binds Rankrat HTTP to host loopback;
@@ -93,7 +94,7 @@ The committed Compose deployment:
 
 Set `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` to an empty value or omit the socket
 mount. The five tools stay discoverable and return a finite `UNAVAILABLE`.
-Rankrat does not quietly fall back to PageSpeed Insights — if you asked for a
+Rankrat does not quietly fall back to PageSpeed Insights. If you asked for a
 local audit and the worker isn't there, you get told, not swapped onto a
 different provider behind your back.
 
@@ -112,7 +113,7 @@ proxy. That proxy:
 Allowed pages can pull public third-party subresources, and a public cross-origin
 redirect may get fetched before Rankrat rejects its final URL as off-site.
 Private and special destinations stay blocked by the proxy the whole way. Treat
-public cross-origin traffic as part of the audit's network footprint — because it
+public cross-origin traffic as part of the audit's network footprint, because it
 is.
 
 ## Chromium sandbox caveat
@@ -120,23 +121,23 @@ is.
 Chromium runs with `--no-sandbox`. The non-root, capability-free,
 no-new-privileges container this ships in cannot give Chromium its
 namespace/setuid sandbox. The container limits, missing credentials, and
-outbound proxy shrink the blast radius — they are not a renderer exploit boundary
+outbound proxy shrink the blast radius. They are not a renderer exploit boundary
 equivalent to Chromium's own sandbox. Don't pretend otherwise.
 
 So point it at operator-controlled, trusted content only. For untrusted pages,
-wrap the whole worker in a stronger outer runtime — gVisor, Kata Containers, that
+wrap the whole worker in a stronger outer runtime: gVisor, Kata Containers, that
 class of thing. Do not run its Chromium command straight on the host, and do not
 bolt provider-credential mounts onto the worker to "make it convenient."
 
 ## Timeouts and concurrency
 
-The public request timeout is bounded (5–300 seconds), and the worker enforces
+The public request timeout is bounded (5 to 300 seconds), and the worker enforces
 its own runner timeout on top. It takes one audit at a time and returns a finite
 busy response for anything concurrent, rather than spawning an unbounded fleet of
 browsers and melting the host.
 
 Lighthouse scores drift with machine load, network conditions, and the page
-itself. Read repeated measurements and the findings — never treat a single score
+itself. Read repeated measurements and the findings. Never treat a single score
 as gospel.
 
 ## Verification
@@ -154,8 +155,8 @@ Production-image, real-browser transport test:
 make test-lighthouse-image
 ```
 
-That gate builds both production images and drives real audits through stdio MCP,
-authenticated REST, and authenticated Streamable HTTP MCP. The mocked
+That gate builds both production images and drives real audits through
+authenticated REST and authenticated Streamable HTTP MCP. The mocked
 contract/security suites additionally cover invalid boundaries, private address
 classes, malformed worker responses, oversized bodies, busy responses, timeouts,
 and transport parity.

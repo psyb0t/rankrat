@@ -72,3 +72,6 @@ git-update.sh
 
 # Review receipt for the local release script.
 git-update.sh.debot
+
+# Local agent and editor settings.
+*.local.json

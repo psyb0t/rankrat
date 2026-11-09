@@ -2,31 +2,27 @@
   "id": "@psyb0t/rankrat",
   "name": "rankrat",
   "version": "0.0.0",
-  "extensions": ["./bin/cli.js"],
-  "description": "Self-hosted, account-authorized SEO audits, monitoring, Google Tag Manager, Microsoft Clarity, managed edge redirects, safe Bing content submission, internal links, Bing backlink intelligence, CrUX, ownership, remediation, analytics, Cloudflare performance, PageSpeed, and optional local Lighthouse tools. The default server starts the published Rankrat image over MCP stdio.",
+  "extensions": [
+    "./bin/cli.js"
+  ],
+  "description": "Connect OpenClaw to a running Rankrat server over Streamable HTTP MCP: account-authorized SEO audits, monitoring, Google Tag Manager, Microsoft Clarity, managed edge redirects, safe Bing content submission, internal links, Bing backlink intelligence, CrUX, ownership, remediation, analytics, Cloudflare performance, PageSpeed, and optional local Lighthouse tools. The plugin is a stdio-to-HTTP bridge to $RANKRAT_URL/mcp; run the server yourself.",
   "mcpServers": {
     "rankrat": {
       "transport": "stdio",
       "command": "node",
-      "args": ["./bin/cli.js"]
+      "args": [
+        "./bin/cli.js"
+      ]
     }
   },
   "environment": {
-    "RANKRAT_DATA_DIR": {
-      "required": false,
-      "description": "Absolute shared profile directory containing config, secrets, OAuth records, and state. Defaults to $HOME/.config/rankrat."
+    "RANKRAT_URL": {
+      "required": true,
+      "description": "Base URL of your running Rankrat server, e.g. http://127.0.0.1:8080 (the bridge appends /mcp)."
     },
-    "RANKRAT_IMAGE": {
+    "RANKRAT_TOKEN": {
       "required": false,
-      "description": "Published Rankrat image reference. Defaults to psyb0t/rankrat."
-    },
-    "RANKRAT_READ_ONLY": {
-      "required": false,
-      "description": "Set to true to omit every write tool. Defaults to false."
-    },
-    "RANKRAT_LOG_LEVEL": {
-      "required": false,
-      "description": "Rankrat server log level."
+      "description": "HTTP bearer from the server profile's secrets/rankrat/http-bearer-token. Required unless the server runs without a bearer."
     }
   },
   "configSchema": {

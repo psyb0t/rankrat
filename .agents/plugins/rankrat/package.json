@@ -2,10 +2,12 @@
   "name": "@psyb0t/rankrat",
   "version": "0.0.0",
   "mcpName": "io.github.psyb0t/rankrat",
-  "description": "OpenClaw static MCP definition and Docker stdio launcher for Rankrat SEO audits, monitoring, Google Tag Manager, Microsoft Clarity, managed edge redirects, safe Bing content submission, internal links, CrUX, ownership, analytics, Bing backlink intelligence, Cloudflare performance, remediation, PageSpeed, and optional Lighthouse tools.",
+  "description": "OpenClaw stdio-to-HTTP MCP bridge for a running Rankrat server: SEO audits, monitoring, Google Tag Manager, Microsoft Clarity, managed edge redirects, safe Bing content submission, internal links, CrUX, ownership, analytics, Bing backlink intelligence, Cloudflare performance, remediation, PageSpeed, and optional Lighthouse tools.",
   "type": "module",
   "openclaw": {
-    "extensions": ["./bin/cli.js"],
+    "extensions": [
+      "./bin/cli.js"
+    ],
     "compat": {
       "pluginApi": ">=2026.3.24-beta.2"
     },
@@ -50,6 +52,9 @@
   ],
   "engines": {
     "node": ">=18"
+  },
+  "dependencies": {
+    "mcp-remote": "0.1.38"
   },
   "publishConfig": {
     "access": "public"

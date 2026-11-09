@@ -19,7 +19,6 @@ readonly TEST_MEMORY_LIMIT="512m"
 readonly TEST_CPU_LIMIT="1"
 readonly TEST_PIDS_LIMIT=128
 readonly MCP_INITIALIZE_REQUEST='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"rankrat-image-smoke","version":"0"}}}'
-readonly MCP_INITIALIZED_NOTIFICATION='{"jsonrpc":"2.0","method":"notifications/initialized"}'
 readonly MCP_TOOLS_LIST_REQUEST='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
 readonly MCP_SERVER_INFO_REQUEST='{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"server_info","arguments":{}}}'
 readonly MCP_MONITOR_CREATE_REQUEST='{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"monitor_create","arguments":{"name":"Audit '\'' OR 1=1--","account_id":"google","site_url":"https://example.com/"}}}'
@@ -168,7 +167,8 @@ container_security_args=(
 readonly -a container_security_args
 
 log INFO "checking startup fails without an explicit boundary mount"
-if docker run --rm --network none --init --user "$TEST_CONTAINER_UID_GID" --read-only \
+if timeout --kill-after=2s "${MCP_TIMEOUT_SECONDS}s" \
+	docker run --rm --network none --init --user "$TEST_CONTAINER_UID_GID" --read-only \
 	--cap-drop=ALL --security-opt no-new-privileges:true --pids-limit "$TEST_PIDS_LIMIT" \
 	--memory "$TEST_MEMORY_LIMIT" --cpus "$TEST_CPU_LIMIT" \
 	--tmpfs /tmp:rw,noexec,nosuid,size=32m "$image_reference" </dev/null; then
@@ -177,54 +177,6 @@ if docker run --rm --network none --init --user "$TEST_CONTAINER_UID_GID" --read
 fi
 
 assert_test_mounts_exist
-log INFO "checking stdio MCP initialization without network access"
-mcp_output=$(printf '%s\n' \
-	"$MCP_INITIALIZE_REQUEST" \
-	"$MCP_INITIALIZED_NOTIFICATION" \
-	"$MCP_TOOLS_LIST_REQUEST" | timeout --kill-after=2s \
-	"${MCP_TIMEOUT_SECONDS}s" docker run --rm -i --network none \
-	"${container_security_args[@]}" "$image_reference")
-grep -Fq '"protocolVersion"' <<<"$mcp_output" || {
-	log ERROR "stdio MCP initialization did not return a protocol version"
-	exit 1
-}
-grep -Fq '"name":"server_info"' <<<"$mcp_output" || {
-	log ERROR "stdio MCP tools/list did not expose server_info"
-	exit 1
-}
-
-mcp_call_output=$(printf '%s\n' \
-	"$MCP_INITIALIZE_REQUEST" \
-	"$MCP_INITIALIZED_NOTIFICATION" \
-	"$MCP_SERVER_INFO_REQUEST" | timeout --kill-after=2s \
-	"${MCP_TIMEOUT_SECONDS}s" docker run --rm -i --network none \
-	"${container_security_args[@]}" "$image_reference")
-grep -Fq '\"read_only\":true' <<<"$mcp_call_output" || {
-	log ERROR "stdio MCP tools/call did not execute server_info"
-	exit 1
-}
-
-log INFO "checking writable stdio MCP persists monitor state"
-state_mcp_output=$(printf '%s\n' \
-	"$MCP_INITIALIZE_REQUEST" \
-	"$MCP_INITIALIZED_NOTIFICATION" \
-	"$MCP_MONITOR_CREATE_REQUEST" \
-	"$MCP_MONITORS_LIST_REQUEST" | timeout --kill-after=2s \
-	"${MCP_TIMEOUT_SECONDS}s" docker run --rm -i --network none \
-	"${container_security_args[@]}" \
-	--mount "type=bind,src=$state_directory,dst=/run/state" \
-	-e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
-	-e RANKRAT_READ_ONLY=false \
-	"$image_reference")
-grep -Fq "\\\"name\\\":\\\"Audit ' OR 1=1--\\\"" <<<"$state_mcp_output" || {
-	log ERROR "writable stdio MCP did not create and list a persisted monitor"
-	exit 1
-}
-[[ -f "$state_directory/rankrat.sqlite3" ]] || {
-	log ERROR "writable stdio MCP did not create the mounted state database"
-	exit 1
-}
-
 log INFO "checking loopback-only HTTP health and authentication"
 docker run -d --name "$container_name" --network bridge \
 	-p "127.0.0.1::${HTTP_PORT}" \
@@ -430,9 +382,11 @@ docker run -d --name "$container_name" --network bridge \
 	--mount "type=bind,src=$config_directory,dst=/run/config" \
 	--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly" \
 	--mount "type=bind,src=$oauth_directory,dst=/run/oauth,readonly" \
+	--mount "type=bind,src=$state_directory,dst=/run/state" \
 	-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
 	-e RANKRAT_SECRET_ROOT=/run/secrets \
 	-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
+	-e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
 	-e RANKRAT_HTTP_HOST=0.0.0.0 \
 	-e RANKRAT_HTTP_PORT="$HTTP_PORT" \
 	-e RANKRAT_HTTP_BEARER_SECRET_FILE=/run/secrets/test-http-bearer \
@@ -450,6 +404,7 @@ writable_host_port="${writable_port_mapping##*:}"
 readonly writable_health_url="http://127.0.0.1:${writable_host_port}/healthz"
 readonly writable_server_info_url="http://127.0.0.1:${writable_host_port}${SERVER_INFO_URL_PATH}"
 readonly writable_openapi_url="http://127.0.0.1:${writable_host_port}${OPENAPI_PATH}"
+readonly writable_mcp_url="http://127.0.0.1:${writable_host_port}/mcp/"
 
 for ((attempt = 1; attempt <= HTTP_RETRY_COUNT; attempt++)); do
 	if curl --silent --show-error --fail --noproxy '*' --proto '=http' \
@@ -480,6 +435,30 @@ writable_openapi=$(curl --silent --show-error --fail --config "$curl_authorizati
 	--max-time "$HTTP_CONNECT_TIMEOUT_SECONDS" "$writable_openapi_url")
 grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$writable_openapi" || {
 	log ERROR "writable server did not publish the site onboarding route"
+	exit 1
+}
+
+log INFO "checking writable Streamable HTTP MCP persists monitor state"
+state_mcp_output=""
+for mcp_request in \
+	"$MCP_INITIALIZE_REQUEST" \
+	"$MCP_MONITOR_CREATE_REQUEST" \
+	"$MCP_MONITORS_LIST_REQUEST"; do
+	mcp_response=$(curl --silent --show-error --fail --config "$curl_authorization_config" \
+		--noproxy '*' --proto '=http' --max-redirs 0 \
+		--connect-timeout "$HTTP_CONNECT_TIMEOUT_SECONDS" \
+		--max-time "$MCP_TIMEOUT_SECONDS" --request POST \
+		--header 'Content-Type: application/json' \
+		--header 'Accept: application/json, text/event-stream' \
+		--data "$mcp_request" "$writable_mcp_url")
+	state_mcp_output+="$mcp_response"
+done
+grep -Fq "\\\"name\\\":\\\"Audit ' OR 1=1--\\\"" <<<"$state_mcp_output" || {
+	log ERROR "writable Streamable HTTP MCP did not create and list a persisted monitor"
+	exit 1
+}
+[[ -f "$state_directory/rankrat.sqlite3" ]] || {
+	log ERROR "writable Streamable HTTP MCP did not create the mounted state database"
 	exit 1
 }
 
@@ -544,4 +523,4 @@ if ! grep -Fq "\"${SITE_ONBOARDING_URL_PATH}\"" <<<"$no_onboarding_openapi"; the
 	exit 1
 fi
 
-log INFO "production image stdio and HTTP smoke passed"
+log INFO "production image REST and Streamable HTTP MCP smoke passed"

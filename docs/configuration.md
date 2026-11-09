@@ -1,10 +1,16 @@
+---
+title: "Configuration"
+description: "Every Rankrat runtime environment variable and boundaries.json field: accounts, sites, inventory, limits, state, and the read-only switch."
+nav_order: 3
+---
+
 # Configuration and boundaries
 
 Every runtime switch and every boundary field, and what each one actually does.
 
 Rankrat reads recognized configuration once, at startup, and never reloads.
-Unknown `RANKRAT_*` variables are ignored — your typos included — so copy names
-from [`.env.example`](../.env.example) instead of wondering why a setting did
+Unknown `RANKRAT_*` variables are ignored (your typos included), so copy names
+from [`.env.example`](https://github.com/psyb0t/rankrat/blob/main/.env.example) instead of wondering why a setting did
 nothing. The boundary document is the opposite of forgiving: unknown fields,
 duplicates, invalid URLs, mismatched provider fields, and relative credential
 paths all fail startup outright.
@@ -36,7 +42,7 @@ Read by the `rankrat` launcher, not the Python process:
 
 The launcher derives exactly five paths from that root:
 `config/boundaries.json`, `secrets/`, `oauth/`, `state/`, and
-`docker-compose.yml`. There are no separate per-path overrides — so one process
+`docker-compose.yml`. There are no separate per-path overrides, so one process
 can't accidentally splice credentials, OAuth records, and inventory from
 different profiles. The root must be absolute, canonical, non-symlinked, and
 free of anything that would confuse Docker's `--mount` syntax. Only those fixed
@@ -48,14 +54,14 @@ and the HTTP bearer safely. HTTP uses the profile as its Compose project
 directory: it writes the reviewed Compose file when one is missing, preserves an
 existing regular file, and requires both the directory and the file to be owned
 by the current UID and not group/world writable. The Python process ignores the
-data-directory and image selectors entirely — those are the wrapper's business.
+data-directory and image selectors entirely. Those are the wrapper's business.
 
 ### Permanent host env file
 
 To set these once instead of per run, put them in a host env file at
 `~/.config/rankrat/.env` (override the path with `RANKRAT_ENV_FILE`). The launcher
-reads it before it selects a profile, so it can set `RANKRAT_DATA_DIR` — which
-profile to use — along with `RANKRAT_READ_ONLY`, `RANKRAT_IMAGE`,
+reads it before it selects a profile, so it can set `RANKRAT_DATA_DIR` (which
+profile to use) along with `RANKRAT_READ_ONLY`, `RANKRAT_IMAGE`,
 `RANKRAT_LIGHTHOUSE_IMAGE`, `RANKRAT_HTTP_PORT`, `RANKRAT_OAUTH_CALLBACK_PORT`,
 and `RANKRAT_ROLLING`. Each variable is filled only when it is unset or empty, so
 a `--data-dir` flag or a real environment variable still wins. Every `RANKRAT_*`
@@ -81,26 +87,26 @@ Read by the Python process:
 | `RANKRAT_SECRET_ROOT` | `/run/secrets` | Root permitted for credentials |
 | `RANKRAT_OAUTH_TOKEN_ROOT` | `/run/oauth` | Root permitted for OAuth records |
 | `RANKRAT_STATE_DATABASE` | empty | Persistent monitor database; empty disables it. The shipped HTTP Compose sets `/run/state/rankrat.sqlite3` |
-| `RANKRAT_SCHEDULER_INTERVAL_SECONDS` | `60` | HTTP scheduler wake interval (10–3600) |
-| `RANKRAT_STATE_RETENTION_DAYS` | `180` | Snapshot/event retention (1–3650) |
+| `RANKRAT_SCHEDULER_INTERVAL_SECONDS` | `60` | HTTP scheduler wake interval (10 to 3600) |
+| `RANKRAT_STATE_RETENTION_DAYS` | `180` | Snapshot/event retention (1 to 3650) |
 | `RANKRAT_LIGHTHOUSE_WORKER_SOCKET` | `/run/lighthouse/lighthouse.sock` | Worker socket; empty disables it |
 | `RANKRAT_LOG_FILE` | `/tmp/rankrat/rankrat.log` | Structured log destination |
 | `RANKRAT_LOG_LEVEL` | `INFO` | Log threshold |
 | `RANKRAT_HTTP_HOST` | `127.0.0.1` | Bind address inside the network namespace |
 | `RANKRAT_HTTP_PORT` | `8080` | HTTP listen port |
-| `RANKRAT_HTTP_BEARER_SECRET_FILE` | unset on loopback | Bearer-secret file |
+| `RANKRAT_HTTP_BEARER_SECRET_FILE` | unset on loopback | Bearer-secret file. `RANKRAT_HTTP_BEARER_TOKEN_FILE` is accepted as an alias |
 | `RANKRAT_ENABLE_OPENAPI` | `false` | Serve `/openapi.json` |
 | `RANKRAT_READ_ONLY` | `false` | Remove every write tool and route when true |
 
-Transport is a command — `stdio` or `http` — not an environment mode. The
+The server runs with the `http` command; there is no transport environment mode. The
 bounds shown are enforced, and an out-of-range value fails startup. A
 non-loopback `RANKRAT_HTTP_HOST` refuses to start without
 `RANKRAT_HTTP_BEARER_SECRET_FILE`. Full example in
-[`.env.example`](../.env.example).
+[`.env.example`](https://github.com/psyb0t/rankrat/blob/main/.env.example).
 
 ## Boundary document
 
-Copy [`boundaries.json.example`](../config/boundaries.json.example). Its shape:
+Copy [`boundaries.json.example`](https://github.com/psyb0t/rankrat/blob/main/config/boundaries.json.example). Its shape:
 
 ```json
 {
@@ -140,7 +146,7 @@ Provider-specific fields:
 
 A field from the wrong provider is rejected. Cloudflare accounts carry only DNS
 zone inventory; a Clarity account carries only its `id`, `provider`, and
-project-token `credential` — one account, one Clarity project. None of these
+project-token `credential`: one account, one Clarity project. None of these
 arrays narrows the credential's authority. Rankrat records resources as
 operations need them, but the provider stays the source of truth for what the
 credential can reach.
@@ -159,7 +165,7 @@ For provider-backed operations, the account ID selects a fixed credential and a
 fixed provider origin, and the requested property/site is validated against the
 inventory that account returns. URL-bearing operations also apply the
 public-HTTPS and child-containment rules above. A caller can't pick another
-credential or bend Rankrat into an arbitrary URL proxy — and the cached resource
+credential or bend Rankrat into an arbitrary URL proxy, and the cached resource
 arrays never become a second authorization layer to do it.
 
 ## DNS zones
@@ -209,7 +215,7 @@ Publish the generated key file before verification. This does not submit URLs.
 | `false` (default) | All supported reads and writes, site onboarding included |
 | `true` | Read tools only; write REST routes and MCP tools are never mounted or listed |
 
-This is the only capability switch — provider credentials are the authority.
+This is the only capability switch. Provider credentials are the authority.
 The wrapper still demands an owner-only, host-owned, non-symlink config
 directory before a writable process may persist discovered resources. Fixed
 provider origins, typed request validation, public-URL checks, and HTTP bearer
@@ -222,5 +228,5 @@ with no group or other bits. The scheduler runs only in long-lived HTTP mode. An
 empty `RANKRAT_STATE_DATABASE` disables persistence, and monitor operations then
 return a finite unavailable error.
 
-Back up SQLite with its online-backup tooling, or while Rankrat is stopped —
-copying a live main database while WAL state may exist gives you a corrupt one.
+Back up SQLite with its online-backup tooling, or while Rankrat is stopped.
+Copying a live main database while WAL state may exist gives you a corrupt one.

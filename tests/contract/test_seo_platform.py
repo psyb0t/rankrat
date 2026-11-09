@@ -98,7 +98,7 @@ def _patch_read_services(
 
 
 @pytest.mark.asyncio
-async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
+async def test_seo_read_operations_have_rest_and_mcp_parity(
     deployment: tuple[Settings, ApplicationServices],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -201,7 +201,7 @@ async def test_seo_read_operations_have_rest_and_stdio_mcp_parity(
 
 
 @pytest.mark.asyncio
-async def test_seo_write_operations_have_rest_and_stdio_mcp_parity(
+async def test_seo_write_operations_have_rest_and_mcp_parity(
     indexnow_deployment: tuple[Settings, ApplicationServices],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

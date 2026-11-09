@@ -51,47 +51,6 @@ HOST_USER_ID="$(id -u)"
 readonly HOST_USER_ID
 HOST_GROUP_ID="$(id -g)"
 readonly HOST_GROUP_ID
-read -r -d '' MCP_RESPONSE_VALIDATOR <<'PYTHON' || true
-import json
-import sys
-
-responses = []
-for line in sys.stdin:
-    try:
-        responses.append(json.loads(line))
-    except json.JSONDecodeError:
-        continue
-expected_by_id = {
-    2: {"performance", "accessibility", "best-practices", "seo"},
-    3: {"seo"},
-    4: {"accessibility"},
-    5: {"performance"},
-    6: {"best-practices"},
-}
-responses_by_id = {item.get("id"): item for item in responses}
-for response_id, expected_categories in expected_by_id.items():
-    response = responses_by_id.get(response_id)
-    if response is None:
-        raise SystemExit(
-            f"stdio MCP omitted response id={response_id}; "
-            f"response_ids={sorted(responses_by_id)}"
-        )
-    result = response.get("result", {})
-    content = result.get("content", [])
-    if not content or not isinstance(content[0].get("text"), str):
-        raise SystemExit(f"stdio MCP returned no text content for id={response_id}")
-    payload = json.loads(content[0]["text"])
-    if result.get("isError") is True:
-        raise SystemExit(
-            f"Lighthouse tool id={response_id} error code={payload.get('code', 'UNKNOWN')}"
-        )
-    returned_categories = {item["category"] for item in payload.get("categories", [])}
-    if returned_categories != expected_categories:
-        raise SystemExit(f"Lighthouse categories are wrong for stdio id={response_id}")
-    if not isinstance(payload.get("lighthouse_version"), str):
-        raise SystemExit(f"Lighthouse report id={response_id} has no version")
-PYTHON
-readonly MCP_RESPONSE_VALIDATOR
 read -r -d '' HTTP_RESPONSE_VALIDATOR <<'PYTHON' || true
 import json
 import sys
@@ -235,9 +194,6 @@ temporary_directory=$(
 readonly config_directory="$temporary_directory/config"
 readonly secret_directory="$temporary_directory/secrets"
 readonly oauth_directory="$temporary_directory/oauth"
-readonly mcp_input_fifo="$temporary_directory/mcp-input"
-readonly mcp_output_file="$temporary_directory/mcp-output.jsonl"
-readonly mcp_error_file="$temporary_directory/mcp-error.log"
 readonly curl_authorization_config="$temporary_directory/curl-authorization.conf"
 readonly http_request_body="{\"account_id\":\"google\",\"site_url\":\"https://example.com/\",\"page_url\":\"https://example.com/\",\"timeout_seconds\":${LIVE_AUDIT_TIMEOUT_SECONDS}}"
 install -d -m 755 "$config_directory" "$secret_directory" "$oauth_directory"
@@ -248,7 +204,6 @@ printf '%s\n' "$TEST_HTTP_BEARER_SECRET" >"$secret_directory/rankrat/http-bearer
 printf 'header = "Authorization: Bearer %s"\n' "$TEST_HTTP_BEARER_SECRET" \
 	>"$curl_authorization_config"
 chmod 600 "$secret_directory/rankrat/http-bearer-token" "$curl_authorization_config"
-mkfifo -m 600 "$mcp_input_fifo"
 
 runtime_volume_name="rankrat-lighthouse-runtime-$$-${RANDOM}"
 docker volume create "$runtime_volume_name" >/dev/null
@@ -302,64 +257,6 @@ docker run --rm --network none --read-only --cap-drop=ALL \
 	--tmpfs /tmp:rw,noexec,nosuid,size=16m \
 	--mount "type=volume,src=$runtime_volume_name,dst=/run/lighthouse,readonly" \
 	--entrypoint python "$rankrat_image" -c "$WORKER_BAD_INPUT_VALIDATOR"
-
-log INFO "running a public-page Lighthouse audit through production stdio MCP"
-rankrat_container_name="rankrat-lighthouse-client-$$-${RANDOM}"
-exec 3<>"$mcp_input_fifo"
-docker run --rm -i --name "$rankrat_container_name" --network none \
-	--user "$HOST_USER_ID:$HOST_GROUP_ID" \
-	--read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-	--pids-limit "$RANKRAT_PIDS_LIMIT" --memory "$RANKRAT_MEMORY_LIMIT" \
-	--cpus "$RANKRAT_CPU_LIMIT" --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-	--mount "type=bind,src=$config_directory,dst=/run/config,readonly" \
-	--mount "type=bind,src=$secret_directory,dst=/run/secrets,readonly" \
-	--mount "type=bind,src=$oauth_directory,dst=/run/oauth,readonly" \
-	--mount "type=volume,src=$runtime_volume_name,dst=/run/lighthouse,readonly" \
-	-e RANKRAT_BOUNDARY_FILE=/run/config/boundaries.json \
-	-e RANKRAT_SECRET_ROOT=/run/secrets \
-	-e RANKRAT_OAUTH_TOKEN_ROOT=/run/oauth \
-	-e RANKRAT_LIGHTHOUSE_WORKER_SOCKET=/run/lighthouse/lighthouse.sock \
-	"$rankrat_image" stdio <"$mcp_input_fifo" >"$mcp_output_file" 2>"$mcp_error_file" &
-rankrat_process_id=$!
-rankrat_started=true
-printf '%s\n' \
-	"$MCP_INITIALIZE_REQUEST" \
-	"$MCP_INITIALIZED_NOTIFICATION" >&3
-mcp_request_id=2
-for operation in "${LIGHTHOUSE_OPERATIONS[@]}"; do
-	printf '{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":"%s","arguments":%s}}\n' \
-		"$mcp_request_id" "$operation" "$http_request_body" >&3
-	for ((attempt = 1; attempt <= AUDIT_RETRY_COUNT; attempt++)); do
-		if grep -Eq "\"id\"[[:space:]]*:[[:space:]]*${mcp_request_id}([,}])" \
-			"$mcp_output_file"; then
-			break
-		fi
-		if ! kill -0 "$rankrat_process_id" 2>/dev/null; then
-			log ERROR "Rankrat stdio exited before returning ${operation}"
-			cat "$mcp_error_file" >&2
-			exit 1
-		fi
-		if [[ "$attempt" -eq "$AUDIT_RETRY_COUNT" ]]; then
-			log ERROR "Rankrat stdio timed out waiting for ${operation}"
-			cat "$mcp_error_file" >&2
-			exit 1
-		fi
-		sleep "$AUDIT_RETRY_DELAY_SECONDS"
-	done
-	((mcp_request_id += 1))
-done
-
-exec 3>&-
-
-docker run --rm -i --network none \
-	--read-only --cap-drop=ALL --security-opt no-new-privileges:true \
-	--pids-limit 16 --memory 64m --cpus 0.25 --tmpfs /tmp:rw,noexec,nosuid,size=8m \
-	--entrypoint python "$rankrat_image" -c "$MCP_RESPONSE_VALIDATOR" \
-	<"$mcp_output_file" ||
-	fail "stdio MCP returned an invalid Lighthouse result"
-
-docker rm -f "$rankrat_container_name" >/dev/null
-rankrat_started=false
 
 log INFO "running public-page Lighthouse audits through REST and Streamable HTTP MCP"
 rankrat_container_name="rankrat-lighthouse-http-$$-${RANDOM}"
@@ -491,4 +388,4 @@ docker run --rm -i --network none --read-only --cap-drop=ALL \
 	"$rankrat_image" -c "$HTTP_RESPONSE_VALIDATOR" <"$http_response_file" ||
 	fail "REST or Streamable HTTP MCP returned an invalid Lighthouse result"
 
-log INFO "Lighthouse production-image stdio, REST, and Streamable HTTP smokes passed"
+log INFO "Lighthouse production-image REST and Streamable HTTP smokes passed"

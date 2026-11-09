@@ -1,12 +1,18 @@
+---
+title: "Providers and credentials"
+description: "How to create each Rankrat credential: Google OAuth, Bing Webmaster key, Cloudflare token, Clarity token, IndexNow key, and the HTTP bearer."
+nav_order: 4
+---
+
 # Providers and credentials
 
 Every credential Rankrat needs, plus exactly what each one lets the rat touch.
 
-Every integration here runs on a free provider tier — a paid subscription buys
+Every integration here runs on a free provider tier. A paid subscription buys
 you nothing extra. Set up only the providers you use. Secrets go in
 owner-readable files under `secrets/` and nowhere else: not `.env`, not a JSON
 example, not Compose, not source, not a chat window. The boundary file holds
-container paths, account IDs, and discovered inventory — never a credential
+container paths, account IDs, and discovered inventory, never a credential
 value.
 
 ## Contents
@@ -35,7 +41,7 @@ value.
 | HTTP auth | `secrets/rankrat/http-bearer-token` | Random bearer only |
 
 `chmod 700` the directories, `chmod 600` the files. The wrapper mounts
-`secrets/` read-only and `oauth/` read/write — Google rotates refresh material
+`secrets/` read-only and `oauth/` read/write. Google rotates refresh material
 and the rat has to write the new record somewhere.
 
 Do it by hand only if a deployment demands it. Otherwise run `make setup` (from
@@ -60,13 +66,13 @@ and Tag Manager container the rat manages.
    to `rankrat` and pick your email as the support contact. Save.
 3. Open [Audience](https://console.cloud.google.com/auth/audience). Select
    **External**, then **Add users** and add the same Google email that will
-   authorize Rankrat — that's what lets you make the first authorization while
+   authorize Rankrat. That's what lets you make the first authorization while
    the app is in testing. Skip this and Google kills the flow with
    `403 access_denied`.
 4. After the first authorization goes through, come back to
    [Audience](https://console.cloud.google.com/auth/audience). Under
    **Publishing status**, click **Publish app** (or **In production**) and
-   confirm. Do this even for a one-person install — an External app left in
+   confirm. Do this even for a one-person install: an External app left in
    **Testing** hands out refresh tokens that die after seven days. An unverified
    production app still works for its own operator; Google just shows an
    unverified-app warning. Verification only matters if you're handing Rankrat
@@ -86,7 +92,7 @@ and Tag Manager container the rat manages.
 6. Open [OAuth Clients](https://console.cloud.google.com/auth/clients). Click
    **Create client**, choose **Desktop app**, name it `rankrat`, click
    **Create**, then **Download JSON** and keep the file. Not a Web client, not a
-   service account — Desktop app.
+   service account. Desktop app.
 7. Run setup, choose `google` when it asks for providers, then open the
    downloaded JSON and paste its single line at the hidden prompt:
 
@@ -96,11 +102,11 @@ and Tag Manager container the rat manages.
 
    From a checkout it's `make setup`. Rankrat validates the pasted client JSON
    and copies it into its owner-only secret directory. The Desktop-app JSON
-   Google hands you is already one line — paste it as-is, don't reformat it.
+   Google hands you is already one line. Paste it as-is, don't reformat it.
    Setup opens the one browser consent flow itself.
 
 The supported Google identity is the user who completes this consent flow. There
-is no service-account path — don't build one.
+is no service-account path. Don't build one.
 
 ### Boundary and authorization
 
@@ -152,7 +158,7 @@ rankrat revoke-google
 OAuth only exercises permissions the signed-in user already has. Rankrat
 discovers and operates on every Search Console site, Analytics account, GA4
 property, and Tag Manager account that user can see. The resource arrays are
-cached inventory and URL-containment data, not a second permission gate — OAuth
+cached inventory and URL-containment data, not a second permission gate. OAuth
 doesn't hand you a property the user can't already manage.
 
 The Analytics Admin API can't create a GA4 **account**, only a property inside
@@ -168,7 +174,7 @@ ordinary page eligible or promise indexing.
 
 PageSpeed doesn't use OAuth. An API key raises its quota and is required for CrUX
 History. `rankrat setup` asks for it right after the Google client file and
-stores it for you — don't create the secret file by hand.
+stores it for you. Don't create the secret file by hand.
 
 1. Open [Google API Credentials](https://console.cloud.google.com/apis/credentials).
 2. Click **Create credentials → API key**.
@@ -179,7 +185,7 @@ stores it for you — don't create the secret file by hand.
    key. Leave it blank only if you're deliberately skipping PageSpeed quota
    identity and CrUX History.
 
-`pagespeed_sites` sets the public root that contains local Lighthouse requests —
+`pagespeed_sites` sets the public root that contains local Lighthouse requests:
 every requested page must be a child of the selected site.
 
 ## Bing Webmaster Tools
@@ -190,7 +196,7 @@ every requested page must be a child of the selected site.
 2. Click the gear top-right, then **Settings → API Access**. Accept the terms if
    Bing shows them, then **API Key → Generate API Key** and copy the value.
 3. Run `rankrat setup` (or `make setup`), choose `bing`, and paste the key. Bing
-   issues one key per user, not per site — the same key covers every verified
+   issues one key per user, not per site. The same key covers every verified
    site in that Webmaster account, plus any Rankrat adds later.
 4. Let Rankrat discover the account's sites, or seed known roots:
 
@@ -257,7 +263,7 @@ change callers: DNS for issued ownership proofs, separate Cloudflare tools for
 analytics, cache, and managed redirects. It does not expose arbitrary record
 bodies, whole-zone purges, or replacement of arbitrary existing rulesets.
 
-Ownership proof records are DNS-only and untagged — Rankrat won't burn a
+Ownership proof records are DNS-only and untagged. Rankrat won't burn a
 Cloudflare DNS tag quota just to mark a verification record.
 
 Readiness proves the token reaches Cloudflare and can discover zones. It
@@ -268,7 +274,7 @@ setting. Set it anyway.
 ## Microsoft Clarity
 
 Clarity's free Data Export API is project-scoped. Configure one Rankrat
-`clarity` account per Clarity project — the credential is that project's token,
+`clarity` account per Clarity project. The credential is that project's token,
 not a Microsoft account-wide credential.
 
 1. Open [Microsoft Clarity](https://clarity.microsoft.com/) and sign in. No
@@ -279,7 +285,7 @@ not a Microsoft account-wide credential.
    admin.
 3. Click **Generate new API token**, name it `rankrat`, and copy the value.
 4. Run `rankrat setup` (or `make setup`), choose `clarity`, and paste the token.
-   It belongs to this one project — repeat for each project you want.
+   It belongs to this one project. Repeat for each project you want.
 
 Rankrat calls only Clarity's fixed project-insights endpoint. It doesn't write
 Clarity config or replay session recordings. The upstream export API caps each
@@ -290,7 +296,7 @@ for the current dimensions, metrics, and quota.
 
 ## IndexNow
 
-IndexNow is an open push protocol — no dashboard, no credentialed reporting
+IndexNow is an open push protocol: no dashboard, no credentialed reporting
 account. It tells participating engines that bounded URLs changed. It does not
 promise crawl, indexing, or ranking.
 
@@ -307,7 +313,7 @@ Verification needs exact contents and no redirect. See the
 
 ## HTTP bearer
 
-Generate a random token — don't reuse a provider secret:
+Generate a random token. Don't reuse a provider secret:
 
 ```sh
 install -m 600 /dev/null secrets/rankrat/http-bearer-token
@@ -315,12 +321,12 @@ openssl rand -base64 32 | tr -d '\n' > secrets/rankrat/http-bearer-token
 ```
 
 This guards REST and Streamable HTTP MCP. It has nothing to do with provider
-auth and stdio never touches it.
+auth.
 
 ## Live provider verification
 
 Each test pulls its account and a safe target straight from the selected Rankrat
-profile — there's no second selector matrix to keep in sync. A test skips with a
+profile. There's no second selector matrix to keep in sync. A test skips with a
 specific reason when the provider is absent or the account has no usable
 site/property/zone yet.
 

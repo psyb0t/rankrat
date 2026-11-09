@@ -14,19 +14,21 @@ Bing Webmaster somewhere else, plus Cloudflare, Clarity, PageSpeed, CrUX, GTM,
 and Bing's backlink data. Point an agent at your rankings and it drowns juggling
 eight consoles. Rankrat drags all of them behind one self-hosted service, so you
 tell an agent the outcome you want and it inspects, creates, updates, or rips
-out provider resources through a single surface — REST and MCP, no dashboards.
+out provider resources through a single surface: REST and MCP, no dashboards.
 
 It's a rat, not a burglar. You hand it the provider accounts; those credentials
 are the only authority it has. The resource lists in `boundaries.json` are
-inventory and URL-containment data — not a second permission system pretending
+inventory and URL-containment data, not a second permission system pretending
 to keep you safe. Rankrat writes by default; set `RANKRAT_READ_ONLY=true` and
 every mutating route and tool disappears from discovery. That's the one switch.
 
-It speaks MCP over stdio, MCP over Streamable HTTP at `/mcp`, and a FastAPI JSON
-API under `/v1/`. Wrapper-managed HTTP gets a bearer; a hand-rolled loopback-only
-launch can drop it if you know what you're doing.
+It speaks MCP over Streamable HTTP at `/mcp` and a FastAPI JSON API under `/v1/`,
+both from one long-lived process. Wrapper-managed HTTP gets a bearer; a
+hand-rolled loopback-only launch can drop it if you know what you're doing. The
+stdio transport is gone as of 0.21.0; see
+[moving off stdio](https://psyb0t.github.io/rankrat/transports/#moving-off-stdio).
 
-**Status:** alpha. The API and tool surface can still move before 1.0 — minor
+**Status:** alpha. The API and tool surface can still move before 1.0. Minor
 releases may break things on purpose (documented), so pin an exact release if
 you need it to hold still.
 
@@ -39,6 +41,7 @@ you need it to hold still.
 - [Documentation](#documentation)
 - [Agent integrations](#agent-integrations)
 - [Development](#development)
+- [Sponsor](#sponsor)
 - [Project information](#project-information)
 
 ## Capabilities
@@ -53,9 +56,9 @@ you need it to hold still.
 | Backlinks | Bing Webmaster backlink intelligence for configured sites |
 | Monitoring and remediation | Persistent monitors and issue history, sitemap/URL resubmission, IndexNow, exact Cloudflare purges, finite cache templates, and managed edge redirects |
 
-What the runtime advertises is what it does — no hidden endpoints. A read-only
+What the runtime advertises is what it does. No hidden endpoints. A read-only
 deployment drops every write from discovery; a writable one exposes onboarding
-alongside the rest. The whole list is the [MCP tool catalog](docs/tool-reference.md)
+alongside the rest. The whole list is the [MCP tool catalog](https://psyb0t.github.io/rankrat/tool-reference/)
 and the generated [OpenAPI document](openapi.json).
 
 ## Quick start
@@ -65,27 +68,28 @@ want, then run it. Docker is the only runtime requirement.
 
 ### Install
 
-Download the installer, read it, then run it — per-user (no root) or
+Download the installer, read it, then run it, per-user (no root) or
 system-wide:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh -o rankrat-install.sh
+curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh \
+  -o rankrat-install.sh
 less rankrat-install.sh
 bash rankrat-install.sh                # per-user   -> ~/.local/bin/rankrat
 sudo bash rankrat-install.sh --system  # system-wide -> /usr/local/bin/rankrat
 ```
 
 The mode auto-detects from who runs it; `--user` / `--system` force it and
-`--uninstall` removes the command. This puts the `rankrat` wrapper — a readable
-script that drives the published Docker images — on your PATH. Prefer to work
+`--uninstall` removes the command. This puts the `rankrat` wrapper (a readable
+script that drives the published Docker images) on your PATH. Prefer to work
 from a source checkout? Clone the repo and use `./rankrat` or the `make` targets
-instead; see [Getting started](docs/getting-started.md).
+instead; see [Getting started](https://psyb0t.github.io/rankrat/getting-started/).
 
 ### Set up
 
 Run setup. It lists every provider, you pick the ones you actually use, and it
-walks you through creating each credential — the exact console clicks for Google
-OAuth, the Bing Webmaster key, the Cloudflare token, the Clarity token — then
+walks you through creating each credential (the exact console clicks for Google
+OAuth, the Bing Webmaster key, the Cloudflare token, the Clarity token), then
 hides every value you paste. No copying token permissions out of a README:
 
 ```sh
@@ -93,30 +97,29 @@ rankrat setup
 ```
 
 Configuring Google? Paste the one-line Desktop OAuth client JSON at the hidden
-prompt when setup asks — same as every other credential.
+prompt when setup asks, same as every other credential.
 
-Setup validates account access — it does not submit URLs or create properties.
+Setup validates account access. It does not submit URLs or create properties.
 Your profile lives in `~/.config/rankrat`; override it per launch with
 `rankrat --data-dir /absolute/path` or `RANKRAT_DATA_DIR` for a separate profile
 per account or workspace. Want to read the credential steps ahead of time, or
 what each provider actually gives you? See
-[Providers and credentials](docs/providers.md). From a source checkout the setup
+[Providers and credentials](https://psyb0t.github.io/rankrat/providers/). From a source checkout the setup
 step is `make setup`.
 
 ## Run it
 
 ```sh
-rankrat            # MCP over stdio (default)
-rankrat http -d    # REST + Streamable-HTTP MCP + Lighthouse, detached with restarts
+rankrat http -d    # REST + Streamable HTTP MCP + Lighthouse, detached with restarts
+rankrat http       # same stack, attached to the logs
 rankrat upgrade    # re-pin to the latest release, pull it, drop the previous image
 ```
 
-From a source checkout: `make run` (stdio) and `make run-http` (HTTP over
-Compose, attached).
+From a source checkout: `make run-http` (HTTP over Compose, attached).
 
 `rankrat setup` pins both `psyb0t/rankrat` and `psyb0t/rankrat-lighthouse` to the
-latest release tag — recorded, along with the HTTP port and read-only flag, in a
-`.env` at your profile root — rather than tracking the moving `:latest`. `rankrat
+latest release tag (recorded, along with the HTTP port and read-only flag, in a
+`.env` at your profile root) rather than tracking the moving `:latest`. `rankrat
 upgrade` re-pins the images to the newest release, pulls both, restarts a running
 HTTP stack (reusing the recorded port and read-only flag), and removes the
 superseded images; it leaves the port and read-only lines untouched. Pass
@@ -137,19 +140,17 @@ your shell exports. It is separate from the per-profile `.env`: the host file
 selects the profile and the host defaults, while a profile's `.env` pins that
 profile's images, port, and read-only flag.
 
-Over HTTP, MCP lives at `http://127.0.0.1:8080/mcp` and REST under `/v1/`; stdio
-needs no port and no bearer. HTTP treats your data directory as its Compose
-project — it drops a `docker-compose.yml` in there if one's missing and never
+MCP lives at `http://127.0.0.1:8080/mcp` and REST under `/v1/`, both behind the
+bearer in your profile's `secrets/rankrat/http-bearer-token`. HTTP treats your data directory as its Compose
+project: it drops a `docker-compose.yml` in there if one's missing and never
 touches yours if it isn't. Under the hood that's two
 long-lived services plus one one-shot volume initializer. The wrapper, plain
 `docker run`, raw Compose, HTTP auth, and client wiring all live in
-[Transports and deployment](docs/transports.md).
+[Transports and deployment](https://psyb0t.github.io/rankrat/transports/).
 
 Browser audits run in a separate `psyb0t/rankrat-lighthouse` image over a Unix
-socket, and it never sees a single provider credential. `rankrat` stdio brings up
-an ephemeral Lighthouse sidecar for the session — same capability as HTTP — and
-tears it down on exit; the wrapper launches it host-side, so the app stays off the
-Docker socket and reaches Lighthouse only over the socket. See [Lighthouse](docs/lighthouse.md).
+socket, and it never sees a single provider credential. The HTTP Compose stack
+starts it next to Rankrat. See [Lighthouse](https://psyb0t.github.io/rankrat/lighthouse/).
 
 ## Safety model
 
@@ -164,23 +165,27 @@ Docker socket and reaches Lighthouse only over the socket. See [Lighthouse](docs
 - Secrets are read-only mounts; OAuth records and monitor state have separate
   writable mounts.
 
-See [Configuration](docs/configuration.md) and [Security](docs/security.md)
+See [Configuration](https://psyb0t.github.io/rankrat/configuration/) and [Security](https://psyb0t.github.io/rankrat/security/)
 before enabling writes or exposing HTTP beyond loopback.
 
 ## Documentation
 
-- [Getting started](docs/getting-started.md) — install, file locations, verifying setup
-- [Configuration](docs/configuration.md) — every boundary field and runtime switch
-- [Providers and credentials](docs/providers.md) — obtaining each credential and its permissions
-- [Transports and deployment](docs/transports.md) — stdio MCP, Streamable HTTP MCP, REST, Compose, agent integrations
-- [Feature workflows](docs/features.md) — operations for common SEO, analytics, backlink, and indexing questions
-- [Lighthouse](docs/lighthouse.md) — the browser worker and its security limits
-- [Ownership and onboarding](docs/ownership-and-onboarding.md) — Google/Bing property creation and DNS verification
-- [Monitoring and remediation](docs/monitoring-and-remediation.md) — persistent monitors and provider-write behavior
-- [Security](docs/security.md) — trust boundaries and production rules
-- [MCP tool reference](docs/tool-reference.md) — every discoverable MCP tool
-- [Troubleshooting](docs/troubleshooting.md) — startup, OAuth, provider, sitemap, and browser-audit failures
-- [Development](docs/development.md) — build, test, generate contracts, audit dependencies, contribute
+The full manual lives at **[psyb0t.github.io/rankrat](https://psyb0t.github.io/rankrat/)**.
+
+| Page | What's in it |
+| --- | --- |
+| [Getting started](https://psyb0t.github.io/rankrat/getting-started/) | Install, file locations, verifying setup |
+| [Configuration](https://psyb0t.github.io/rankrat/configuration/) | Every boundary field and runtime switch |
+| [Providers and credentials](https://psyb0t.github.io/rankrat/providers/) | Getting each credential and its permissions |
+| [Transports and deployment](https://psyb0t.github.io/rankrat/transports/) | Streamable HTTP MCP, REST, Compose, agent integrations |
+| [Feature workflows](https://psyb0t.github.io/rankrat/features/) | Operations for common SEO, analytics, backlink, and indexing questions |
+| [Lighthouse](https://psyb0t.github.io/rankrat/lighthouse/) | The browser worker and its security limits |
+| [Ownership and onboarding](https://psyb0t.github.io/rankrat/ownership-and-onboarding/) | Google/Bing property creation and DNS verification |
+| [Monitoring and remediation](https://psyb0t.github.io/rankrat/monitoring-and-remediation/) | Persistent monitors and provider-write behavior |
+| [Security](https://psyb0t.github.io/rankrat/security/) | Trust boundaries and production rules |
+| [MCP tool reference](https://psyb0t.github.io/rankrat/tool-reference/) | Every discoverable MCP tool |
+| [Troubleshooting](https://psyb0t.github.io/rankrat/troubleshooting/) | Startup, OAuth, provider, sitemap, and browser-audit failures |
+| [Development](https://psyb0t.github.io/rankrat/development/) | Build, test, generate contracts, audit dependencies, contribute |
 
 The REST source is YAML-first: [`openapi.yaml`](src/rankrat/api/openapi.yaml),
 [`seo-openapi.yaml`](src/rankrat/api/seo-openapi.yaml), and
@@ -191,8 +196,9 @@ Claude Code and Codex manifests, or OpenClaw integration under [`.agents`](.agen
 ## Agent integrations
 
 The [Rankrat skill](.agents/skills/rankrat) works in agents that read
-`.agents/skills/` (such as [peen](https://github.com/psyb0t/peen)). The integrations below cover both MCP stdio and a shared
-Streamable HTTP server.
+`.agents/skills/` (such as [peen](https://github.com/psyb0t/peen)). Every
+integration below talks to a running `rankrat http` server at
+`http://127.0.0.1:8080/mcp`.
 
 ### Claude Code
 
@@ -200,6 +206,8 @@ Streamable HTTP server.
 claude plugin marketplace add psyb0t/agents
 claude plugin install rankrat@psyb0t
 ```
+
+The plugin asks for the server URL and the bearer.
 
 ### Codex
 
@@ -218,16 +226,15 @@ openclaw skills install @psyb0t/rankrat
 openclaw plugins install clawhub:@psyb0t/rankrat
 ```
 
-The plugin launches the published image over MCP stdio using the standard
-`$HOME/.config/rankrat/` layout. Set one absolute `RANKRAT_DATA_DIR` in every
-client to reuse the same provider accounts, OAuth authorization, inventory,
-and monitor state from any site repository. To use an already-running shared server,
-configure OpenClaw for its authenticated `http://127.0.0.1:8080/mcp`
-Streamable HTTP endpoint. See [Transports](docs/transports.md#agent-integrations).
+The plugin is a stdio-to-HTTP bridge built on `mcp-remote`. Set `RANKRAT_URL`
+(for example `http://127.0.0.1:8080`) and `RANKRAT_TOKEN` (the profile's bearer)
+in its environment. Registering the server URL directly in Claude Code, Codex,
+or OpenClaw is covered in
+[Transports and deployment](https://psyb0t.github.io/rankrat/transports/#agent-integrations).
 
 ## Development
 
-Everything runs in containers — no "works on my machine" roulette:
+Everything runs in containers. No "works on my machine" roulette:
 
 ```sh
 make help
@@ -238,7 +245,11 @@ make test
 Mocked tests need zero credentials. Live tests are opt-in and pull their one
 account plus a safe target straight from your profile, so they can't wander off
 and touch something they shouldn't. Full contributor guide in
-[Development](docs/development.md).
+[Development](https://psyb0t.github.io/rankrat/development/).
+
+## Sponsor
+
+<a href="https://www.buymeacoffee.com/psyb0t"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me a Coffee" height="60" width="217"></a>
 
 ## Project information
 

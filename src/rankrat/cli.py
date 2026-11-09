@@ -1,4 +1,4 @@
-"""Rankrat process entrypoint for stdio MCP and local HTTP serving."""
+"""Rankrat process entrypoint for HTTP serving (REST and Streamable HTTP MCP)."""
 
 from __future__ import annotations
 
@@ -56,12 +56,12 @@ from rankrat.services.onboarding_guide import (
 )
 from rankrat.services.provider_readiness import ProviderReadinessRequest
 from rankrat.transports.http import create_http_app
-from rankrat.transports.mcp import build_mcp_server
 from rankrat.transports.runtime import build_services
-from rankrat.transports.stdio import run_stdio
 
 _LOGGER = logging.getLogger(__name__)
-_SERVE_MODES = ("stdio", "http")
+_SERVE_MODES = ("http",)
+# Removed in 0.21.0; still parsed so old launch commands fail with directions.
+_REMOVED_STDIO_MODE = "stdio"
 _OAUTH_MODES = ("auth-google", "revoke-google")
 _OPERATOR_MODES = ("onboard-site", "setup")
 _SETUP_GA4_CONFIGURATION_ACTION = (
@@ -77,6 +77,11 @@ _ONBOARDING_GUIDE_POINTER = (
     "The full procedure is also served to agents as the rankrat://onboarding resource "
     "and the onboarding_guide tool."
 )
+_STDIO_REMOVED_MESSAGE = (
+    "rankrat: the stdio MCP transport was removed in 0.21.0. Run the HTTP server "
+    "(rankrat http -d) and connect MCP clients to http://127.0.0.1:8080/mcp with the "
+    "bearer from secrets/rankrat/http-bearer-token.\n"
+)
 _SETUP_READY_MESSAGE = (
     "SETUP READY: configured provider checks passed. Confirm each configured GA4 web stream's "
     "G- Measurement ID is deployed in its site's public <head>, then run make test-live for "
@@ -88,9 +93,9 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="rankrat")
     parser.add_argument(
         "mode",
-        choices=(*_SERVE_MODES, *_OAUTH_MODES, *_OPERATOR_MODES),
+        choices=(*_SERVE_MODES, _REMOVED_STDIO_MODE, *_OAUTH_MODES, *_OPERATOR_MODES),
         nargs="?",
-        default="stdio",
+        default="http",
     )
     parser.add_argument("--account-id")
     parser.add_argument("--callback-port", type=int)
@@ -111,6 +116,9 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> int:
     """Load immutable configuration, then start exactly one selected transport."""
     arguments = _parser().parse_args()
+    if arguments.mode == _REMOVED_STDIO_MODE:
+        sys.stderr.write(_STDIO_REMOVED_MESSAGE)
+        return 2
     try:
         settings = load_settings()
         configure_logging(settings.log_level, settings.log_file)
@@ -133,12 +141,6 @@ def main() -> int:
         sys.stderr.write("rankrat startup failed: invalid configuration\n")
         return 2
     log_event(_LOGGER, logging.INFO, "rankrat starting", mode=settings.mode)
-    if settings.mode == "stdio":
-        try:
-            asyncio.run(run_stdio(build_mcp_server(services)))
-        except KeyboardInterrupt:
-            log_event(_LOGGER, logging.INFO, "rankrat stopped", mode=settings.mode)
-        return 0
     uvicorn.run(
         create_http_app(settings, services),
         host=settings.http_host,

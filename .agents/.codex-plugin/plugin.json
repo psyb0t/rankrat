@@ -1,7 +1,7 @@
 {
   "name": "rankrat",
-  "version": "0.20.1",
-  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse: persistent monitoring, internal-link and content opportunities, ownership, remediation, onboarding, and multi-provider backlinks. Writable by default with one read-only switch. MCP over stdio and Streamable HTTP, plus REST.",
+  "version": "0.21.0",
+  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse: persistent monitoring, internal-link and content opportunities, ownership, remediation, onboarding, and multi-provider backlinks. Writable by default with one read-only switch. MCP over Streamable HTTP at /mcp, plus REST.",
   "author": {
     "name": "psyb0t",
     "url": "https://github.com/psyb0t"
@@ -16,7 +16,6 @@
     "developerName": "psyb0t",
     "category": "Developer Tools",
     "capabilities": [
-      "MCP stdio",
       "MCP Streamable HTTP",
       "SEO monitoring",
       "Search analytics",

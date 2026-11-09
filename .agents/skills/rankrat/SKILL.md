@@ -1,6 +1,6 @@
 ---
 name: rankrat
-description: Query Google Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft Clarity, PageSpeed, CrUX, Cloudflare analytics, and Bing backlink intelligence; manage typed tags and safe edge redirects; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over stdio and Streamable HTTP, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, tags, redirects, backlinks, browser scores, performance history, or search traffic for sites they control.
+description: Query Google Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft Clarity, PageSpeed, CrUX, Cloudflare analytics, and Bing backlink intelligence; manage typed tags and safe edge redirects; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over Streamable HTTP at /mcp, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, tags, redirects, backlinks, browser scores, performance history, or search traffic for sites they control.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
@@ -17,15 +17,15 @@ permissions:
 # rankrat
 
 A self-hosted MCP server over the SEO and search-analytics APIs you already have
-accounts on — Google Search Console, Google Tag Manager, Bing Webmaster Tools,
-GA4, Microsoft Clarity, and PageSpeed Insights — so an agent can read and,
+accounts on (Google Search Console, Google Tag Manager, Bing Webmaster Tools,
+GA4, Microsoft Clarity, and PageSpeed Insights), so an agent can read and,
 when trusted, manage your own provider resources without you handing it a
 browser session or a service-account key.
 
 Install, credentials and the full environment reference:
 [`references/setup.md`](references/setup.md).
 For a human-readable operator manual organized by topic, use the public
-[Rankrat documentation](https://github.com/psyb0t/rankrat/tree/main/docs).
+[Rankrat documentation](https://psyb0t.github.io/rankrat/).
 
 ## Contents
 
@@ -59,8 +59,8 @@ the bearer token if anything else can reach it.
 ## When to use
 
 - Reading Search Console performance: queries, pages, countries, devices, dates
-  — as raw rows, summaries, trends, period comparisons, or anomaly and
-  traffic-drop attribution.
+  (as raw rows, summaries, trends, period comparisons, or anomaly and
+  traffic-drop attribution).
 - Diagnosing indexing: URL inspection (single or batch), sitemap listings,
   crawl issues, crawl stats.
 - Bing Webmaster Tools equivalents, plus keyword statistics, related keywords,
@@ -91,8 +91,7 @@ the bearer token if anything else can reach it.
   itself rather than accepting caller-provided content or headers.
 - Persistent site-audit monitors, immutable snapshots, issue lifecycle events,
   and explicit acknowledge/resolve operations. The background scheduler runs
-  only in the long-lived HTTP process; stdio supports explicit monitor runs and
-  history. Poll these tools because Rankrat does not send external notifications.
+  inside the long-lived HTTP process. Poll these tools because Rankrat does not send external notifications.
 - Local Lighthouse performance, accessibility, best-practices, and SEO scores
   or category-specific failed findings when the companion worker is configured.
 - Checking which providers are actually wired up (`provider_readiness`,
@@ -112,44 +111,27 @@ the bearer token if anything else can reach it.
 
 ## Usage
 
-Both MCP transports run from the published image. Read tools have a stable
+The MCP server runs from the published image. Read tools have a stable
 discovery surface even when their provider is not configured; ask
 `provider_readiness` before interpreting an empty or unavailable result. Only
 write-tool discovery changes, and only with `RANKRAT_READ_ONLY`.
 
-The public `rankrat` launcher keeps stdio as a hardened direct `docker run`
-child and uses Docker Compose for HTTP so Rankrat and Lighthouse share one
-lifecycle:
+The public `rankrat` launcher runs HTTP through Docker Compose so Rankrat and
+Lighthouse share one lifecycle. Connect MCP clients to
+`http://127.0.0.1:8080/mcp` with the profile's bearer
+(`secrets/rankrat/http-bearer-token`). The stdio transport was removed in
+0.21.0:
 
 ```bash
-rankrat --data-dir /absolute/path/to/rankrat-profile stdio
 rankrat --data-dir /absolute/path/to/rankrat-profile http -d
 ```
 
 HTTP uses the profile as its Compose project directory. The launcher creates
 the reviewed `docker-compose.yml` there when missing, preserves an existing
-safe regular file, and mounts only the fixed profile children—not the root
+safe regular file, and mounts only the fixed profile children, not the root
 itself. The project directory and Compose file must be owned by the current UID
 and not group/world writable.
 Omit `-d` to attach to logs; detached services restart unless stopped.
-
-**stdio** is the default mode, so a client that spawns its own server just runs
-the image and talks to it — no port, no bridge:
-
-```bash
-export RANKRAT_DATA_DIR=/absolute/path/to/rankrat-profile
-docker run -i --rm --init --read-only \
-  --user "$(id -u):$(id -g)" \
-  --cap-drop=ALL --security-opt no-new-privileges:true \
-  --pids-limit 128 --memory 512m --cpus 1 \
-  --tmpfs /tmp:rw,noexec,nosuid,size=32m \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/config",dst=/run/config \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/secrets",dst=/run/secrets,readonly \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/oauth",dst=/run/oauth \
-  --mount type=bind,src="$RANKRAT_DATA_DIR/state",dst=/run/state \
-  -e RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3 \
-  psyb0t/rankrat stdio
-```
 
 **Manual single-container Streamable HTTP** is available when local Lighthouse
 is not needed. MCP is at `/mcp`, and the REST API is on the same port:
@@ -184,7 +166,7 @@ setup reference.
 
 The repository ships one public launcher named `rankrat`; install it before
 asking an agent to use a human-managed profile. It uses direct Docker for
-stdio/operator commands and Compose for HTTP; agents can still invoke either
+operator commands and Compose for HTTP; agents can still invoke either
 image directly. Omit `--data-dir` for the default `$HOME/.config/rankrat`
 profile. A chosen profile's fixed `config/`, `secrets/`, `oauth/`, and `state/`
 children preserve provider sessions and inventory when launched from different
@@ -200,7 +182,7 @@ Use the browser worker only for operator-controlled sites. Its documented
 non-root, capability-free container needs Chromium's `--no-sandbox`; a hostile
 page therefore requires a stronger outer sandbox such as gVisor or Kata. The
 worker blocks private/special-address egress, while public cross-origin
-subresources—and a public redirect before Rankrat rejects its final URL—remain
+subresources (and a public redirect before Rankrat rejects its final URL) remain
 possible.
 
 The browser surface is exactly `lighthouse_audit`,
@@ -215,7 +197,7 @@ seconds. The REST equivalents live under `/v1/lighthouse/`.
 GA4 nests every property under an *account*, and properties routinely sit under
 an unrelated one because that is whatever the dropdown defaulted to when they
 were created. `google_analytics_account_inventory` lists every account the
-credential can see with its properties — that is the tool for "which account is
+credential can see with its properties. That is the tool for "which account is
 this site under", and the answer is often surprising.
 
 `google_analytics_data_streams` returns a configured property's streams and their
@@ -224,16 +206,16 @@ correctly: a tag whose measurement ID belongs to a different property looks
 perfectly installed and reports into a property nobody is reading.
 
 `google_analytics_account_rename` and `google_analytics_property_rename` exist in
-writable mode. Account names are cosmetic — the numeric ID is what boundaries,
-measurement IDs and reports bind to — so renaming is safe and is the usual fix
+writable mode. Account names are cosmetic (the numeric ID is what boundaries,
+measurement IDs and reports bind to), so renaming is safe and is the usual fix
 for a misfiled property. There is no GA4 account-creation or Analytics deletion
 tool. Property creation is available through writable site onboarding.
 
 ### Onboarding a site
 
 Read the `rankrat://onboarding` resource before saying anything about onboarding,
-or call the `onboarding_guide` tool if the client does not support resources —
-pass `site_url` to get the methods that site's property form actually accepts.
+or call the `onboarding_guide` tool if the client does not support resources.
+Pass `site_url` to get the methods that site's property form actually accepts.
 Both are read-only and present on every server, including read-only ones, and
 `POST /v1/onboarding-guides` serves the same document over REST.
 
@@ -242,7 +224,7 @@ many resources each account carries; `google_sites_list` lists the Search Consol
 properties the credential sees upstream, broader than the cached boundary; and
 `site_ownership_check` reports whether Google and Bing already treat the site as
 verified. A site that is already a verified Search Console and Bing property does
-not need onboarding — onboarding always resolves or creates a GA4 property. When
+not need onboarding. Onboarding always resolves or creates a GA4 property. When
 you only need Rankrat to operate on existing properties, register them in the
 account's `search_console_sites`, `pagespeed_sites`, and Bing `sites` inventory
 in `boundaries.json`, plus the site's zone in the Cloudflare `dns_zones` if you
@@ -251,7 +233,7 @@ unverified until `site_ownership_verify` or a manual method redeems its proof,
 and Bing rejects sitemap writes until then.
 
 If the user has no GA4 account yet, do not attempt to create one and do not
-guess the steps. No tool can create a GA4 account — the Admin API has no
+guess the steps. No tool can create a GA4 account: the Admin API has no
 `accounts.create`, and the flow ends at a Terms of Service page. The guide's
 `manual_provisioning` block carries the start URL and the exact ordered clicks;
 relay those, then ask the user for the numeric account ID, which
@@ -270,10 +252,10 @@ separate writable Rankrat process or the `rankrat onboard-site` terminal command
 
 Typical flow for "why did traffic drop":
 
-1. `google_search_analytics_summary` — establish the baseline.
-2. `google_search_analytics_comparison` — the affected period against the prior one.
-3. `google_search_analytics_drop_attribution` — which queries and pages account for it.
-4. `google_url_inspection` on the worst pages — whether it is an indexing problem.
+1. `google_search_analytics_summary`: establish the baseline.
+2. `google_search_analytics_comparison`: the affected period against the prior one.
+3. `google_search_analytics_drop_attribution`: which queries and pages account for it.
+4. `google_url_inspection` on the worst pages: whether it is an indexing problem.
 
 Tool names are prefixed by provider (`google_*`, `bing_*`), with a handful of
 server-level ones (`server_info`, `accounts_list`, `sites_list`, `diagnostics`,

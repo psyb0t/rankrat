@@ -14,7 +14,8 @@
       "identifier": "docker.io/psyb0t/rankrat:latest",
       "runtimeHint": "docker",
       "transport": {
-        "type": "stdio"
+        "type": "streamable-http",
+        "url": "http://localhost:8080/mcp"
       }
     }
   ]

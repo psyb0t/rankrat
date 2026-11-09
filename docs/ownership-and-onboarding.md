@@ -1,13 +1,19 @@
+---
+title: "Ownership and onboarding"
+description: "Check Google and Bing site ownership, verify through Cloudflare DNS, and onboard a new site across GA4, Search Console, and Bing in one call."
+nav_order: 9
+---
+
 # Ownership and onboarding
 
-Creating provider resources and proving you own them are two different jobs — Rankrat does both, in that order, and never pretends one is the other.
+Creating provider resources and proving you own them are two different jobs. Rankrat does both, in that order, and never pretends one is the other.
 
 Rankrat creates or reuses one GA4 property and stream, adds or reuses Google
 Search Console and Bing properties, and writes what it made into local
 inventory. Hand it a supported DNS adapter and it also publishes and redeems the
 ownership proofs the providers issue. What it can't do: create a GA4 account, or
 touch DNS through a provider it has no adapter for. And onboarding never deploys
-a GA4 tag — that's your move, later.
+a GA4 tag. That's your move, later.
 
 ## Contents
 
@@ -36,12 +42,12 @@ Every process serves the onboarding guide, read-only mode included:
 It tells you the live write/onboarding posture, the configured sites, the
 verification methods each specific property form accepts, the manual steps, and
 who performs each action. Read it instead of assuming every Search Console
-property takes the same proof — Domain and URL-prefix don't.
+property takes the same proof. Domain and URL-prefix don't.
 
 ## Check what already exists first
 
 Onboarding creates provider resources. Before running it, find out whether they
-already exist — re-running the full flow on a site that is already set up is
+already exist. Re-running the full flow on a site that is already set up is
 rarely what you want, and it always resolves or creates a GA4 property.
 
 - `accounts_list` reports how many Search Console, PageSpeed, GA4, and Bing
@@ -49,12 +55,12 @@ rarely what you want, and it always resolves or creates a GA4 property.
 - `google_sites_list` lists the Search Console properties the Google credential
   can see upstream, which is broader than the cached boundary inventory. A site
   present here but absent from the boundary is already a permissioned or verified
-  Search Console property — it needs registering, not creating.
+  Search Console property. It needs registering, not creating.
 - `site_ownership_check`, with the Google and/or Bing account selected, reports
   whether each provider already treats the exact site as verified.
 
 A site that is already a verified Search Console and Bing property does not need
-onboarding at all — see
+onboarding at all. See
 [Registering an already-verified site](#registering-an-already-verified-site-without-onboarding).
 
 ## What onboarding creates
@@ -65,21 +71,21 @@ For one HTTPS site root:
 2. A web data stream and the `G-` measurement ID it returns.
 3. An unverified Google Search Console URL-prefix property.
 4. An unverified Bing Webmaster site.
-5. GA4/Search Console/Bing inventory entries in `boundaries.json` — written only
+5. GA4/Search Console/Bing inventory entries in `boundaries.json`, written only
    once all three provider stages have succeeded.
 
 No GA4 tag gets deployed. In writable mode, deploy one yourself with the typed
 Tag Manager tools (container, workspace, entity, version, publish) using the
 returned measurement ID, or drop it in through however the site normally loads
 tags. GA4 collects nothing until that tag is live. Search Console and Bing data
-also start at verification — none of it is retroactive.
+also start at verification. None of it is retroactive.
 
 ## The GA4 account prerequisite
 
 Analytics has accounts, and properties live inside them. The Admin API has no
 `accounts.create`, and `provisionAccountTicket` dead-ends at a Terms of Service
 page only a human can accept. So if there's no account yet, no tool finishes
-this — you do:
+this. You do:
 
 1. Open [Google Analytics](https://analytics.google.com/) as the OAuth user.
 2. Go to **Admin → Create → Account**.
@@ -87,7 +93,7 @@ this — you do:
 4. Accept the Analytics Terms of Service.
 5. Run `google_analytics_account_inventory` and copy the numeric account ID.
 
-One account visible, Rankrat picks it. Several visible, it can't guess — pass
+One account visible, Rankrat picks it. Several visible, it can't guess. Pass
 the numeric ID as `google_analytics_parent_account_id` when you onboard.
 
 ## Operator-driven onboarding
@@ -116,18 +122,18 @@ RANKRAT_READ_ONLY=false
 ```
 
 HTTP still wants its bearer. `RANKRAT_READ_ONLY=true` drops this operation from
-REST and MCP discovery — that's the only switch.
+REST and MCP discovery. That's the only switch.
 
 ## Registering an already-verified site without onboarding
 
 `site_onboarding_submit` and `rankrat onboard-site` always resolve or create a
 GA4 property for the site. When the Search Console and Bing properties already
 exist and you do not want Rankrat attaching or creating a GA4 property, do not
-onboard — add the existing resources to the account inventory in
+onboard. Add the existing resources to the account inventory in
 `boundaries.json` directly:
 
 1. Append the verified Search Console property to the Google account's
-   `search_console_sites` — an HTTPS URL-prefix like `https://example.com/`, or
+   `search_console_sites`: an HTTPS URL-prefix like `https://example.com/`, or
    an `sc-domain:example.com` Domain property. Copy the exact form
    `google_sites_list` returns.
 2. Append the HTTPS root to `pagespeed_sites` for PageSpeed, CrUX, and
@@ -141,10 +147,10 @@ onboard — add the existing resources to the account inventory in
 These arrays are discovered and cached inventory, not a second permission layer,
 so registering a property you already control changes nothing about the
 credential's authority. Rankrat reads `boundaries.json` once at startup: restart
-the process, or start a fresh stdio session, before the new entries are visible
+the HTTP process before the new entries are visible
 to `sites_list` and the provider tools.
 
-Registering a Bing site this way — or through `bing_site_submit` — leaves it
+Registering a Bing site this way (or through `bing_site_submit`) leaves it
 unverified, and Bing rejects sitemap writes until it is verified. Run
 [automated DNS verification](#automated-dns-verification) or a
 [manual method](#bing) next.
@@ -160,7 +166,7 @@ unverified, and Bing rejects sitemap writes until it is verified. Run
 
 It returns no verification token. A property can exist and still be unverified,
 so don't read anything into an empty report until ownership is complete for every
-selected provider. Select at least one — a Bing-only request never calls Google,
+selected provider. Select at least one. A Bing-only request never calls Google,
 a Google-only request never calls Bing.
 
 ## Automated DNS verification
@@ -169,7 +175,7 @@ a Google-only request never calls Bing.
 
 1. pulls proof values only from the selected Google and/or Bing APIs;
 2. selects the configured DNS account and its exact zone;
-3. creates only those proof records through the DNS adapter — Google TXT, Bing
+3. creates only those proof records through the DNS adapter: Google TXT, Bing
    CNAME to `verify.bing.com`, nothing else;
 4. checks public propagation;
 5. redeems each proof once it's visible;
@@ -181,7 +187,7 @@ next adapter fills the same contract without changing the surface.
 
 It's idempotent: an exact existing record is reused, and a CNAME name that's
 already occupied is refused rather than clobbered. There is no arbitrary
-DNS name/type/value CRUD here — only these proofs.
+DNS name/type/value CRUD here. Only these proofs.
 
 Verify Bing on its own, for instance, when Google Site Verification isn't in
 play:
@@ -204,14 +210,14 @@ Propagation is asynchronous, so don't expect one call to finish it:
 3. Stop only when `complete` is true, or a finite provider error lands on your
    desk.
 
-Leave the verification records in place — providers recheck them.
+Leave the verification records in place. Providers recheck them.
 
 ## Manual verification alternatives
 
 ### Search Console Domain property
 
 `sc-domain:example.com` takes DNS TXT and nothing else. A GA4 tag, an HTML file,
-a meta tag — none of them verify a Domain property.
+a meta tag: none of them verify a Domain property.
 
 ### Search Console URL-prefix property
 
@@ -222,7 +228,7 @@ An `https://` property accepts:
 - Google's issued meta tag;
 - Google's issued DNS TXT record.
 
-Rankrat doesn't invent proof values — the provider consoles issue them.
+Rankrat doesn't invent proof values. The provider consoles issue them.
 
 ### Bing
 
@@ -239,7 +245,7 @@ The runtime onboarding guide returns whichever methods actually apply right now.
 
 Once the resources exist:
 
-1. Deploy a tag with the returned GA4 measurement ID — through the typed Tag
+1. Deploy a tag with the returned GA4 measurement ID, through the typed Tag
    Manager write tools, or the site's normal integration.
 2. Verify Search Console and Bing, by automated DNS or a manual method.
 3. Poll ownership until it's complete.
@@ -250,7 +256,7 @@ Once the resources exist:
 
 Onboarding runs in sequence and does not roll back. It resolves or creates GA4
 first, then Search Console, then Bing, and writes inventory only after all three
-land. If a later stage fails, the earlier provider resources are real — they just
+land. If a later stage fails, the earlier provider resources are real. They just
 aren't in local inventory yet. The receipt names the stages that completed.
 
 Before you retry:
@@ -258,7 +264,7 @@ Before you retry:
 1. Inspect `google_analytics_account_inventory` and the Google/Bing site lists.
 2. Fix the permission or provider that broke.
 3. Retry the exact same request. Rankrat matches an existing GA4 stream by site
-   URL and reuses existing Search Console/Bing sites — it won't duplicate them.
+   URL and reuses existing Search Console/Bing sites. It won't duplicate them.
 
 There's no rollback and no delete tool. Renaming an account or property is
 supported; deleting an Analytics container is left out on purpose.

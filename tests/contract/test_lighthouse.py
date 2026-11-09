@@ -136,7 +136,7 @@ async def test_all_lighthouse_rest_contracts_are_strict(
 
 
 @pytest.mark.asyncio
-async def test_all_lighthouse_stdio_mcp_tools_have_parity_and_open_world_annotations(
+async def test_all_lighthouse_mcp_tools_have_parity_and_open_world_annotations(
     deployment: tuple[Settings, ApplicationServices],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

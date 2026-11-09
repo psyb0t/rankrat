@@ -33,7 +33,7 @@ def test_runtime_make_targets_delegate_to_the_wrapper() -> None:
     assert './rankrat --data-dir "$(RANKRAT_PROFILE)"' in source
     assert "RANKRAT_STATE=$(STATE)" not in source
     assert "./rankrat.sh" not in source
-    assert "$(WRAPPER) stdio" in _target(source, "run")
+    assert "\nrun: run-http ##" in source
     assert "$(WRAPPER) http" in _target(source, "run-http")
     assert "RANKRAT_WRAPPERS := rankrat" in source
     assert "$(SHELLCHECK_IMAGE) $(RANKRAT_WRAPPERS) scripts/*.sh" in source
@@ -82,8 +82,6 @@ def test_wrapper_mounts_config_writable_exactly_when_writes_are_enabled() -> Non
     ) in source
     assert _READ_ONLY_MOUNT_ASSIGNMENT in source
     assert _WRITABLE_MOUNT_ASSIGNMENT in source
-    assert 'serve_boundary_mount="$readonly_boundary_mount"' in source
-    assert 'serve_boundary_mount="$writable_boundary_mount"' in source
     assert 'require_writable_boundary_is_safe "$boundary_file" "$boundary_directory"' in source
 
 
@@ -163,10 +161,10 @@ def test_wrapper_uses_one_shared_profile_independently_of_cwd(tmp_path: Path) ->
             }
             site_directory = tmp_path / site_name
             site_directory.mkdir()
-            result = _run_wrapper(environment, site_directory)
+            result = _run_wrapper(environment, site_directory, mode="revoke-google")
             assert result.returncode == 0, result.stderr
 
-        arguments = _stdio_main_run(docker_all_arguments)
+        arguments = _main_run(docker_all_arguments, "revoke-google")
         expected_mounts = {
             f"type=bind,src={data_directory}/config,dst=/run/config,readonly",
             f"type=bind,src={data_directory}/secrets,dst=/run/secrets,readonly",
@@ -176,98 +174,43 @@ def test_wrapper_uses_one_shared_profile_independently_of_cwd(tmp_path: Path) ->
         assert expected_mounts.issubset(set(arguments))
         assert not any(str(data_directory) == argument for argument in arguments)
         assert not any("/ignored/old/" in argument for argument in arguments)
-        # Drop the per-session Lighthouse volume name so the profile-derived
-        # invocation can be compared across working directories.
-        stable_invocations.append(
-            [argument for argument in arguments if "rankrat-lighthouse-stdio-" not in argument]
-        )
+        stable_invocations.append(arguments)
 
     assert stable_invocations[0] == stable_invocations[1]
 
 
-def test_stdio_launches_ephemeral_lighthouse_sidecar(tmp_path: Path) -> None:
+def test_wrapper_refuses_the_removed_stdio_mode_before_docker(tmp_path: Path) -> None:
     data_directory = _create_data_directory(tmp_path / "profile")
-    docker_all_arguments = tmp_path / "docker-all-arguments"
+    docker_marker = tmp_path / "docker-was-called"
     with _fake_bin_directory() as fake_bin:
         environment = {
             **os.environ,
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "RANKRAT_DATA_DIR": str(data_directory),
-            "RANKRAT_IMAGE": "example/rankrat:test",
-            "RANKRAT_LIGHTHOUSE_IMAGE": "example/lighthouse:test",
-            "RANKRAT_READ_ONLY": "true",
-            "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-arguments"),
-            "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_arguments),
+            "RANKRAT_TEST_DOCKER_ARGS": str(docker_marker),
         }
         result = _run_wrapper(environment, tmp_path, mode="stdio")
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode != 0
     assert result.stdout == ""
-    invocations = _docker_invocations(docker_all_arguments)
+    assert "stdio MCP transport was removed" in result.stderr
+    assert "http://127.0.0.1:8080/mcp" in result.stderr
+    assert not docker_marker.exists()
 
-    def volume_source(invocation: list[str]) -> str | None:
-        for argument in invocation:
-            if argument.startswith("type=volume,src=rankrat-lighthouse-stdio-"):
-                return argument.split("src=", 1)[1].split(",", 1)[0]
-        return None
 
-    # (a) The worker runs the resolved Lighthouse image, hardened and networked.
-    worker_runs = [
-        invocation
-        for invocation in invocations
-        if invocation[:2] == ["run", "-d"] and invocation[-1] == "example/lighthouse:test"
-    ]
-    assert len(worker_runs) == 1, invocations
-    worker_run = worker_runs[0]
-    assert "bridge" in worker_run
-    assert "LIGHTHOUSE_SOCKET_PATH=/run/lighthouse/lighthouse.sock" in worker_run
-    assert "LIGHTHOUSE_RUNNER_TIMEOUT_MS=120000" in worker_run
-
-    # The networkless one-shot initializer chowns the volume to the host UID/GID.
-    init_runs = [
-        invocation
-        for invocation in invocations
-        if invocation[:2] == ["run", "--rm"] and "--cap-add=CHOWN" in invocation
-    ]
-    assert len(init_runs) == 1, invocations
-    init_run = init_runs[0]
-    assert "none" in init_run
-    assert "0:0" in init_run
-    assert init_run[-2:] == [str(os.getuid()), str(os.getgid())]
-
-    # (b) The main container gets the worker socket env and the read-only volume.
-    main_run = _stdio_main_run(docker_all_arguments)
-    assert "RANKRAT_LIGHTHOUSE_WORKER_SOCKET=/run/lighthouse/lighthouse.sock" in main_run
-    assert any(
-        argument.startswith("type=volume,src=rankrat-lighthouse-stdio-")
-        and argument.endswith(",dst=/run/lighthouse,readonly")
-        for argument in main_run
-    )
-    assert main_run[-2:] == ["example/rankrat:test", "stdio"]
-
-    # All three containers share one per-session socket volume.
-    volume_names = {
-        volume_source(init_run),
-        volume_source(worker_run),
-        volume_source(main_run),
-    }
-    assert len(volume_names) == 1 and None not in volume_names
-
-    # (c) A cleanup trap removes the container and the volume on exit.
-    assert any(
-        invocation[:2] == ["rm", "-f"] and invocation[-1].startswith("rankrat-lighthouse-stdio-")
-        for invocation in invocations
-    )
-    assert any(
-        invocation[:2] == ["volume", "rm"]
-        and invocation[-1].startswith("rankrat-lighthouse-stdio-")
-        for invocation in invocations
+def test_wrapper_without_a_mode_prints_usage_and_fails(tmp_path: Path) -> None:
+    result = subprocess.run(  # noqa: S603
+        [_BASH_EXECUTABLE, str(_SOURCE_WRAPPER.resolve())],
+        capture_output=True,
+        check=False,
+        cwd=tmp_path,
+        encoding="utf-8",
+        env={**os.environ, "HOME": str(tmp_path)},
     )
 
-    source = _SOURCE_WRAPPER.read_text(encoding="utf-8")
-    assert "trap lighthouse_stdio_cleanup EXIT INT TERM" in source
-    assert 'docker rm -f "$lighthouse_stdio_container" >/dev/null 2>&1 || true' in source
-    assert 'docker volume rm "$lighthouse_stdio_volume" >/dev/null 2>&1 || true' in source
+    assert result.returncode == 2
+    assert "usage: rankrat" in result.stderr
+    assert "stdio" not in result.stderr
 
 
 def test_wrapper_rejects_unsafe_data_directories_before_docker(tmp_path: Path) -> None:
@@ -295,6 +238,7 @@ def test_wrapper_rejects_unsafe_data_directories_before_docker(tmp_path: Path) -
             result = _run_wrapper(
                 {**base_environment, "RANKRAT_DATA_DIR": invalid_directory},
                 tmp_path,
+                mode="revoke-google",
             )
             assert result.returncode != 0
             assert result.stdout == ""
@@ -644,7 +588,7 @@ def test_lighthouse_image_target_drives_the_production_transport() -> None:
     assert "SMOKE_BOUNDARY_DOCUMENT" in script
     assert '"pagespeed_sites": ["https://example.com/"]' in script
     assert "boundaries.json.example" not in script
-    assert script.count('--user "$HOST_USER_ID:$HOST_GROUP_ID"') == 5
+    assert script.count('--user "$HOST_USER_ID:$HOST_GROUP_ID"') == 4
 
 
 def test_reusable_workflows_follow_the_current_shared_release_line() -> None:
@@ -765,10 +709,10 @@ def test_host_env_file_selects_the_profile_without_a_flag_or_env_var(
             "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_arguments),
         }
         environment.pop("RANKRAT_DATA_DIR", None)
-        result = _run_wrapper(environment, tmp_path, mode="stdio")
+        result = _run_wrapper(environment, tmp_path, mode="revoke-google")
 
     assert result.returncode == 0, result.stderr
-    main_run = _stdio_main_run(docker_all_arguments)
+    main_run = _main_run(docker_all_arguments, "revoke-google")
     expected_mounts = {
         f"type=bind,src={data_directory}/config,dst=/run/config,readonly",
         f"type=bind,src={data_directory}/secrets,dst=/run/secrets,readonly",
@@ -785,7 +729,8 @@ def test_host_env_file_enables_read_only_mode(tmp_path: Path) -> None:
         f"RANKRAT_DATA_DIR={data_directory}\nRANKRAT_READ_ONLY=true\n",
         encoding="utf-8",
     )
-    docker_all_arguments = tmp_path / "docker-all-arguments"
+    (data_directory / "docker-compose.yml").write_text("services: {}\n", encoding="utf-8")
+    docker_environment = tmp_path / "docker-environment"
 
     with _fake_bin_directory() as fake_bin:
         environment = {
@@ -793,16 +738,16 @@ def test_host_env_file_enables_read_only_mode(tmp_path: Path) -> None:
             "PATH": f"{fake_bin}:{os.environ['PATH']}",
             "RANKRAT_ENV_FILE": str(host_env_file),
             "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-arguments"),
-            "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_arguments),
+            "RANKRAT_TEST_DOCKER_ENV": str(docker_environment),
         }
         environment.pop("RANKRAT_DATA_DIR", None)
         environment.pop("RANKRAT_READ_ONLY", None)
-        result = _run_wrapper(environment, tmp_path, mode="stdio")
+        result = _run_wrapper(environment, tmp_path, mode="http")
 
     assert result.returncode == 0, result.stderr
-    main_run = _stdio_main_run(docker_all_arguments)
-    assert "RANKRAT_READ_ONLY=true" in main_run
-    assert f"type=bind,src={data_directory}/config,dst=/run/config,readonly" in main_run
+    recorded = docker_environment.read_text(encoding="utf-8").splitlines()
+    assert recorded[0] == str(data_directory)
+    assert recorded[4] == "true"
 
 
 def test_host_env_file_yields_to_a_real_env_var_and_the_flag(tmp_path: Path) -> None:
@@ -828,16 +773,16 @@ def test_host_env_file_yields_to_a_real_env_var_and_the_flag(tmp_path: Path) -> 
             "RANKRAT_TEST_DOCKER_ARGS": str(tmp_path / "docker-args-env"),
             "RANKRAT_TEST_DOCKER_ALL_ARGS": str(docker_all_env),
         }
-        result = _run_wrapper(environment, tmp_path, mode="stdio")
+        result = _run_wrapper(environment, tmp_path, mode="revoke-google")
 
     assert result.returncode == 0, result.stderr
-    env_main_run = _stdio_main_run(docker_all_env)
+    env_main_run = _main_run(docker_all_env, "revoke-google")
     assert f"type=bind,src={env_profile}/config,dst=/run/config,readonly" in env_main_run
     assert not any(str(file_profile) in argument for argument in env_main_run)
 
     # The --data-dir flag is parsed before the mode, so it must sit ahead of it.
     # _run_wrapper always places the mode first, so invoke bash directly here to
-    # reproduce a real `rankrat --data-dir DIR stdio` launch.
+    # reproduce a real `rankrat --data-dir DIR revoke-google` launch.
     docker_all_flag = tmp_path / "docker-all-flag"
     with _fake_bin_directory() as fake_bin:
         environment = {
@@ -852,7 +797,7 @@ def test_host_env_file_yields_to_a_real_env_var_and_the_flag(tmp_path: Path) -> 
                 str(_SOURCE_WRAPPER.resolve()),
                 "--data-dir",
                 str(flag_profile),
-                "stdio",
+                "revoke-google",
             ],
             capture_output=True,
             check=False,
@@ -862,7 +807,7 @@ def test_host_env_file_yields_to_a_real_env_var_and_the_flag(tmp_path: Path) -> 
         )
 
     assert result.returncode == 0, result.stderr
-    flag_main_run = _stdio_main_run(docker_all_flag)
+    flag_main_run = _main_run(docker_all_flag, "revoke-google")
     assert f"type=bind,src={flag_profile}/config,dst=/run/config,readonly" in flag_main_run
     assert not any(str(file_profile) in argument for argument in flag_main_run)
     assert not any(str(env_profile) in argument for argument in flag_main_run)
@@ -877,12 +822,12 @@ def _docker_invocations(all_args_file: Path) -> list[list[str]]:
     return [record.splitlines() for record in records if record.strip()]
 
 
-def _stdio_main_run(all_args_file: Path) -> list[str]:
+def _main_run(all_args_file: Path, mode: str) -> list[str]:
     invocations = _docker_invocations(all_args_file)
     main_runs = [
         invocation
         for invocation in invocations
-        if invocation[:1] == ["run"] and invocation[-1:] == ["stdio"]
+        if invocation[:1] == ["run"] and invocation[-1:] == [mode]
     ]
     assert len(main_runs) == 1, invocations
     return main_runs[0]
@@ -908,8 +853,7 @@ def _create_data_directory(path: Path) -> Path:
 def _create_fake_docker(path: Path) -> None:
     # RANKRAT_TEST_DOCKER_ARGS keeps the last invocation (overwritten each call);
     # RANKRAT_TEST_DOCKER_ALL_ARGS, when set, records every invocation as a
-    # NUL-terminated record so the multi-call stdio Lighthouse flow (volume
-    # create, init, worker, main run, cleanup) can be inspected call by call.
+    # NUL-terminated record so multi-call flows can be inspected call by call.
     path.write_text(
         """#!/bin/sh
 printf '%s\\n' "$@" > "$RANKRAT_TEST_DOCKER_ARGS"
@@ -958,7 +902,7 @@ def _fake_bin_directory() -> Iterator[Path]:
 def _run_wrapper(
     environment: dict[str, str],
     working_directory: Path,
-    mode: str = "stdio",
+    mode: str = "revoke-google",
     arguments: tuple[str, ...] = (),
 ) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603

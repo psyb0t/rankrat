@@ -2,6 +2,41 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.21.0, 2026-11-09
+
+Breaking: the stdio MCP transport is gone. Rankrat now serves MCP only over
+Streamable HTTP at `/mcp`, from the same long-lived process as the REST API, the
+monitor scheduler and the Lighthouse worker.
+
+- `rankrat stdio` and the image's `stdio` command now exit with directions to
+  the HTTP server. `rankrat` without a mode prints
+  usage. The image's default command is `http`, and `make run` is an alias of
+  `make run-http`.
+- The wrapper no longer starts per-session `rankrat-lighthouse-stdio-*` sidecars,
+  which could be left behind when a client killed its stdio child.
+- The OpenClaw plugin `@psyb0t/rankrat` is now a stdio-to-HTTP bridge built on
+  `mcp-remote`. Set `RANKRAT_URL` and `RANKRAT_TOKEN`; it passes the bearer as
+  a `${RANKRAT_TOKEN}` placeholder, so the token never appears in a process
+  argument list. The old `RANKRAT_DATA_DIR`, `RANKRAT_IMAGE`, `RANKRAT_READ_ONLY`
+  and `RANKRAT_LOG_LEVEL` plugin settings are gone.
+- The Claude Code plugin asks for the server URL and bearer. The MCP Registry
+  entry advertises Streamable HTTP at `http://localhost:8080/mcp`.
+- Documentation moved to https://psyb0t.github.io/rankrat/ and gained an error
+  code reference in troubleshooting, the `RANKRAT_HTTP_BEARER_TOKEN_FILE`
+  alias, and every Make target.
+- The README gets a Sponsor section, and `FUNDING.yml` adds Buy Me a Coffee.
+
+### Migration
+
+1. Start the server once with `rankrat http -d`; it restarts with Docker.
+2. Remove each stdio registration (`claude mcp remove rankrat`,
+   `codex mcp remove rankrat`).
+3. Register `http://127.0.0.1:8080/mcp` with the bearer from
+   `secrets/rankrat/http-bearer-token`. The commands for Claude Code, Codex and
+   OpenClaw are in the
+   [transports guide](https://psyb0t.github.io/rankrat/transports/#agent-integrations).
+4. Remove leftover `rankrat-lighthouse-stdio-*` containers with `docker rm -f`.
+
 ## v0.20.1, 2026-10-10
 
 Documentation only. The README's agent integrations section names [peen](https://github.com/psyb0t/peen) as an example of an agent that reads `.agents/skills/`.

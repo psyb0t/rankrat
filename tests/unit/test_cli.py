@@ -275,46 +275,24 @@ def test_docker_oauth_authorization_requires_a_fixed_callback_port(
     assert cli.main() == 2
 
 
-def test_main_runs_the_stdio_transport_and_handles_operator_interrupt(
+def test_removed_stdio_mode_exits_with_http_directions(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
-    settings = Settings(
-        boundary_file=tmp_path / "boundaries.json",
-        secret_root=tmp_path / "secrets",
-        oauth_token_root=tmp_path / "oauth",
-        log_file=tmp_path / "rankrat.log",
-    )
-    monkeypatch.setattr(cli, "load_settings", lambda: settings)
-    monkeypatch.setattr(cli, "configure_logging", _configure_logging)
-    services = object()
-    server = object()
-    observed: list[object] = []
+    def unexpected() -> Settings:
+        pytest.fail("the removed stdio mode must not load settings")
 
-    def build_services(received: Settings) -> object:
-        observed.append(received)
-        return services
-
-    def build_mcp_server(received: object) -> object:
-        observed.append(received)
-        return server
-
-    monkeypatch.setattr(cli, "build_services", build_services)
-    monkeypatch.setattr(cli, "build_mcp_server", build_mcp_server)
-
-    async def run_stdio(received: object) -> None:
-        observed.append(received)
-
-    monkeypatch.setattr(cli, "run_stdio", run_stdio)
+    monkeypatch.setattr(cli, "load_settings", unexpected)
     monkeypatch.setattr(sys, "argv", ["rankrat", "stdio"])
-    assert cli.main() == 0
-    assert observed == [settings, services, server]
+    assert cli.main() == 2
+    error = capsys.readouterr().err
+    assert "stdio MCP transport was removed" in error
+    assert "http://127.0.0.1:8080/mcp" in error
 
-    async def interrupt_stdio(_: object) -> None:
-        raise KeyboardInterrupt
 
-    monkeypatch.setattr(cli, "run_stdio", interrupt_stdio)
-    assert cli.main() == 0
+def test_http_is_the_default_mode(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys, "argv", ["rankrat"])
+    assert cli._parser().parse_args().mode == "http"
 
 
 def test_main_runs_the_local_http_transport(
@@ -379,7 +357,7 @@ def test_main_returns_a_safe_startup_failure_for_runtime_dependency_errors(
         raise ValueError("untrusted detail")
 
     monkeypatch.setattr(cli, "build_services", fail)
-    monkeypatch.setattr(sys, "argv", ["rankrat", "stdio"])
+    monkeypatch.setattr(sys, "argv", ["rankrat", "http"])
     assert cli.main() == 2
     assert capsys.readouterr().err == "rankrat startup failed: invalid configuration\n"
 

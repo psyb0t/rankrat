@@ -27,7 +27,7 @@ from rankrat.constants import (
 )
 from rankrat.errors import ConfigurationError
 
-RuntimeMode = Literal["stdio", "http"]
+RuntimeMode = Literal["http"]
 
 
 class Settings(BaseSettings):
@@ -45,7 +45,7 @@ class Settings(BaseSettings):
     secret_root: Path = DEFAULT_SECRET_ROOT
     oauth_token_root: Path = DEFAULT_OAUTH_TOKEN_ROOT
     log_file: Path = DEFAULT_LOG_FILE
-    mode: RuntimeMode = "stdio"
+    mode: RuntimeMode = "http"
     http_host: str = DEFAULT_HTTP_HOST
     http_port: int = Field(default=DEFAULT_HTTP_PORT, ge=1, le=65_535)
     log_level: str = DEFAULT_LOG_LEVEL

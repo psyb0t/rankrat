@@ -47,4 +47,4 @@ USER rankrat:rankrat
 
 EXPOSE 8080
 ENTRYPOINT ["rankrat"]
-CMD ["stdio"]
+CMD ["http"]

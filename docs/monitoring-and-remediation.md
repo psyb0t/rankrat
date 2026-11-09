@@ -1,10 +1,16 @@
+---
+title: "Monitoring and remediation"
+description: "Persistent site-audit monitors, the scheduler, issue history, and the provider writes that fix findings: resubmission, IndexNow, purges, redirects."
+nav_order: 10
+---
+
 # Monitoring and remediation
 
-Persistent monitors, issue history, and the provider-write operations that fix what they find — sitemap and URL resubmission, IndexNow, exact Cloudflare purges, finite cache templates, and managed edge redirects.
+Persistent monitors, issue history, and the provider-write operations that fix what they find: sitemap and URL resubmission, IndexNow, exact Cloudflare purges, finite cache templates, and managed edge redirects.
 
 You decide at startup whether the process is trusted to write. Read-only mode
 hides every write tool and REST route from discovery. Writable mode lets the
-configured account credentials touch what they can reach — but the fixed provider
+configured account credentials touch what they can reach, but the fixed provider
 origins, request limits, URL containment, upstream permissions, and HTTP auth are
 all still in force.
 
@@ -26,7 +32,6 @@ all still in force.
 ## Enable ordinary writes
 
 ```sh
-RANKRAT_READ_ONLY=false rankrat          # writable stdio MCP
 RANKRAT_READ_ONLY=false rankrat http     # writable REST + HTTP MCP
 RANKRAT_READ_ONLY=false rankrat http -d  # persistent restartable scheduler
 ```
@@ -35,7 +40,7 @@ Writable mode carries site onboarding; read-only mode leaves it out.
 
 ## Persistent monitors
 
-A monitor schedules the deterministic, bounded `site_audit` workflow — nothing
+A monitor schedules the deterministic, bounded `site_audit` workflow. Nothing
 looser.
 
 Read operations:
@@ -71,14 +76,11 @@ wake interval it:
 5. resolves system-managed issues that have disappeared;
 6. applies snapshot/event retention.
 
-Stdio still does explicit monitor management and `monitor_run`, but a stdio child
-can't do future due work after its caller exits — nobody's home to fire it.
-
 Use `rankrat http -d` for an unattended scheduler. Its Compose services run
 `restart: unless-stopped`; an attached `rankrat http` dies with the foreground
 Compose process.
 
-Rankrat sends no email, no webhook, no pager — none of it. Agents poll the
+Rankrat sends no email, no webhook, no pager. None of it. Agents poll the
 issue/event tools and decide how to shout. And the scheduler watches site-audit
 findings, not every backlink or provider-indexing metric.
 
@@ -90,7 +92,7 @@ persistence, and monitor calls then return `UNAVAILABLE`.
 
 Back up through SQLite's online-backup mechanism, or while Rankrat is stopped.
 Copy the live main file alone and you can miss WAL state. Deleting a monitor
-cascades only its local Rankrat history — it does not delete provider data.
+cascades only its local Rankrat history. It does not delete provider data.
 
 ## Google writes
 
@@ -104,7 +106,7 @@ cascades only its local Rankrat history — it does not delete provider data.
 | `google_analytics_property_rename` | Rename one account-visible property |
 
 Provider acceptance is asynchronous. A successful sitemap submit means Google
-took the API request — not that it fetched or processed the sitemap. Poll
+took the API request, not that it fetched or processed the sitemap. Poll
 `google_sitemap_get` / `google_sitemaps_list` and read the warnings and errors.
 
 The Indexing API only covers Google's eligible structured-data content. It is
@@ -134,7 +136,7 @@ and public key location. It's a notification protocol: participating engines
 share accepted notifications, then each decides crawl and index timing on its
 own.
 
-Live-test submission demands two independent opt-ins — one flag isn't enough:
+Live-test submission demands two independent opt-ins. One flag isn't enough:
 
 ```sh
 RANKRAT_READ_ONLY=false \
@@ -153,10 +155,10 @@ never submit.
 - resubmit it to Bing;
 - submit bounded changed URLs to Bing.
 
-It does not rewrite pages, robots, sitemap XML, CMS content, or source code — it
+It does not rewrite pages, robots, sitemap XML, CMS content, or source code. It
 only re-pokes the providers. Each write is sequential and not transactional. A
 later stage failing leaves the earlier accepted writes accepted. Read the
-returned status, fix the provider that broke, retry — the workflow is
+returned status, fix the provider that broke, retry. The workflow is
 idempotent.
 
 ## Ownership and onboarding writes
@@ -179,7 +181,7 @@ Tag Manager scope.
 
 `edge_redirect_upsert` and `edge_redirect_delete` use provider-neutral requests.
 Cloudflare is the current adapter, and it only touches redirect rules that carry
-Rankrat's ownership marker — your other redirects and rulesets are left alone.
+Rankrat's ownership marker. Your other redirects and rulesets are left alone.
 
 `bing_content_submission_create` fetches the bounded public page inside Rankrat
 and submits that freshly fetched HTML body to Bing. The caller can't hand it raw
@@ -188,7 +190,7 @@ content, arbitrary headers, or some other remote URL.
 ## Cloudflare cache writes
 
 `cloudflare_cache_purge` purges exact URLs inside a configured site. No
-whole-zone purge is exposed — that blast radius isn't yours to trigger.
+whole-zone purge is exposed. That blast radius isn't yours to trigger.
 
 `cloudflare_cache_template_apply` accepts exactly two templates:
 
@@ -201,7 +203,7 @@ replaces a whole ruleset, and it preserves your unrelated rules. Applying a
 template that already matches is a no-op.
 
 Template mutations are serialized per zone within a single Rankrat process. That
-stops two callers in that process from both racing to create the first rule — it
+stops two callers in that process from both racing to create the first rule. It
 is not a distributed lock across separate Rankrat deployments.
 
 ## Write checklist

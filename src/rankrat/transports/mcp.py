@@ -1,4 +1,4 @@
-"""Official low-level MCP server shared by stdio and Streamable HTTP."""
+"""Official low-level MCP server behind the Streamable HTTP transport."""
 # pyright: reportGeneralTypeIssues=false, reportUnusedClass=false, reportUnusedImport=false, reportUnusedVariable=false
 
 from __future__ import annotations

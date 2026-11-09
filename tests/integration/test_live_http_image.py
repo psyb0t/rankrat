@@ -215,7 +215,7 @@ def test_live_http_shell_runner_uses_default_egress_and_never_submits_indexnow()
     assert "--env-file" not in script
 
 
-def test_final_image_exercises_writable_stdio_with_mounted_state() -> None:
+def test_final_image_exercises_writable_http_mcp_with_mounted_state() -> None:
     script = _FINAL_IMAGE_SCRIPT_PATH.read_text(encoding="utf-8")
 
     security_arguments = script.split("container_security_args=(", maxsplit=1)[1].split(
@@ -223,7 +223,7 @@ def test_final_image_exercises_writable_stdio_with_mounted_state() -> None:
         maxsplit=1,
     )[0]
     assert "RANKRAT_READ_ONLY=true" in security_arguments
-    assert "checking writable stdio MCP persists monitor state" in script
+    assert "checking writable Streamable HTTP MCP persists monitor state" in script
     assert "type=bind,src=$state_directory,dst=/run/state" in script
     assert "RANKRAT_STATE_DATABASE=/run/state/rankrat.sqlite3" in script
     assert "RANKRAT_READ_ONLY=false" in script

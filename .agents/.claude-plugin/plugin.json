@@ -1,7 +1,10 @@
 {
   "name": "rankrat",
-  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse: persistent monitoring, internal-link and content opportunities, ownership, remediation, onboarding, and multi-provider backlinks. Writable by default with one read-only switch. MCP over stdio and Streamable HTTP, plus REST.",
-  "author": { "name": "psyb0t", "url": "https://github.com/psyb0t" },
+  "description": "Self-hosted SEO intelligence over Google Search Console, Bing Webmaster Tools, GA4, PageSpeed, CrUX, Cloudflare, IndexNow, and optional local Lighthouse: persistent monitoring, internal-link and content opportunities, ownership, remediation, onboarding, and multi-provider backlinks. Writable by default with one read-only switch. MCP over Streamable HTTP at /mcp, plus REST.",
+  "author": {
+    "name": "psyb0t",
+    "url": "https://github.com/psyb0t"
+  },
   "homepage": "https://github.com/psyb0t/rankrat",
   "license": "WTFPL",
   "keywords": [
@@ -16,5 +19,19 @@
     "indexing",
     "search-analytics",
     "mcp"
-  ]
+  ],
+  "userConfig": {
+    "url": {
+      "type": "string",
+      "title": "Rankrat URL",
+      "description": "Base URL of your running Rankrat server, e.g. http://127.0.0.1:8080 (MCP is served at /mcp).",
+      "required": true
+    },
+    "token": {
+      "type": "string",
+      "title": "HTTP bearer",
+      "description": "Contents of the server profile's secrets/rankrat/http-bearer-token.",
+      "sensitive": true
+    }
+  }
 }

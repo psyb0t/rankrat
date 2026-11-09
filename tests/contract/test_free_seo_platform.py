@@ -210,7 +210,7 @@ def _patch_writes(services: ApplicationServices, monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
-async def test_free_seo_read_routes_have_stdio_mcp_parity_and_hide_writes(
+async def test_free_seo_read_routes_have_mcp_parity_and_hide_writes(
     deployment: tuple[Settings, ApplicationServices],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -266,7 +266,7 @@ async def test_free_seo_read_routes_have_stdio_mcp_parity_and_hide_writes(
 
 
 @pytest.mark.asyncio
-async def test_free_seo_write_routes_have_stdio_mcp_parity(
+async def test_free_seo_write_routes_have_mcp_parity(
     indexnow_deployment: tuple[Settings, ApplicationServices],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

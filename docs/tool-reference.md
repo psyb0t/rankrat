@@ -1,12 +1,18 @@
+---
+title: "MCP tool reference"
+description: "Every MCP tool Rankrat can expose, grouped by provider and area, with the read-only and writable sets and their REST counterparts."
+nav_order: 7
+---
+
 # MCP tool reference
 
-The authority is `tools/list` on the running process — this page tracks it, it
+The authority is `tools/list` on the running process. This page tracks it, it
 doesn't replace it. Read-only mode exposes reads only. Writable mode adds every
 mutation, site onboarding included. No counts are printed here on purpose: the
 catalog moves, and runtime discovery is the exact number.
 
 REST rides the same services and schemas, but the route names come from the
-generated [`openapi.json`](../openapi.json). Read that for paths — don't guess
+generated [`openapi.json`](https://github.com/psyb0t/rankrat/blob/main/openapi.json). Read that for paths. Don't guess
 them from MCP names, they aren't a 1:1 mapping.
 
 ## Contents
@@ -238,6 +244,6 @@ Clients without MCP resource support call `onboarding_guide` instead.
 ## Tool annotations
 
 Read/write, destructive, idempotent, and open-world hints ride in the MCP tool
-annotations. They're guidance for clients — not a stand-in for startup policy or
+annotations. They're guidance for clients, not a stand-in for startup policy or
 boundary enforcement. And an idempotent request still doesn't mean instant:
 provider acceptance and DNS/indexing progress stay asynchronous regardless.
