@@ -287,10 +287,11 @@ profile for a detached, restartable deployment.
 
 ## CI and release surface
 
-The GitHub pipeline runs on pushes to `main` and on `v*` tags:
+The GitHub pipeline runs on pushes to any branch and on `v*` tags:
 
-- A `main` push runs the checks and coverage, publishes the badges, and builds,
-  scans and pushes both images as `:latest` and `:sha-<commit>`.
+- Every branch push runs the checks and coverage. A `main` push also publishes
+  the badges and builds, scans and pushes both images as `:latest` and
+  `:sha-<commit>`.
 - A tag waits for that commit's `main` run to succeed. It fails if that run
   fails, never shows up or times out. It then promotes the already-built
   `:sha-<commit>` images to `:vX.Y.Z` without rebuilding, so every platform keeps

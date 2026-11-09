@@ -1,12 +1,12 @@
 name: pipeline
 
-# Rankrat publishes images, not a Python package. Pushes to main run the checks
-# and publish :latest plus :sha-<commit> for both images. A v* tag waits for that
-# commit's main run to succeed, then promotes the same digests to the release tag
-# without rebuilding or rerunning checks.
+# Rankrat publishes images, not a Python package. Every branch push runs the
+# checks; main also publishes :latest plus :sha-<commit> for both images. A v*
+# tag waits for that commit's main run to succeed, then promotes the same digests
+# to the release tag without rebuilding or rerunning checks.
 on:
   push:
-    branches: [main]
+    branches: ["**"]
     tags: ["v*"]
 
 permissions: {}
