@@ -676,8 +676,10 @@ def test_lighthouse_dependency_lifecycle_is_sandboxed_and_age_gated() -> None:
         "lighthouse-pkg-update",
     )
     assert "minimumReleaseAge: 10080" in workspace
-    assert "- brace-expansion@5.0.9" in workspace
-    assert "brace-expansion: 5.0.9" in workspace
+    assert "brace-expansion: 5.0.12" in workspace
+    assert "glob: 14.0.3" in workspace
+    assert "minimatch: 11.0.1" in workspace
+    assert "vite: 7.3.7" in workspace
     assert "- nanoid@3.3.18" in workspace
     assert "nanoid: 3.3.18" in workspace
     tooling_target = _target(makefile, "test-tooling")

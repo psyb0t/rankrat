@@ -81,7 +81,7 @@ export async function resolvePublicTarget(
   if (!hostname || hostname.includes("%")) {
     throw new Error("destination hostname is invalid");
   }
-  const answers = await dns.lookup(hostname, { all: true, verbatim: true });
+  const answers = await dns.lookup(hostname, { all: true, order: "verbatim" });
   if (answers.length === 0) {
     throw new Error("destination did not resolve");
   }

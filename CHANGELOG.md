@@ -2,6 +2,22 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.21.1, 2026-11-09
+
+Security update. `pip-audit` and `pnpm audit` now report no known
+vulnerabilities in either image.
+
+- Python: `mcp` 1.30.0, `certifi` 2026.10.23, `msgpack` 1.2.4, `filelock`
+  4.2.6, `PyJWT` 2.15.1, `urllib3` 2.8.0 and `pip` 26.2.2, along with the rest
+  of the lock under a dependency age gate moved to 2026-11-02.
+- Lighthouse worker: `zod` 4.6.7, `lighthouse` 13.6.0 and current dev tooling
+  (vitest 5, eslint 10.14), plus overrides for `vite` 7.3.7, `glob` 14.0.3,
+  `minimatch` 11.0.1 and `brace-expansion` 5.0.12 where their parents pin
+  vulnerable versions. TypeScript stays on 6.0.3 because typescript-eslint
+  does not support 7 yet.
+- The worker resolves hostnames with `dns.lookup`'s `order: "verbatim"`, which
+  replaces the deprecated `verbatim: true` with the same behavior.
+
 ## v0.21.0, 2026-11-09
 
 Breaking: the stdio MCP transport is gone. Rankrat now serves MCP only over
