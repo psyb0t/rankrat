@@ -1504,9 +1504,12 @@ async def test_streamable_http_mcp_calls_tools_and_sanitizes_provider_errors(
     ):
         initialized = await client.post("/mcp/", headers=headers, json=initialize_request)
         called = await client.post("/mcp/", headers=headers, json=tool_request)
+        bare = await client.post("/mcp", headers=headers, json=initialize_request)
 
     assert initialized.status_code == 200
     assert initialized.json()["result"]["protocolVersion"]
+    assert bare.status_code == 200
+    assert bare.json()["result"]["protocolVersion"]
     assert called.status_code == 200
     content = called.json()["result"]["content"][0]
     assert json.loads(content["text"]) == {

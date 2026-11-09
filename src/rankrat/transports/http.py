@@ -202,6 +202,22 @@ class _SecurityHeadersASGI:
         await self._app(scope, receive, secure_send)
 
 
+class _MCPPathASGI:
+    """Serve `/mcp` directly instead of answering with a 307 to `/mcp/`.
+
+    The Streamable HTTP app is mounted at `/mcp`, so Starlette redirects the
+    bare path. Clients that do not follow a redirect on POST would fail there.
+    """
+
+    def __init__(self, app: ASGIApp) -> None:
+        self._app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http" and scope.get("path") == MCP_PATH:
+            scope = {**scope, "path": f"{MCP_PATH}/", "raw_path": f"{MCP_PATH}/".encode()}
+        await self._app(scope, receive, send)
+
+
 class _RequestIDASGI:
     """Echo a bounded request ID without using buffering middleware."""
 
@@ -311,6 +327,7 @@ def create_http_app(settings: Settings, services: ApplicationServices) -> ASGIAp
         app,
         load_bearer_secret(settings.http_bearer_secret_file),
     )
+    wrapped = _MCPPathASGI(wrapped)
     wrapped = _BodyLimitASGI(wrapped, MAX_HTTP_BODY_BYTES)
     wrapped = _RequestIDASGI(wrapped)
     return _SecurityHeadersASGI(wrapped)

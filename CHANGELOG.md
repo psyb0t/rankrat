@@ -2,6 +2,12 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.21.2, 2026-11-09
+
+- `POST /mcp` reaches the MCP server directly. It used to answer with a 307
+  redirect to `/mcp/`, which clients that do not follow redirects on POST
+  treated as a failure. `/mcp/` keeps working.
+
 ## v0.21.1, 2026-11-09
 
 Security update. `pip-audit` and `pnpm audit` now report no known
