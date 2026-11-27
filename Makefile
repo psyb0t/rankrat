@@ -62,6 +62,12 @@ export RANKRAT_RELEASE_VERSION
 
 UID := $(shell id -u)
 GID := $(shell id -g)
+DOCS_NODE_IMAGE := node:24.21.0-bookworm-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
+DOCS_CACHE := .testing/docs-cache
+DOCS_RUN := docker run --rm --init --cap-drop ALL --security-opt no-new-privileges:true \
+	--user $(UID):$(GID) -e HOME=/tmp -e COREPACK_HOME=/cache/corepack \
+	-v "$(CURDIR)/$(DOCS_CACHE):/cache" \
+	-v "$(CURDIR)/docs:/work/docs:ro" -v "$(CURDIR)/website:/work/website" -w /work/website
 
 # Keep the published wrapper as the single production invocation.
 WRAPPER := RANKRAT_IMAGE=$(IMAGE_NAME):$(IMAGE_TAG) \
@@ -161,7 +167,7 @@ LIGHTHOUSE_MUTATE_RUN := docker run --rm --init \
 .PHONY: help version dev-image lighthouse-dev-image lighthouse-lock-image lighthouse-image rankrat-image lock-image setup init-indexnow verify-indexnow-key shell dep pkg-lock pkg-add pkg-update pkg-upgrade pkg-remove lighthouse-pkg-lock lighthouse-pkg-add lighthouse-pkg-update lighthouse-pkg-upgrade lighthouse-pkg-remove \
 	lint lighthouse-lint lint-fix format lighthouse-format test lighthouse-test test-local test-unit test-contract test-integration test-security test-live test-live-one test-live-google-search-console test-live-google-analytics test-live-google-tag-manager test-live-pagespeed test-live-cloudflare test-live-clarity test-live-bing test-live-indexnow test-live-http test-image test-lighthouse-image \
 	test-tooling test-coverage coverage-percent audit audit-secrets audit-compose audit-image sbom build build-test run run-http \
-	auth-google oauth-revoke onboard-site clean generate generate-openapi check-openapi
+	auth-google oauth-revoke onboard-site docs docs-build docs-lock clean generate generate-openapi check-openapi
 
 help: ## Show supported Rankrat commands
 	@awk 'BEGIN {FS = ":.*##"}; /^[a-zA-Z0-9_.-]+:.*##/ {printf "%-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -512,6 +518,18 @@ generate-openapi: dev-image ## Generate openapi.json from the YAML-first OAS sou
 
 check-openapi: dev-image ## Fail if the JSON OpenAPI artifact is stale
 	$(DEV_RUN) uv run --frozen --no-sync python scripts/generate_openapi.py --check
+
+docs: docs-build ## Build the documentation site into website/build, with the link check
+
+docs-build: | $(DOCS_CACHE)
+	$(DOCS_RUN) $(DOCS_NODE_IMAGE) corepack pnpm install --frozen-lockfile --ignore-scripts --store-dir /cache/pnpm
+	$(DOCS_RUN) --network none $(DOCS_NODE_IMAGE) corepack pnpm run build
+
+docs-lock: | $(DOCS_CACHE) ## Refresh website/pnpm-lock.yaml under the dependency age gate
+	$(DOCS_RUN) $(DOCS_NODE_IMAGE) corepack pnpm install --lockfile-only --ignore-scripts --store-dir /cache/pnpm
+
+$(DOCS_CACHE):
+	mkdir -p "$@"
 
 clean: ## Remove only Rankrat images built by these Make targets
 	-docker image rm $(IMAGE_NAME):$(IMAGE_TAG) $(IMAGE_NAME):latest $(DEV_IMAGE) \

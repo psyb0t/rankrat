@@ -1,7 +1,6 @@
 ---
 title: "Configuration"
 description: "Every Rankrat runtime environment variable and boundaries.json field: accounts, sites, inventory, limits, state, and the read-only switch."
-nav_order: 3
 ---
 
 # Configuration and boundaries

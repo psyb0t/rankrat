@@ -1,0 +1,1 @@
+export default { docs: ["index", "getting-started", "configuration", "providers", "transports", "integrations", "features", "tool-reference", "lighthouse", "ownership-and-onboarding", "monitoring-and-remediation", "security", "troubleshooting", "development"] };

@@ -1,7 +1,6 @@
 ---
 title: "Transports and deployment"
 description: "Run Rankrat's HTTP server with the wrapper, Compose, or plain Docker, with bearer auth, REST and OpenAPI, and the move off stdio."
-nav_order: 5
 ---
 
 # Transports and deployment

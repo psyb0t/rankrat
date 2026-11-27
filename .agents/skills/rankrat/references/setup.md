@@ -192,16 +192,19 @@ APIs over HTTPS and are not sent anywhere else.
 
 An agent runs the published image directly. A human creates the profile,
 credentials, and Google authorization with `rankrat setup` beforehand, after
-installing the launcher. Download the installer, read it, then run it, per-user
-(no root) or system-wide:
+installing the launcher. The installer downloads the launcher script from the
+same repository and copies it to the install path. Download the installer, read
+it, then run it as your normal user:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/psyb0t/rankrat/main/install.sh \
   -o rankrat-install.sh
 less rankrat-install.sh
-bash rankrat-install.sh                # per-user   -> ~/.local/bin/rankrat
-sudo bash rankrat-install.sh --system  # system-wide -> /usr/local/bin/rankrat
+bash rankrat-install.sh   # per-user -> ~/.local/bin/rankrat
 ```
+
+Optional, only when the user asks for a system-wide install (needs root, writes
+`/usr/local/bin/rankrat`): `sudo bash rankrat-install.sh --system`.
 
 The single public launcher is named `rankrat`; it is not duplicated into agent
 skills, so the shipped code cannot drift from what operators install:
@@ -256,13 +259,15 @@ loopback. MCP is then at `http://127.0.0.1:8080/mcp`; send
 
 The commands above use the writable default. Before mounting config writable,
 verify that the resolved directory is owner-only, `boundaries.json` is not a
-symlink, both are owned by the current UID, and the file is not group- or
-world-writable. The public `rankrat` launcher performs those checks. For a read-only
+symlink, both are owned by the current UID, and only the owner can write the
+file. The public `rankrat` launcher performs those checks. For a read-only
 caller, set `RANKRAT_READ_ONLY=true` and make only `/run/config` read-only.
 Never make the provider-secret mount writable during normal service operation.
 
 Local Lighthouse audits require the separate published browser image. Start it
-once against a private named volume:
+once against a private named volume. The initializer runs as root in a throwaway
+container with no network and only that new volume mounted, and it ends by
+setting the volume root to mode `0750` owned by the shared non-root UID:
 
 ```bash
 docker volume create rankrat-lighthouse-runtime

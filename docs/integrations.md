@@ -1,7 +1,6 @@
 ---
 title: "Agent integrations"
 description: "Install the Rankrat skill and plugins in Claude Code, Codex, and OpenClaw from the psyb0t/agents marketplace, and register the MCP server."
-nav_order: 6
 ---
 
 # Agent integrations

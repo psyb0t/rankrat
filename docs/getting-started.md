@@ -1,7 +1,6 @@
 ---
 title: "Getting started"
 description: "Install the rankrat launcher, create a profile with guided setup, start the HTTP stack, and verify every configured provider works."
-nav_order: 2
 ---
 
 # Getting started

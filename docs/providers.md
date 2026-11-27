@@ -1,7 +1,6 @@
 ---
 title: "Providers and credentials"
 description: "How to create each Rankrat credential: Google OAuth, Bing Webmaster key, Cloudflare token, Clarity token, IndexNow key, and the HTTP bearer."
-nav_order: 4
 ---
 
 # Providers and credentials

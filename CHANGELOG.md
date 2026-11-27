@@ -2,6 +2,17 @@
 
 Notable changes to Rankrat, newest first.
 
+## v0.21.3, 2026-11-27
+
+Agent skill, documentation and pipeline changes. The server behaves the same.
+
+- The agent skill published to ClawHub, the agent skill registry, names the exact `psyb0t/rankrat` and `psyb0t/rankrat-lighthouse` images of the release, by tag and digest. Its link to the launcher installer points at the release tag instead of `main`.
+- The skill's permissions now list the installer download, the Docker and Docker Compose commands, and the files the installer writes. Its setup page installs the launcher per user and runs the system-wide install only when the user asks, and it explains what the Lighthouse volume initializer does.
+- Added an Agent integrations page to the documentation.
+- The documentation site is generated with Docusaurus instead of Jekyll, both static site generators. `make docs` builds it in a pinned Node container and fails on a broken link or heading anchor, a new workflow deploys it to GitHub Pages, and the shared visitor tracker script loads on every page.
+- The pipeline runs lint and the tests on pushes to every branch again, and runs `make generate` to fail when `openapi.json` is out of date.
+- The pipeline names its image jobs `docker` and `docker-lighthouse`, and every image job states that its Docker Hub repository stays public and that its description is synced from GitHub.
+
 ## v0.21.2, 2026-11-09
 
 - `POST /mcp` reaches the MCP server directly. It used to answer with a 307

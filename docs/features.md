@@ -1,7 +1,6 @@
 ---
 title: "Feature workflows"
 description: "Which Rankrat tools answer common SEO questions: search analytics, indexing, audits, internal links, backlinks, tags, redirects, and performance."
-nav_order: 7
 ---
 
 # Feature workflows

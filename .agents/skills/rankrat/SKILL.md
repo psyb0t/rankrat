@@ -1,6 +1,6 @@
 ---
 name: rankrat
-description: Query Google Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft Clarity, PageSpeed, CrUX, Cloudflare analytics, and Bing backlink intelligence; manage typed tags and safe edge redirects; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over Streamable HTTP at /mcp, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, tags, redirects, backlinks, browser scores, performance history, or search traffic for sites they control.
+description: Query Google Search Console, Google Tag Manager, Bing Webmaster Tools, GA4, Microsoft Clarity, PageSpeed, CrUX, Cloudflare analytics, and Bing backlink intelligence; manage typed tags and safe edge redirects; run Lighthouse and bounded whole-site/internal-link audits; persist monitors and issue history; automate ownership and finite remediation through one self-hosted MCP server. Speaks MCP over Streamable HTTP at /mcp, plus a FastAPI JSON API. Use when the user wants to inspect or improve SEO, indexing, ownership, internal links, tags, redirects, backlinks, browser scores, performance history, or search traffic for sites they control. Setup runs the published Docker images and can install the rankrat launcher script from the repository.
 homepage: https://github.com/psyb0t/rankrat
 user-invocable: true
 metadata:
@@ -9,9 +9,9 @@ metadata:
     requires:
       bins: [docker]
 permissions:
-  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Google Tag Manager, Bing Webmaster Tools, Microsoft Clarity, PageSpeed/CrUX, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; inbound only on the port you bind."
-  shell: "docker run invocations for the published image or the installed rankrat launcher; no other host access is required."
-  filesystem: "reads provider-account config and credentials; writes the configured OAuth token store, persistent SQLite monitor state, locally initialized IndexNow key, and discovered resource inventory in the config file when writable."
+  network: "outbound HTTPS to configured Google Search Console, Google Analytics, Google Tag Manager, Bing Webmaster Tools, Microsoft Clarity, PageSpeed/CrUX, Cloudflare, public DNS, public pages beneath configured sites, and IndexNow endpoints; optional Lighthouse browser traffic to explicitly requested bounded pages; Docker Hub image pulls; raw.githubusercontent.com for the launcher installer; inbound only on the port you bind."
+  shell: "docker and docker compose to run the published psyb0t/rankrat and psyb0t/rankrat-lighthouse images, and the installed rankrat launcher; curl and bash to download the repository's install.sh and run it after the user has read it, per-user by default, with sudo only when the user asks for the system-wide install; no other host access is required."
+  filesystem: "reads provider-account config and credentials; writes the configured OAuth token store, persistent SQLite monitor state, locally initialized IndexNow key, and discovered resource inventory in the config file when writable; the installer writes the launcher to ~/.local/bin/rankrat (or /usr/local/bin/rankrat for the system-wide install) and a log to /tmp/rankrat-install.log."
 ---
 
 # rankrat
@@ -165,7 +165,8 @@ refresh token; provider secrets stay read-only. For a read-only agent, set
 setup reference.
 
 The repository ships one public launcher named `rankrat`; install it before
-asking an agent to use a human-managed profile. It uses direct Docker for
+asking an agent to use a human-managed profile. The download, read and run steps
+are in [`references/setup.md`](references/setup.md#running-it). It uses direct Docker for
 operator commands and Compose for HTTP; agents can still invoke either
 image directly. Omit `--data-dir` for the default `$HOME/.config/rankrat`
 profile. A chosen profile's fixed `config/`, `secrets/`, `oauth/`, and `state/`

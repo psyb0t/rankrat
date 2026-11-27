@@ -1,7 +1,6 @@
 ---
 title: "Development"
 description: "Build and test Rankrat in containers: Make targets, test suites, generated OpenAPI contracts, dependency age gates, audits, and releases."
-nav_order: 14
 ---
 
 # Development
@@ -23,6 +22,7 @@ the machine.
 - [Spec-first REST development](#spec-first-rest-development)
 - [Dependency changes](#dependency-changes)
 - [Security and supply-chain gates](#security-and-supply-chain-gates)
+- [Documentation site](#documentation-site)
 - [Local runtime](#local-runtime)
 - [CI and release surface](#ci-and-release-surface)
 - [Contribution checklist](#contribution-checklist)
@@ -45,6 +45,7 @@ scripts/            generation, setup helpers, and production-image smoke tests
 .agents/            distributable skill and client/plugin manifests
 security/           reviewed OpenVEX statements for image scanning
 docs/               operator and contributor guides
+website/            Docusaurus site that builds docs/
 ```
 
 The package is Python 3.14 with strict Pydantic models at the request, provider,
@@ -256,6 +257,10 @@ specific CPython stdlib findings whose affected code paths aren't reachable.
 Security tests bind every statement to package/runtime evidence. Never add a VEX
 statement just to turn a scanner green. Document and test the call-path
 justification, or don't add it.
+
+## Documentation site
+
+The guides in `docs/` are built into a site with Docusaurus from the `website/` directory. `make docs` builds it in a pinned Node container into `website/build` and fails on a broken link or heading anchor. After adding or removing a page, update `website/sidebars.mjs` and `website/static/llms.txt`. `make docs-lock` refreshes `website/pnpm-lock.yaml`, and the install refuses packages published in the last seven days. Every page needs front matter with a `title` and a `description`.
 
 ## Local runtime
 

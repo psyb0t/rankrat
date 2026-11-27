@@ -1,7 +1,6 @@
 ---
 title: "Monitoring and remediation"
 description: "Persistent site-audit monitors, the scheduler, issue history, and the provider writes that fix findings: resubmission, IndexNow, purges, redirects."
-nav_order: 11
 ---
 
 # Monitoring and remediation

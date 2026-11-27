@@ -1,10 +1,7 @@
 ---
 title: "Home"
 description: "Rankrat puts Search Console, Bing Webmaster, GA4, Tag Manager, Clarity, Cloudflare, PageSpeed and CrUX behind one self-hosted MCP and REST server."
-nav_order: 1
-permalink: /
-seo:
-  type: WebSite
+slug: /
 ---
 
 # rankrat

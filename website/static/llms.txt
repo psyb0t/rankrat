@@ -1,0 +1,18 @@
+# rankrat
+
+> Self-hosted MCP and REST server that audits, monitors and manages sites you control across Search Console, Bing Webmaster, GA4, Tag Manager, Clarity, Cloudflare, PageSpeed and CrUX.
+
+- [rankrat](https://psyb0t.github.io/rankrat/): Rankrat puts Search Console, Bing Webmaster, GA4, Tag Manager, Clarity, Cloudflare, PageSpeed and CrUX behind one self-hosted MCP and REST server.
+- [Getting started](https://psyb0t.github.io/rankrat/getting-started/): Install the rankrat launcher, create a profile with guided setup, start the HTTP stack, and verify every configured provider works.
+- [Configuration](https://psyb0t.github.io/rankrat/configuration/): Every Rankrat runtime environment variable and boundaries.json field: accounts, sites, inventory, limits, state, and the read-only switch.
+- [Providers and credentials](https://psyb0t.github.io/rankrat/providers/): How to create each Rankrat credential: Google OAuth, Bing Webmaster key, Cloudflare token, Clarity token, IndexNow key, and the HTTP bearer.
+- [Transports and deployment](https://psyb0t.github.io/rankrat/transports/): Run Rankrat's HTTP server with the wrapper, Compose, or plain Docker, with bearer auth, REST and OpenAPI, and the move off stdio.
+- [Agent integrations](https://psyb0t.github.io/rankrat/integrations/): Install the Rankrat skill and plugins in Claude Code, Codex, and OpenClaw from the psyb0t/agents marketplace, and register the MCP server.
+- [Feature workflows](https://psyb0t.github.io/rankrat/features/): Which Rankrat tools answer common SEO questions: search analytics, indexing, audits, internal links, backlinks, tags, redirects, and performance.
+- [MCP tool reference](https://psyb0t.github.io/rankrat/tool-reference/): Every MCP tool Rankrat can expose, grouped by provider and area, with the read-only and writable sets and their REST counterparts.
+- [Lighthouse](https://psyb0t.github.io/rankrat/lighthouse/): Local Lighthouse audits in the isolated psyb0t/rankrat-lighthouse worker: deployment, the five tools, limits, and the browser threat model.
+- [Ownership and onboarding](https://psyb0t.github.io/rankrat/ownership-and-onboarding/): Check Google and Bing site ownership, verify through Cloudflare DNS, and onboard a new site across GA4, Search Console, and Bing in one call.
+- [Monitoring and remediation](https://psyb0t.github.io/rankrat/monitoring-and-remediation/): Persistent site-audit monitors, the scheduler, issue history, and the provider writes that fix findings: resubmission, IndexNow, purges, redirects.
+- [Security](https://psyb0t.github.io/rankrat/security/): Rankrat's trust model: what provider credentials can reach, read-only mode, HTTP exposure, container hardening, SSRF limits, and secret handling.
+- [Troubleshooting](https://psyb0t.github.io/rankrat/troubleshooting/): Fixes for Rankrat startup, profile, OAuth, provider, sitemap, monitor, and Lighthouse failures, with the error categories each one reports.
+- [Development](https://psyb0t.github.io/rankrat/development/): Build and test Rankrat in containers: Make targets, test suites, generated OpenAPI contracts, dependency age gates, audits, and releases.
